@@ -1,0 +1,79 @@
+#####################################
+#
+# Build container to compile AquachemD Release binaries (armhf and arm64)
+#
+# armhf is 32 bit armv6l (armhf) trixie and newer - work on all Pi's running 32bit (Pi1 to Pi4)
+# arm64 is 64 bit aarch64 trixie newer - work on Pi3/Pi4/2w running 64bit os
+#
+# To build
+# docker build -f Dockerfile.releaseBinaries -t aquachemd-releasebin .
+# For better debug logs use --progress=plain
+# docker build --progress=plain -f Dockerfile.releaseBinaries -t aquachemd-releasebin .
+#
+# To Run
+# docker run -it --mount type=bind,source=./build,target=/build aquachemd-releasebin bash
+#
+#  clean method
+#  docker system prune
+#  docker buildx prune  <- just build env
+#
+#####################################
+
+FROM debian:trixie
+
+# ############
+# Get arm64 build environment.
+#
+
+RUN apt-get update && \
+    apt-get install -y \
+    build-essential \
+    gcc-aarch64-linux-gnu \
+    binutils-arm-linux-gnueabi \
+    file
+
+RUN dpkg --add-architecture arm64
+RUN apt-get update && \
+    apt-get install -y libsystemd-dev:arm64 libgpiod-dev:arm64
+
+# ############
+# Get armhf build environment
+# 
+RUN apt-get install -y \
+    gcc-arm-linux-gnueabihf \
+    binutils-arm-linux-gnueabihf
+
+RUN dpkg --add-architecture armhf
+RUN apt-get update && \
+    apt-get install -y libsystemd-dev:armhf libgpiod-dev:armhf
+
+
+
+# Install some tools and compilers + clean up
+RUN apt-get update && \
+    #apt-get install -y rsync git wget gcc-6 g++-6 cmake gdb gdbserver bzip2 && \
+    apt-get install -y rsync git wget cmake gdb gdbserver bzip2 && \
+    apt-get clean autoclean && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+
+
+
+ENV C_INCLUDE_PATH=/opt/cross-pi-gcc/arm-linux-gnueabihf/usr/include
+
+ENV PATH=$PATH:/opt/cross-pi-gcc/bin:/opt/cross-pi-gcc/libexec/gcc/arm-linux-gnueabihf/6.3.0/
+
+RUN mkdir /build
+WORKDIR /build
+
+# Add a user called `build` uid 1001 & gid 10000
+# You chould change RB_UID & RB_GID to what works on your build setup
+ENV RB_USER=build
+ENV RB_UID=1001
+ENV RB_GID=1000
+RUN groupadd -g $RB_GID $RB_USER  2> /dev/null; exit 0
+RUN useradd $RB_USER -u $RB_UID -g $RB_GID -m -s /bin/bash
+RUN echo "$RB_USER   ALL=(ALL:ALL) ALL" >> /etc/sudoers
+
+USER $RB_USER
+ 
