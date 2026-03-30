@@ -4,6 +4,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <gpiod.h>
+#include <stdbool.h>
 
 #include "gpio.h"
 
@@ -13,7 +14,7 @@
 
 // Iterate /dev/gpiochip* entries — libgpiod v2 removed chip iterators
 // so we scan the directory ourselves
-void gpio_detect()
+void gpio_detect(bool deepscan)
 {
   struct dirent *entry;
   DIR *dev = opendir("/dev");
@@ -41,30 +42,33 @@ void gpio_detect()
 
     unsigned int num_lines = gpiod_chip_info_get_num_lines(info);
 
-    printf("\n  %-16s  label: %-30s  lines: %u\n",
+    printf("  %-16s  label: %-30s  lines: %u\n",
       chip_path,
       gpiod_chip_info_get_label(info),
       num_lines);
 
     // Print each line — name, consumer, direction
-    for (unsigned int i = 0; i < num_lines; i++)
-    {
-      struct gpiod_line_info *linfo = gpiod_chip_get_line_info(chip, i);
-      if (!linfo) continue;
+    if(deepscan) {
+      for (unsigned int i = 0; i < num_lines; i++)
+      {
+        struct gpiod_line_info *linfo = gpiod_chip_get_line_info(chip, i);
+        if (!linfo) continue;
 
-      const char *name     = gpiod_line_info_get_name(linfo);
-      const char *consumer = gpiod_line_info_get_consumer(linfo);
-      int         used     = gpiod_line_info_is_used(linfo);
-      enum gpiod_line_direction dir = gpiod_line_info_get_direction(linfo);
+        const char *name     = gpiod_line_info_get_name(linfo);
+        const char *consumer = gpiod_line_info_get_consumer(linfo);
+        int         used     = gpiod_line_info_is_used(linfo);
+        enum gpiod_line_direction dir = gpiod_line_info_get_direction(linfo);
 
-      printf("    line %3u: %-20s %-20s [%s]%s\n",
-        i,
-        name     ? name     : "unnamed",
-        consumer ? consumer : "unused",
-        dir == GPIOD_LINE_DIRECTION_OUTPUT ? "output" : "input",
-        used ? " *" : "");
+        printf("    line %3u: %-20s %-20s [%s]%s\n",
+          i,
+          name     ? name     : "unnamed",
+          consumer ? consumer : "unused",
+          dir == GPIOD_LINE_DIRECTION_OUTPUT ? "output" : "input",
+          used ? " *" : "");
 
-      gpiod_line_info_free(linfo);
+        gpiod_line_info_free(linfo);
+      }
+      printf("\n");
     }
 
     gpiod_chip_info_free(info);

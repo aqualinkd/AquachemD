@@ -1,6 +1,6 @@
 
-#ifndef AQUACHEM_H_
-#define AQUACHEM_H_
+#ifndef EZO_H_
+#define EZO_H_
 
 // I2C bus
 #define I2C_BUS         "/dev/i2c-1"

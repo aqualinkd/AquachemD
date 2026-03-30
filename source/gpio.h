@@ -36,7 +36,8 @@ typedef struct {
 
 // List all GPIO chips and their lines — equivalent to gpiodetect + gpioinfo.
 // Useful for finding chip paths and pin numbers on an unknown board.
-void gpio_detect();
+//void gpio_detect();
+void gpio_detect(bool deepscan);
 
 // ─── Line management ─────────────────────────────────────────────────────────
 

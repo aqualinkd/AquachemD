@@ -5,6 +5,9 @@ Make sure to have the below in /boot/firmware/config.txt to enable I2C on Raspbe
 dtparam=i2c_arm=on
 dtparam=i2c_arm_baudrate=100000
 
+# To enable 1 wire
+dtoverlay=w1-gpio
+
 # Install i2c-tools for testing and debugging:
 sudo apt install i2c-tools
 
@@ -19,7 +22,8 @@ echo "i2c-dev" | sudo tee /etc/modules-load.d/i2c.conf
 
 Usage:
   ./aquachemd                       - normal mode, loop reading sensors
-  ./aquachemd scan                  - scan I2C bus and identify devices
+  ./aquachemd scan                  - scan I2C bus and identify devices, scan GPIO chips
+  ./aquachemd deepscan              - scan I2C bus and identify devices, scan GPIO chips with line details
   ./aquachemd calibrate mid         - calibrate pH mid-point (7.00)
   ./aquachemd calibrate low         - calibrate pH low-point (4.00)
   ./aquachemd calibrate high        - calibrate pH high-point (10.00)
@@ -33,8 +37,12 @@ Usage:
 #include <string.h>
 #include <unistd.h>
 
-#include "aquachem.h"
+#include "ezo.h"
+#include "1wire.h"
+
+#ifdef WITH_GPIOD
 #include "gpio.h"
+#endif
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -49,12 +57,16 @@ int main(int argc, char *argv[])
   }
 
   // ── Scan mode ───────────────────────────────────────────────────────────────
-  if (argc >= 2 && strcasecmp(argv[1], "scan") == 0)
-  {
-    ezo_i2cdetect();
-    //gpio_detect();
-    return 0;
-  }
+if (argc >= 2 && (strcasecmp(argv[1], "scan") == 0 || strcasecmp(argv[1], "deepscan") == 0))
+{
+#ifdef WITH_GPIOD
+  int deep = strcasecmp(argv[1], "deepscan") == 0;
+  gpio_detect(deep);
+#endif
+  w1_detect();
+  ezo_i2cdetect();
+  return 0;
+}
 
   // ── Calibration mode ────────────────────────────────────────────────────────
   if (argc >= 2 && strcasecmp(argv[1], "calibrate") == 0)
@@ -159,12 +171,33 @@ printf("Dispensed: %.2f ml total\n", pump_get_total_volume());
 
 // GPIO Dosing pump example
 // CM4 — pH dosing pump on gpiochip0 pin 17, active-high relay
-    gpio_handle_t ph_pump;
-    gpio_open(&ph_pump, "gpiochip0", 17, GPIO_OUTPUT, GPIO_ACTIVE_HIGH, "ph_pump");
+gpio_handle_t ph_pump;
+gpio_open(&ph_pump, "gpiochip0", 17, GPIO_OUTPUT, GPIO_ACTIVE_HIGH, "ph_pump");
 
-    // Turn pump on for 5 seconds then off
-    relay_on(&ph_pump);
-    sleep(5);
-    relay_off(&ph_pump);
-    gpio_close(&ph_pump);
+// Turn pump on for 5 seconds then off
+relay_on(&ph_pump);
+sleep(5);
+relay_off(&ph_pump);
+gpio_close(&ph_pump);
+
+// 1wire sensors example
+
+// Option 1 — explicit path
+w1_sensor_t pool_temp;
+w1_init_ds18b20(&pool_temp, "/sys/bus/w1/devices/28-0304949760eb", "pool_water");
+w1_reading_t r = w1_read(&pool_temp);
+
+// Option 2 — auto-discover all DS18B20s on the bus
+w1_sensor_t sensors[8];
+int found = w1_find_ds18b20(sensors, 8);
+for (int i = 0; i < found; i++)
+{
+  w1_reading_t r = w1_read(&sensors[i]);
+  printf("%s: %.3f °C\n", sensors[i].label, r.value);
+}
+
+// Option 3 — generic sensor with custom scale/offset
+w1_sensor_t flow;
+w1_init_generic(&flow, "/sys/bus/w1/devices/xx-xxxx", 0.01f, 0.0f, "flow_meter");
+
 #endif

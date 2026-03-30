@@ -8,7 +8,7 @@
 #include <sys/ioctl.h>
 #include <time.h>
 
-#include "aquachem.h"
+#include "ezo.h"
 
 // ─── Real implementation ──────────────────────────────────────────────────────
 // All code in this block is compiled only when DUMMY_SENSORS is NOT defined.
@@ -470,7 +470,8 @@ int pump_clear_total_volume()
 int pump_get_info(char *info, int len) { return ezo_get_info(EZO_PMP_ADDR, info, len); }
 int pump_sleep()                       { return ezo_sleep(EZO_PMP_ADDR); }
 
-#endif // DUMMY_SENSORS
+//#endif // DUMMY_SENSORS
+#endif // ifndef DUMMY_SENSORS
 
 // ─── Dummy sensor implementation ──────────────────────────────────────────────
 // Compiled only when DUMMY_SENSORS is defined: make dummy
