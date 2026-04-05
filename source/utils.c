@@ -16,6 +16,15 @@
 
 
 
+void FORCE_LOG(const int msg_level, const char * format, ...)
+{
+  va_list args;
+
+  va_start(args, format);
+  vfprintf(stdout, format, args);
+  sd_journal_printv(msg_level, format, args);
+  va_end(args);
+}
 
 void LOG(const int msg_level, const char * format, ...)
 {

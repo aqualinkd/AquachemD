@@ -40,7 +40,7 @@ Usage:
 #include <string.h>
 #include <unistd.h>
 
-
+#include "version.h"
 #include "aquachemd.h"
 #include "utils.h"
 #include "ezo.h"
@@ -104,15 +104,16 @@ int main(int argc, char *argv[])
 {
   struct aquachemdata acddata;
   struct timespec next_wake;
-  _acdconfig_.log_level = LOG_NOTICE;
+  //_acdconfig_.log_level = LOG_NOTICE;
   _acdconfig_.deamonize = true;
   _acdconfig_.config_file = "/etc/aquachemd.conf";
 
 #ifdef DUMMY_SENSORS
-  _acdconfig_.log_level = LOG_DEBUG;
+//  _acdconfig_.log_level = LOG_DEBUG;
 #endif
 
   CLEAR_DIRTY(acddata.is_dirty);
+
 
   if (!ezo_bus_available())
   {
@@ -209,6 +210,9 @@ int main(int argc, char *argv[])
     return 1;
   }
 */
+
+
+  FORCE_LOG(LOG_NOTICE, "Starting %s (%s) v%s\n", AQUACHEMD_NAME, AQUACHEMD_SHORT_NAME, AQUACHEMD_VERSION);
 
   parse_config_file(&acddata);
 

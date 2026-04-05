@@ -9,6 +9,8 @@
 //#include <time.h>
 
 void LOG(const int msg_level, const char * format, ...);
+void FORCE_LOG(const int msg_level, const char * format, ...);
+
 char *cleanwhitespace(char *str);
 bool text2bool(char *str);
 char *bool2text(bool val);

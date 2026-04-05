@@ -13,182 +13,49 @@
 
 void set_config_defaults();
 
-
-const bool          _dcfg_false            = false;
-const bool          _dcfg_true             = true;
-const int           _dcfg_loglevel         = LOG_NOTICE;
-const char         *_dcfg_web_port         = "http://0.0.0.0:80";
-const char         *_dcfg_web_root         = "/var/www/aquachemd";
-const char         *mqtt_aquachemd_topic   = "aquachemd";
-const int           _dcfg_zero             = 0;
-const int           _dcfg_sensor_poll_time = 60;
-
+#define SET_VAL_CFG_STRING(field, def)  _acdconfig_.field = (char *)(def)
+#define SET_VAL_CFG_INT(field, def)     _acdconfig_.field = (int)(def)
+#define SET_VAL_CFG_BOOL(field, def)    _acdconfig_.field = (bool)(def)
+#define SET_VAL_CFG_FLOAT(field, def)   _acdconfig_.field = (float)(def)
+#define SET_VAL_CFG_HEX(field, def)     _acdconfig_.field = (unsigned char)(def)
+#define SET_VAL_CFG_BITMASK(field, def) _acdconfig_.field = (uint16_t)(def)
+#define SET_VAL_CFG_TXT_INT(field, def) _acdconfig_.field = (int)(def)
 
 void init_cfg_parameters()
 {
-  _numCfgParams = 0;
+  LOG(LOG_DEBUG, "Initializing config with %d entries", CFG_PARAM_COUNT);
 
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.listen_address;
-  _cfgParams[_numCfgParams].value_type = CFG_STRING;
-  _cfgParams[_numCfgParams].name = CFG_N_listen_address;
-  _cfgParams[_numCfgParams].config_mask |= CFG_GRP_ADVANCED;
-  _cfgParams[_numCfgParams].config_mask |= CFG_FORCE_RESTART;
-  _cfgParams[_numCfgParams].default_value = (void *)_dcfg_web_port;
+  int i = 0;
 
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.web_directory;
-  _cfgParams[_numCfgParams].value_type = CFG_STRING;
-  _cfgParams[_numCfgParams].name = CFG_N_web_directory;
-  _cfgParams[_numCfgParams].config_mask |= CFG_GRP_ADVANCED;
-  _cfgParams[_numCfgParams].config_mask |= CFG_READONLY;
-  _cfgParams[_numCfgParams].config_mask |= CFG_FORCE_RESTART;
-  _cfgParams[_numCfgParams].default_value = (void *)_dcfg_web_root;
-
-
-#if MG_TLS > 0
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.cert_dir;
-  _cfgParams[_numCfgParams].value_type = CFG_STRING;
-  _cfgParams[_numCfgParams].name = CFG_N_cert_dir;
-  _cfgParams[_numCfgParams].default_value = (void *)&_dcfg_null;
-  _cfgParams[_numCfgParams].config_mask |= CFG_ALLOW_BLANK;
-  _cfgParams[_numCfgParams].config_mask |= CFG_GRP_ADVANCED;
-  _cfgParams[_numCfgParams].config_mask |= CFG_FORCE_RESTART;
-#endif 
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.log_level;
-  _cfgParams[_numCfgParams].value_type = CFG_SPECIAL;
-  _cfgParams[_numCfgParams].name = CFG_N_log_level;
-  _cfgParams[_numCfgParams].valid_values = CFG_V_log_level;
-  _cfgParams[_numCfgParams].default_value = (void *)&_dcfg_loglevel;
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.mg_log_level;
-  _cfgParams[_numCfgParams].value_type = CFG_INT;
-  _cfgParams[_numCfgParams].name = CFG_N_MG_log_level;
-  _cfgParams[_numCfgParams].config_mask |= CFG_READONLY;
-  _cfgParams[_numCfgParams].config_mask |= CFG_HIDE;
-  _cfgParams[_numCfgParams].default_value = (void *) &_dcfg_zero;
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.mqtt_server;
-  _cfgParams[_numCfgParams].value_type = CFG_STRING;
-  _cfgParams[_numCfgParams].name = CFG_N_mqtt_server;
-  _cfgParams[_numCfgParams].config_mask |= CFG_FORCE_RESTART;
-  _cfgParams[_numCfgParams].default_value = NULL;
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.mqtt_user;
-  _cfgParams[_numCfgParams].value_type = CFG_STRING;
-  _cfgParams[_numCfgParams].name = CFG_N_mqtt_user;
-  _cfgParams[_numCfgParams].config_mask |= CFG_FORCE_RESTART;
-  _cfgParams[_numCfgParams].default_value = NULL;
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.mqtt_passwd;
-  _cfgParams[_numCfgParams].value_type = CFG_STRING;
-  _cfgParams[_numCfgParams].name = CFG_N_mqtt_passwd;
-  _cfgParams[_numCfgParams].config_mask |= CFG_FORCE_RESTART;
-  _cfgParams[_numCfgParams].config_mask |= CFG_PASSWD_MASK;
-  _cfgParams[_numCfgParams].default_value = NULL;
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.mqtt_aquachemd_topic;
-  _cfgParams[_numCfgParams].value_type = CFG_STRING;
-  _cfgParams[_numCfgParams].name = CFG_N_mqtt_aquachemd_topic;
-  _cfgParams[_numCfgParams].config_mask |= CFG_FORCE_RESTART;
-  _cfgParams[_numCfgParams].default_value = (void *)&mqtt_aquachemd_topic;
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.mqtt_aqualinkd_topic;
-  _cfgParams[_numCfgParams].value_type = CFG_STRING;
-  _cfgParams[_numCfgParams].name = CFG_N_mqtt_aqualinkd_topic;
-  _cfgParams[_numCfgParams].config_mask |= CFG_FORCE_RESTART;
-  _cfgParams[_numCfgParams].default_value = NULL;
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.mqtt_discovery_topic;
-  _cfgParams[_numCfgParams].value_type = CFG_STRING;
-  _cfgParams[_numCfgParams].name = CFG_N_mqtt_discovery_topic;
-  _cfgParams[_numCfgParams].config_mask |= CFG_FORCE_RESTART;
-  _cfgParams[_numCfgParams].default_value = NULL;
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.mqtt_discovery_use_mac;
-  _cfgParams[_numCfgParams].value_type = CFG_BOOL;
-  _cfgParams[_numCfgParams].name = CFG_N_mqtt_discovery_use_mac;
-  _cfgParams[_numCfgParams].default_value = (void *)&_dcfg_true;
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.convert_mqtt_temp;
-  _cfgParams[_numCfgParams].value_type = CFG_BOOL;
-  _cfgParams[_numCfgParams].name = CFG_N_convert_mqtt_temp;
-  _cfgParams[_numCfgParams].default_value = (void *)&_dcfg_false;
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.mqtt_timed_update;
-  _cfgParams[_numCfgParams].value_type = CFG_BOOL;
-  _cfgParams[_numCfgParams].name = CFG_N_mqtt_timed_update;
-  _cfgParams[_numCfgParams].default_value = (void *)&_dcfg_true;
-
-  _numCfgParams++;
-  _cfgParams[_numCfgParams].value_ptr = &_acdconfig_.sensor_poll_time;
-  _cfgParams[_numCfgParams].value_type = CFG_INT;
-  _cfgParams[_numCfgParams].name = CFG_N_sensor_poll_time;
-  _cfgParams[_numCfgParams].default_value = (void *)&_dcfg_sensor_poll_time;
-
-  set_config_defaults();
-}
-
-void set_cfg_parm_to_default(cfgParam *parm)
-{
-  switch (parm->value_type)
-  {
-  case CFG_STRING:
-    *(char **)parm->value_ptr = (char *)parm->default_value;
-    break;
-  case CFG_INT:
-    *(int *)parm->value_ptr = *(int *)parm->default_value;
-    break;
-  case CFG_BOOL:
-    *(bool *)parm->value_ptr = *(bool *)parm->default_value;
-    break;
-  case CFG_HEX:
-    *(unsigned char *)parm->value_ptr = *(unsigned char *)parm->default_value;
-    break;
-  case CFG_FLOAT:
-    *(float *)parm->value_ptr = *(float *)parm->default_value;
-    break;
-  case CFG_BITMASK:
-    if (*(bool *)parm->default_value == true)
-    {
-      *(uint16_t *)parm->value_ptr |= parm->mask;
-    }
-    else
-    {
-      *(uint16_t *)parm->value_ptr &= ~parm->mask;
-    }
-    break;
-  case CFG_SPECIAL:
-    if (strncasecmp(parm->name, CFG_N_log_level, strlen(CFG_N_log_level)) == 0)
-    {
-      *(int *)parm->value_ptr = *(int *)parm->default_value;
-    }
-    else
-    {
-      LOG(LOG_ERR, "ADD CONFIG DEFAULT FOR %s\n", parm->name);
-    }
-    break;
+#define CFG_ENTRY(cfg_name, cfg_field, cfg_def, cfg_type, cfg_mask, cfg_flag, cfg_meta) \
+  if (i < CFG_PARAM_COUNT) {                                  \
+        _cfgParams[i].name        = cfg_name;                   \
+        _cfgParams[i].value_ptr   = &_acdconfig_.cfg_field;     \
+        _cfgParams[i].value_type  = cfg_type;                   \
+        _cfgParams[i].config_mask = cfg_mask;                   \
+        _cfgParams[i].bit_flag    = cfg_flag;                   \
+        _cfgParams[i].metadata    = cfg_meta;                   \
+                                                                \
+        /* Use cfg_type here to match the argument above */     \
+        SET_VAL_ ## cfg_type(cfg_field, cfg_def);               \
+        i++;                                                    \
   }
+
+#undef CONFIG_TABLE_H_ 
+#include "config_table.h"
+
+#undef CFG_ENTRY
+#undef SET_VAL_CFG_STRING
+#undef SET_VAL_CFG_INT
+#undef SET_VAL_CFG_BOOL
+#undef SET_VAL_CFG_FLOAT
+#undef SET_VAL_CFG_HEX
+#undef SET_VAL_CFG_BITMASK
+#undef SET_VAL_CFG_TXT_INT
+
+    //LOG(LOG_DEBUG, "Finished Initializing config with %d entries", i);
 }
 
-void set_config_defaults()
-{
-  for (int i=0; i <= _numCfgParams; i++) { 
-    set_cfg_parm_to_default(&_cfgParams[i]);
-  }
-}
 
 
 
@@ -198,22 +65,23 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
 
   value = cleanwhitespace(value);
  
-  for (int i=0; i <= _numCfgParams; i++) {
+  for (int i=0; i < CFG_PARAM_COUNT; i++) {
     if (strncasecmp(param, _cfgParams[i].name, (int)strlen(_cfgParams[i].name) ) == 0) {
       rtn=true;
 
       // Any special 
-      if ( _cfgParams[i].valid_values != NULL ) {
+      if ( _cfgParams[i].metadata != NULL ) {
         //printf("Checking %s in %s\n",value,_cfgParams[i].valid_values);
-        if ( strncasestr(_cfgParams[i].valid_values, value, STR_FULL_LENGTH) == NULL) {
+        if ( strncasestr(_cfgParams[i].metadata, value, STR_FULL_LENGTH) == NULL) {
           LOG(LOG_ERR, "Config entry '%s',  %s is not valid\n",param, value);
           return false;
         }
       }
 
       if (strlen(value) <= 0) {
-        LOG(LOG_INFO,"Set configuration option `%s` to default since value is blank\n",_cfgParams[i].name );
-        set_cfg_parm_to_default(&_cfgParams[i]);
+        //LOG(LOG_INFO,"Set configuration option `%s` to default since value is blank\n",_cfgParams[i].name );
+        //set_cfg_parm_to_default(&_cfgParams[i]);
+        LOG(LOG_INFO,"Set configuration option `%s` is blank, ignoring\n",_cfgParams[i].name );
         return true;
       }
 
@@ -226,12 +94,14 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
 
       switch (_cfgParams[i].value_type) {
         case CFG_STRING:
-          if (_cfgParams[i].value_ptr != NULL && *(char **)_cfgParams[i].value_ptr != _cfgParams[i].default_value) {
+          if (isMASKSET(_cfgParams[i].config_mask, CFG_IS_ALLOCATED)) {
             LOG(LOG_DEBUG,"FREE Memory for config %s %s\n",_cfgParams[i].name, *(char **)_cfgParams[i].value_ptr);
             free(*(char **)_cfgParams[i].value_ptr);
             *(char **)_cfgParams[i].value_ptr = NULL;
+            removeMASK(_cfgParams[i].config_mask, CFG_IS_ALLOCATED);
           }
           *(char **)_cfgParams[i].value_ptr = cleanalloc(value, STR_FULL_LENGTH);
+          setMASK(_cfgParams[i].config_mask, CFG_IS_ALLOCATED);
         break;
         case CFG_INT:
           *(int *)_cfgParams[i].value_ptr = strtoul(value, NULL, 10);
@@ -249,16 +119,14 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
         break;
         case CFG_BITMASK:
           if (text2bool(value))
-            *(uint16_t *)_cfgParams[i].value_ptr |= _cfgParams[i].mask;
+            *(uint16_t *)_cfgParams[i].value_ptr |= _cfgParams[i].bit_flag;
           else
-            *(uint16_t *)_cfgParams[i].value_ptr &= ~_cfgParams[i].mask;
+            *(uint16_t *)_cfgParams[i].value_ptr &= ~_cfgParams[i].bit_flag;
         break;
-        case CFG_SPECIAL:
-          if (strncasecmp(param, CFG_N_log_level, strlen(CFG_N_log_level)) == 0) {
+        case CFG_TXT_INT:
+          if (_cfgParams[i].value_ptr == &_acdconfig_.log_level) {
             *(int *)_cfgParams[i].value_ptr = log_str_to_priority(value);
-          //} else if (strncasecmp(param, CFG_N_panel_type, strlen(CFG_N_panel_type)) == 0) {
-          //  setPanelByName(acdata, value); 
-          //} else {
+          } else {
             LOG(LOG_ERR, "ADD SPECIAL CONFIG FOR '%s'\n",param);
           }
         break;
@@ -283,17 +151,17 @@ void parse_config_file(struct aquachemdata *acdata)
   char bufr[MAXCFGLINE];
   char *b_ptr;
 
-  LOG(LOG_DEBUG, "reading config file");
+  // If -v was passed on cmd line, we need to keep logging in debug and override any config value in default value 
+  int log_level = _acdconfig_.log_level; // Save log level since it may will be reset in init_cfg_parameters.
 
   init_cfg_parameters();
 
-  //_acdconfig_.config_file = cleanalloc(cfgFile, STR_FULL_LENGTH);
-  /*
-  if (!(_acdconfig_.config_file = cleanalloc(cfgFile, STR_FULL_LENGTH))) {
-    LOG(LOG_ERR, "Error reading config file");
-    return;
+  if (log_level > 0) {
+    _acdconfig_.log_level = log_level; // Restore log level since it may have been reset to default above.
   }
-  */
+
+  LOG(LOG_DEBUG, "Reading config file");
+
   if( (fp = fopen(_acdconfig_.config_file, "r")) != NULL){
     while(! feof(fp)){
       if (fgets(bufr, MAXCFGLINE, fp) != NULL)
@@ -311,6 +179,11 @@ void parse_config_file(struct aquachemdata *acdata)
               char *end = b_ptr + strlen(b_ptr) - 1;
               while(end > b_ptr && isspace(*end)) end--;
               LOG(LOG_ERR, "Unknown config parameter '%.*s'\n",end-b_ptr+1, b_ptr);
+            } else {
+              // restore debug from config values overiding it if -v was used on cmd line
+              if (log_level > 0 && _acdconfig_.log_level != log_level) {
+                _acdconfig_.log_level = log_level; // Restore log level since it may have been reset to default above.
+              }
             }
           } 
         }
@@ -354,6 +227,7 @@ bool write_config_file (struct aquachemdata *acdata)
   */
 
   //fp = aq_open_file(_acdconfig_.config_file, &ro_root, &created_file);
+
   fp = fopen(_acdconfig_.config_file, "w");
 
   if (fp == NULL) {
@@ -365,7 +239,7 @@ bool write_config_file (struct aquachemdata *acdata)
   
   // Loop over config parameters.
 
-  for ( i=0; i <= _numCfgParams; i++) {
+  for ( i=0; i < CFG_PARAM_COUNT; i++) {
     if (isMASKSET(_cfgParams[i].config_mask, CFG_HIDE) ) {
       continue;
     }
@@ -402,13 +276,11 @@ bool write_config_file (struct aquachemdata *acdata)
           fprintf(fp, "%s=%f\n", _cfgParams[i].name, *(float *)_cfgParams[i].value_ptr);
         break;
         case CFG_BITMASK:
-          fprintf(fp, "%s=%s\n", _cfgParams[i].name, (*(uint16_t *)_cfgParams[i].value_ptr & _cfgParams[i].mask) == _cfgParams[i].mask? bool2text(true):bool2text(false));
+          fprintf(fp, "%s=%s\n", _cfgParams[i].name, (*(uint16_t *)_cfgParams[i].value_ptr & _cfgParams[i].bit_flag) == _cfgParams[i].bit_flag? bool2text(true):bool2text(false));
         break;
-        case CFG_SPECIAL:
-          if (strncasecmp(_cfgParams[i].name, CFG_N_log_level, strlen(CFG_N_log_level)) == 0) {
+        case CFG_TXT_INT:
+          if (_cfgParams[i].value_ptr == &_acdconfig_.log_level) {
             fprintf(fp, "%s=%s\n", _cfgParams[i].name, log_priority_to_str(_acdconfig_.log_level));
-          //} else if (strncasecmp(_cfgParams[i].name, CFG_N_panel_type, strlen(CFG_N_panel_type)) == 0) {
-          //  fprintf(fp, "%s=%s\n", _cfgParams[i].name, getPanelString());
           } else {
             fprintf(fp, "%s=NEED TO ADD CODE TO HANDLE THIS\n",_cfgParams[i].name);
           }
@@ -433,7 +305,11 @@ void check_print_config (struct aquachemdata *acdata)
   char name[MAX_PRINTLEN];
   //uint32_t errors=0;
 
-  for ( i=0; i <= _numCfgParams; i++) {
+  // Anything that's not in the config table should be added as a special case here until it's added to the table. This is for handling things that need to be displayed in a special way or that aren't actually stored in the config struct but are still important to display.
+  LOG(LOG_NOTICE, "%-35s = %s\n","Configuration file", _acdconfig_.config_file);
+
+
+  for ( i=0; i < CFG_PARAM_COUNT; i++) {
 
     // don't print mg_log_level if it's 0 since it's only used for debugging and would just add confusion to users looking at the config
     if (_cfgParams[i].value_ptr == &_acdconfig_.mg_log_level && *(int *)_cfgParams[i].value_ptr == 0) {
@@ -468,10 +344,10 @@ void check_print_config (struct aquachemdata *acdata)
         LOG(LOG_NOTICE, "%-35s = %f\n", name, *(float *)_cfgParams[i].value_ptr);
       break;
       case CFG_BITMASK:
-        LOG(LOG_NOTICE, "%-35s = %s\n", name, (*(uint16_t *)_cfgParams[i].value_ptr & _cfgParams[i].mask) == _cfgParams[i].mask?bool2text(true):bool2text(false));
+        LOG(LOG_NOTICE, "%-35s = %s\n", name, (*(uint16_t *)_cfgParams[i].value_ptr & _cfgParams[i].bit_flag) == _cfgParams[i].bit_flag?bool2text(true):bool2text(false));
       break;
-      case CFG_SPECIAL:
-        if (strncasecmp(_cfgParams[i].name, CFG_N_log_level, strlen(CFG_N_log_level)) == 0) {
+      case CFG_TXT_INT:
+        if (_cfgParams[i].value_ptr == &_acdconfig_.log_level) {
           LOG(LOG_NOTICE, "%-35s = %s\n", name, log_priority_to_str(_acdconfig_.log_level));
         } else {
           LOG(LOG_NOTICE, "%-35s = NEED TO ADD CODE TO HANDLE THIS\n",name);

@@ -40,6 +40,10 @@ struct acdconfig
   bool mqtt_timed_update;
   
   int sensor_poll_time;
+
+  unsigned char test_hex;
+  float test_float;
+  uint16_t test_bitmask;
 };
 
 
@@ -51,17 +55,16 @@ typedef enum cfg_value_type{
   CFG_HEX,
   CFG_BOOL,
   CFG_BITMASK,
-  CFG_SPECIAL
+  CFG_TXT_INT  // Int that should be displayed as text (ie log_level) 
 } cfg_value_type;
 
 typedef struct cfgParam {
   void *value_ptr;
-  void *default_value;
   cfg_value_type value_type;
   uint16_t config_mask;
   char *name;
-  char *valid_values;
-  uint16_t mask;
+  char *metadata; // For dropdowns, etc. JSON string that the UI can parse to get options, etc. (ie for log_level: ["DEBUG_SERIAL", "DEBUG", "INFO", "NOTICE", "WARNING", "ERROR"])
+  uint16_t bit_flag; // For bitmask types, the specific bit to toggle for this param
 } cfgParam;
 
 #define CFG_PERSISTANT        (1 << 0) // Don't free memory, things referance the pointer
@@ -72,6 +75,9 @@ typedef struct cfgParam {
 #define CFG_FORCE_RESTART     (1 << 5) // Force aqualinkd to restart
 #define CFG_ALLOW_BLANK       (1 << 6) // Allow blank entry
 #define CFG_GREYED_OUT        (1 << 7) // Greyout in UI, show but not editable
+
+#define CFG_IS_ALLOCATED      (1 << 15)  // Largest bitmask, used internally to track if memory has been allocated for string types and needs to be freed when updated or on exit
+
 //#define CFG_      (1 << 3)
 
 // Text to show when CFG_PASSWD_MASK is set
@@ -84,13 +90,25 @@ extern struct acdconfig _acdconfig_;
 struct acdconfig _acdconfig_;
 #endif
 
+
+// Count entries in the config table at compile time
+#define CFG_ENTRY(...) +1
+// Need to use enum to create a scope for the CFG_PARAM_COUNT constant and avoid potential naming conflicts, and also to allow it to be used in array declarations
+enum { 
+    CFG_PARAM_COUNT = (0
+#include "config_table.h"
+    )
+};
+#undef CFG_ENTRY
+
 #ifndef CONFIG_C
-extern cfgParam _cfgParams[];
-extern int _numCfgParams;
+//extern cfgParam _cfgParams[CFG_PARAM_COUNT];
 #else
-cfgParam _cfgParams[100];
-int _numCfgParams;
-#endif // CONFIG_C
+cfgParam  _cfgParams[CFG_PARAM_COUNT];
+#endif
+
+
+/*
 
 #define CFG_N_listen_address "listen_address"
 #define CFG_N_cert_dir "cert_dir"
@@ -111,5 +129,7 @@ int _numCfgParams;
 
 #define CFG_V_log_level                         "[\"DEBUG_SERIAL\", \"DEBUG\", \"INFO\", \"NOTICE\", \"WARNING\", \"ERROR\"]"
 #define CFG_V_BOOL                              "[\"Yes\", \"No\"]"
+
+*/
 
 #endif // CONFIG_H_
