@@ -7,7 +7,7 @@
   Flow cell in vertical orientation build with 3/4 Clear PVC tubing.
   
 ```
-  ┌ ← 3/4" elbow → horizontal ball valve → 3/8" outlet tube (slopes down to pre-pump return)
+  ┌ ← 3/4" elbow → horizontal ball valve → 3/8" (or 1/2") outlet tube (slopes down to pre-pump return)
   │
   ├──── Union Coupling        (disconnect for maintenance without cutting pipe)
   │
@@ -21,7 +21,7 @@
   │
   ├──── Union Coupling        (disconnect for maintenance without cutting pipe)
   │
-  └ ← 3/4" elbow → horizontal ball valve → 3/8" inlet tube (from post-filter tap)
+  └ ← 3/4" elbow → horizontal ball valve → 3/8" (or 1/2") inlet tube (from post-filter tap)
 ```
 ## Overview
 

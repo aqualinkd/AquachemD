@@ -2,6 +2,10 @@
 #ifndef AQ_MONGOOSE_ADDITIONAL_H_
 #define AQ_MONGOOSE_ADDITIONAL_H_
 
+// Mongose auto arch configure seems to silently fail without this 
+#define _GNU_SOURCE
+
+
 
 /* Flags left for application */
 /*.  mongoose 6.x had the below that we used & depend on.

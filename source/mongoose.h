@@ -17,6 +17,8 @@
 //
 // SPDX-License-Identifier: GPL-2.0-only or commercial
 
+
+
 #ifndef MONGOOSE_H
 #define MONGOOSE_H
 
@@ -49,6 +51,7 @@ extern "C" {
 
 #define MG_ARCH_NEWLIB MG_ARCH_ARMGCC  // Alias, deprecate in 2025
 
+
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
 #define MG_ARCH MG_ARCH_UNIX
@@ -67,17 +70,6 @@ extern "C" {
 
 // http://esr.ibiblio.org/?p=5095
 #define MG_BIG_ENDIAN (*(uint16_t *) "\0\xff" < 0x100)
-
-
-
-
-
-
-
-
-
-
-
 
 
 

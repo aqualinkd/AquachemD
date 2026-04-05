@@ -34,7 +34,7 @@ CC_ARMHF  = arm-linux-gnueabihf-gcc
 
 # Docker image used for cross-compilation — override to share with another project:
 #   make release DOCKER_IMAGE=aqualinkd-releasebin
-DOCKER_IMAGE = ezo-buildenv
+DOCKER_IMAGE = aquachemd-releasebin
 
 # ─── Options ─────────────────────────────────────────────────────────────────
 #
@@ -49,7 +49,7 @@ WITH_GPIOD ?= 1
 # ─── Flags ────────────────────────────────────────────────────────────────────
 
 # Base libs — always required
-LIBS      = -lm
+LIBS      = -lpthread -lm -lsystemd
 
 # Conditionally add libgpiod
 ifeq ($(WITH_GPIOD), 1)
@@ -69,6 +69,10 @@ DFLAGS    = -Wall -O0 -g -std=c11
 ifeq ($(WITH_GPIOD), 1)
   DFLAGS  += -D WITH_GPIOD
 endif
+
+# Mongoose 7.19 flags
+#CFLAGS += -D MG_TLS=2 #(2=MG_TLS_OPENSSL. 3=MG_TLS_BUILTIN) --or--  -DMG_TLS=MG_TLS_BUILTIN
+CFLAGS += -D MG_TLS=0 -D MG_ENABLE_SSI=0
 
 # ─── Directories ──────────────────────────────────────────────────────────────
 
@@ -135,6 +139,15 @@ release:
 
 # Called inside the Docker container — do not invoke directly
 _release_inside_container: clean arm64 armhf
+
+# ─── Docker release target without clean ───────────────────────────────────────
+quick:
+	sudo docker run -it --mount type=bind,source=./,target=/build $(DOCKER_IMAGE) make _release_inside_container
+	@echo "Release binaries built in $(REL_DIR)/"
+
+# Called inside the Docker container — do not invoke directly
+_release_inside_container: arm64 armhf
+
 
 # ─── Native build ─────────────────────────────────────────────────────────────
 
