@@ -38,7 +38,7 @@ void LOG(const int msg_level, const char * format, ...)
   sd_journal_printv(msg_level, format, args);
   va_end(args);
 
-  if (_acdconfig_.deamonize == false) {
+  if (_acdconfig_.deamonize == false || msg_level <= LOG_ERR) {
     char message[1024];
     va_list args;
     va_start(args, format);

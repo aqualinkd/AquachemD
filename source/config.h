@@ -4,7 +4,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "aquachemd.h"
+
+#include "acd_types.h"
+//#include "gpio.h" //typdef struct gpio_handle_t;
+
+// Forward Declaration: Prevents circular dependency
+struct aquachemdata; 
+
+// Forward Declaration: If needed for other prototypes
+struct acd_condition;
+
+
 
 void parse_config_file(struct aquachemdata *acdata);
 bool write_config_file (struct aquachemdata *acdata);
@@ -12,12 +22,44 @@ void check_print_config (struct aquachemdata *acdata);
 
 #define MAXCFGLINE 256
 
+typedef enum acd_condition_type {
+  COND_MQTT,
+  COND_GPIO
+} acd_condition_type;
+
+typedef struct acd_condition {
+  acd_condition_type type;
+  char *label;
+  char *ID;
+  uint8_t index; //values from 0 to 255
+  bool met; // Whether the condition is currently met or not.
+
+  union {
+    struct {
+      char *mqtt_topic;
+      char *mqtt_value; // Good value for the topic to be considered "met"
+      //char *mqtt_current_value; // Store the current value of the topic so we can check if it has changed in the main loop
+    };
+    struct {
+      int gpio_pin;
+      bool gpio_value; // Good value for the topic to be considered "met"
+      //bool gpio_current_value; // Store the current value of the GPIO pin so we can check if it has changed in the main loop
+      gpio_handle_t *gpio_handle; // Store the GPIO handle for this condition so we can read it in the main loop
+    };
+  };
+  
+  struct acd_condition *next;
+} acd_condition;
+
+
+
 struct acdconfig
 {
 #if MG_TLS > 0
   char *cert_dir;  // for future
   char *mqtt_cert_dir;
 #endif
+  char *main_label;
   char *config_file;
   char *listen_address;
   unsigned int log_level;
@@ -34,6 +76,7 @@ struct acdconfig
   char *mqtt_passwd;
   bool mqtt_discovery_use_mac;
   
+  char *gpio_chip;
   //char mqtt_ID[MQTT_ID_LEN+1];
 
   bool convert_mqtt_temp;
@@ -41,9 +84,15 @@ struct acdconfig
   
   int sensor_poll_time;
 
+  bool post_condition; // Whether to post & display conditions that are met/unmet
+  bool temp_compensated_ph;
+
   unsigned char test_hex;
   float test_float;
   uint16_t test_bitmask;
+
+  acd_condition *conditions;
+  acd_key_t *sensors;
 };
 
 
@@ -55,7 +104,8 @@ typedef enum cfg_value_type{
   CFG_HEX,
   CFG_BOOL,
   CFG_BITMASK,
-  CFG_TXT_INT  // Int that should be displayed as text (ie log_level) 
+  CFG_TXT_INT,  // Int that should be displayed as text (ie log_level)
+  CFG_CUSTOM
 } cfg_value_type;
 
 typedef struct cfgParam {
@@ -75,6 +125,7 @@ typedef struct cfgParam {
 #define CFG_FORCE_RESTART     (1 << 5) // Force aqualinkd to restart
 #define CFG_ALLOW_BLANK       (1 << 6) // Allow blank entry
 #define CFG_GREYED_OUT        (1 << 7) // Greyout in UI, show but not editable
+#define CFG_MULTIPLE          (1 << 8) // This entry can have multiple string values, use linked list of strings
 
 #define CFG_IS_ALLOCATED      (1 << 15)  // Largest bitmask, used internally to track if memory has been allocated for string types and needs to be freed when updated or on exit
 

@@ -25,7 +25,7 @@ static struct mg_http_serve_opts _http_server_opts;
 static struct mg_http_serve_opts _http_server_opts_nocache;
 
 void reset_last_mqtt_status();
-void broadcast_aqualinkstate(struct mg_connection *nc);
+void broadcast_aquachemdstate(struct mg_connection *nc);
 void start_mqtt(struct mg_mgr *mgr);
 
 
@@ -128,6 +128,32 @@ void action_mqtt_message(struct mg_connection *nc, struct mg_mqtt_message *msg)
   log_mg_str(LOG_DEBUG, "MQTT message payload", msg->data);
 }
 
+void action_mqtt_condition_message(acd_condition *condition, struct mg_mqtt_message *mqtt_msg)
+{
+  LOG(LOG_INFO, "MQTT: Received message for condition '%s': %.*s\n", condition->label, mqtt_msg->data.len, mqtt_msg->data.buf);
+  
+  if (strncmp(mqtt_msg->data.buf, condition->mqtt_value, mqtt_msg->data.len) == 0) {
+    LOG(LOG_INFO, "MQTT: Condition '%s' met\n", condition->label);
+    SET_IF_CHANGED(condition->met, true, _aquachemd_data->is_dirty); // Mark data as dirty so it gets sent to clients right away instead of waiting for next sensor read. 
+  } else {
+    LOG(LOG_INFO, "MQTT: Condition '%s' not met\n", condition->label);
+    SET_IF_CHANGED(condition->met, false, _aquachemd_data->is_dirty);
+  }
+}
+
+void action_mqtt_sensor_message(acd_key_t *sensor, struct mg_mqtt_message *mqtt_msg)
+{
+  LOG(LOG_INFO, "MQTT: Received message for sensor '%s': %.*s\n", sensor->label, mqtt_msg->data.len, mqtt_msg->data.buf);
+  
+  if (sensor->type == KEY_TYPE_MQTT_TEMP) {
+    float new_value = strtof(mqtt_msg->data.buf, NULL);
+    LOG(LOG_INFO, "MQTT: Updating sensor '%s' value to %.2f\n", sensor->label, new_value);
+    SET_IF_CHANGED(sensor->value, new_value, _aquachemd_data->is_dirty); // Mark data as dirty so it gets sent to clients right away instead of waiting for next sensor read. 
+  } else {
+    LOG(LOG_WARNING, "MQTT: Received message for unsupported sensor type for sensor '%s'\n", sensor->label);
+  }
+}
+
 static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
   struct mg_mqtt_message *mqtt_msg;
   struct mg_http_message *http_msg;
@@ -171,7 +197,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       LOG(LOG_DEBUG, "-- Websocket left\n");
       if (is_websocket_acdmanager(nc)) {
         _aquachemd_data->acdManagerActive = false;
-        LOG(LOG_DEBUG, "Stoped Aqualink Manager\n");
+        LOG(LOG_DEBUG, "Stoped Aquachemd Manager\n");
       }
     } else if (is_mqtt(nc) || is_mqttconnecting(nc) ) {
       LOG(LOG_WARNING, "MQTT Connection closed\n");
@@ -251,6 +277,28 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       sub_opts.qos = qos;
       LOG(LOG_INFO, "MQTT: Subscribing to '%s'\n", aq_topic);
       mg_mqtt_sub(nc, &sub_opts);
+
+      // Any MQTT conditions we need to subscribe to?
+      for (acd_condition *curr = _aquachemd_data->conditions; curr != NULL; curr = curr->next) {
+        if (curr->type == COND_MQTT) {
+          memset(&sub_opts, 0, sizeof(sub_opts));
+          sub_opts.topic = mg_str(curr->mqtt_topic);
+          sub_opts.qos = qos;
+          LOG(LOG_INFO, "MQTT: Subscribing to '%s'\n", curr->mqtt_topic);
+          mg_mqtt_sub(nc, &sub_opts);
+        }
+      }
+
+      // Any MQTT sensors we need to subscribe to?
+      for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+        if (curr->type == KEY_TYPE_MQTT_TEMP) {
+          memset(&sub_opts, 0, sizeof(sub_opts));
+          sub_opts.topic = mg_str(curr->data.mqtt.topic);
+          sub_opts.qos = qos;
+          LOG(LOG_INFO, "MQTT: Subscribing to '%s'\n", curr->data.mqtt.topic);
+          mg_mqtt_sub(nc, &sub_opts);
+        }
+      }
       
       LOG(LOG_INFO, "MQTT: sending Alive message (last will message)\n");
       snprintf(aq_topic, 24, "%s/%s", _acdconfig_.mqtt_aquachemd_topic,MQTT_LWM_TOPIC);
@@ -265,19 +313,43 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
     break;
   //case MG_EV_MQTT_PUBLISH:
   case MG_EV_MQTT_MSG:
+    bool found=false;
     mqtt_msg = (struct mg_mqtt_message *)ev_data;
     
     // We are only subscribed to aquachemd topic, (so not checking that).
     // Just check we have "set" as string end
     if ( FAST_SUFFIX_3_CI(mqtt_msg->topic.buf, mqtt_msg->topic.len, "set"))
     {
-        action_mqtt_message(nc, mqtt_msg);
+      LOG(LOG_DEBUG, "MQTT: received (msg_id: %d), %.*s\n", mqtt_msg->id, mqtt_msg->topic.len, mqtt_msg->topic.buf);
+      action_mqtt_message(nc, mqtt_msg);
+      found=true;
     } else {
+      for (acd_condition *curr = _aquachemd_data->conditions; curr != NULL; curr = curr->next) {
+        if (curr->type == COND_MQTT) {
+          if (strncasecmp(mqtt_msg->topic.buf, curr->mqtt_topic, mqtt_msg->topic.len) == 0) {
+            LOG(LOG_DEBUG, "MQTT: received (msg_id: %d), %.*s checking\n", mqtt_msg->id, mqtt_msg->topic.len, mqtt_msg->topic.buf);
+            action_mqtt_condition_message(curr, mqtt_msg);
+            found=true;
+          }
+        }
+      }
+      for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+        if (curr->type == KEY_TYPE_MQTT_TEMP) {
+          if (strncasecmp(mqtt_msg->topic.buf, curr->data.mqtt.topic, mqtt_msg->topic.len) == 0) {
+            LOG(LOG_DEBUG, "MQTT: received (msg_id: %d), %.*s checking\n", mqtt_msg->id, mqtt_msg->topic.len, mqtt_msg->topic.buf);
+            action_mqtt_sensor_message(curr, mqtt_msg);
+            found=true;
+          }
+        }
+      }
+    }
+    if (!found) {
       LOG(LOG_DEBUG, "MQTT: received (msg_id: %d), %.*s ignoring\n", mqtt_msg->id, mqtt_msg->topic.len, mqtt_msg->topic.buf);
     }
     break;
   }
 }
+
 
 
 static void ws_send(struct mg_connection *nc, char *msg)
@@ -289,6 +361,15 @@ static void ws_send(struct mg_connection *nc, char *msg)
   //LOG(LOG_DEBUG, "WS: Sent %d characters '%s'\n",size, msg);
 }
 
+void send_mqtt_int_msg(struct mg_connection *nc, char *dev_name, int value) {
+  static char mqtt_pub_topic[250];
+  static char msg[11];
+
+  sprintf(msg, "%d", value);
+  sprintf(mqtt_pub_topic, "%s/%s", _acdconfig_.mqtt_aquachemd_topic, dev_name);
+  send_mqtt(nc, mqtt_pub_topic, msg);
+}
+
 void send_mqtt_float_msg(struct mg_connection *nc, char *dev_name, float value) {
   static char mqtt_pub_topic[250];
   static char msg[11];
@@ -298,6 +379,36 @@ void send_mqtt_float_msg(struct mg_connection *nc, char *dev_name, float value) 
   send_mqtt(nc, mqtt_pub_topic, msg);
 }
 
+/*
+// replaced with send_mqtt_acd_state_msg()
+void send_mqtt_key_status_msg(struct mg_connection *nc, acd_key_t *key) {
+  static char mqtt_pub_topic[250];
+  static char msg[4];
+
+  sprintf(mqtt_pub_topic, "%s/%s/status", _acdconfig_.mqtt_aquachemd_topic, key->ID);
+  sprintf(msg, "%d", key->state);
+  send_mqtt(nc, mqtt_pub_topic, msg);
+}
+*/
+
+void send_mqtt_acd_state_msg(struct mg_connection *nc, char *ID, acd_state_t state) {
+  static char mqtt_pub_topic[250];
+  static char msg[4];
+
+  sprintf(mqtt_pub_topic, "%s/%s/status", _acdconfig_.mqtt_aquachemd_topic, ID);
+  sprintf(msg, "%d", state);
+  send_mqtt(nc, mqtt_pub_topic, msg);
+}
+
+/*
+void send_mqtt_string_msg(struct mg_connection *nc, const char *dev_name, const char *msg) {
+  static char mqtt_pub_topic[250];
+
+  sprintf(mqtt_pub_topic, "%s/%s", _aqconfig_.mqtt_aq_topic, dev_name);
+  send_mqtt(nc, mqtt_pub_topic, msg);
+}
+*/
+
 void send_mqtt_temp_msg(struct mg_connection *nc, char *dev_name, float value)
 {
   // Incase we need to do degc to f conversion, we can do it here.
@@ -306,14 +417,44 @@ void send_mqtt_temp_msg(struct mg_connection *nc, char *dev_name, float value)
 
 void mqtt_broadcast_aquachemdstate(struct mg_connection *nc)
 {
-  send_mqtt_temp_msg(nc, MQTT_TEMP_TOPIC, _aquachemd_data->temp_reading.value);
-  send_mqtt_float_msg(nc, MQTT_PH_TOPIC, _aquachemd_data->ph_reading.value);
-  send_mqtt_float_msg(nc, MQTT_ORP_TOPIC, _aquachemd_data->orp_reading.value);
 
+  char topic[250];
+  char msg[11];
+
+  // Post main ACD state
+  send_mqtt_acd_state_msg(nc, _aquachemd_data->keys->ID, _aquachemd_data->keys->state);
+
+  // Post conditions if enabled.  
+  if (_acdconfig_.post_condition == true) {
+    for (acd_condition *curr = _aquachemd_data->conditions; curr != NULL; curr = curr->next) {
+      send_mqtt_acd_state_msg(nc, curr->ID, curr->met?ACD_LED_ON:ACD_LED_OFF);
+    }
+  }
+
+  // Post sensors
+  for (acd_key_t *curr = _aquachemd_data->keys->next; curr != NULL; curr = curr->next) { 
+    //send_mqtt_key_status_msg(nc, curr);
+    send_mqtt_acd_state_msg(nc, curr->ID, curr->state);
+    if (curr->state == ACD_LED_ON)
+      send_mqtt_float_msg(nc, curr->ID, curr->value);
+  }
+
+  // Post to aqualinkd if enabled (only pH & ORP)
   if (_acdconfig_.mqtt_aqualinkd_topic != NULL) {
-    static char mqtt_pub_topic[250];
-    static char msg[11];
-
+    for (acd_key_t *curr = _aquachemd_data->keys->next; curr != NULL; curr = curr->next) {
+      if (curr->type == KEY_TYPE_EZO_PH && curr->index == MASTER_ID && curr->state == ACD_LED_ON) {
+        sprintf(msg, "%.2f", curr->value);
+        sprintf(topic, "%s/CHEM/pH/set", _acdconfig_.mqtt_aqualinkd_topic);
+        send_mqtt(nc, topic, msg);
+        LOG(LOG_DEBUG, "MQTT: Broadcasted pump pH %s to Aqualinkd\n", msg);
+      } else if (curr->type == KEY_TYPE_EZO_ORP && curr->index == MASTER_ID && curr->state == ACD_LED_ON) {
+        sprintf(msg, "%.2f", curr->value);
+        sprintf(topic, "%s/CHEM/ORP/set", _acdconfig_.mqtt_aqualinkd_topic);
+        send_mqtt(nc, topic, msg);
+        LOG(LOG_DEBUG, "MQTT: Broadcasted pump ORP %s to Aqualinkd\n", msg);
+      }
+    }
+/*
     sprintf(msg, "%.2f", _aquachemd_data->ph_reading.value);
     sprintf(mqtt_pub_topic, "%s/CHEM/pH/set", _acdconfig_.mqtt_aqualinkd_topic);
     send_mqtt(nc, mqtt_pub_topic, msg);
@@ -321,8 +462,8 @@ void mqtt_broadcast_aquachemdstate(struct mg_connection *nc)
     sprintf(msg, "%.2f", _aquachemd_data->orp_reading.value);
     sprintf(mqtt_pub_topic, "%s/CHEM/ORP/set", _acdconfig_.mqtt_aqualinkd_topic);
     send_mqtt(nc, mqtt_pub_topic, msg);
-    
-    LOG(LOG_DEBUG, "MQTT: Broadcasted pH %.2f and ORP %.2f to Aqualinkd\n", _aquachemd_data->ph_reading.value, _aquachemd_data->orp_reading.value);
+*/    
+    //LOG(LOG_DEBUG, "MQTT: Broadcasted pH %.2f and ORP %.2f to Aqualinkd\n", _aquachemd_data->ph_reading.value, _aquachemd_data->orp_reading.value);
   }
 }
 
@@ -331,12 +472,12 @@ void reset_last_mqtt_status()
 {
 }
 
-void broadcast_aqualinkstate(struct mg_connection *nc) 
+void broadcast_aquachemdstate(struct mg_connection *nc) 
 {
   struct mg_connection *c;
   static int mqtt_count=0;
 
-  LOG(LOG_NOTICE, "Broadcasting Aqualink state to websockets and MQTT\n");
+  LOG(LOG_NOTICE, "Broadcasting Aquachemd state to websockets and MQTT\n");
 
   // Reconnect MQTT if needed.
   if (_mqtt_exit_flag == true) {
@@ -468,7 +609,7 @@ void *net_services_thread( void *ptr )
     mg_mgr_poll(&_mgr, 100);
 
     if (_aquachemd_data->is_dirty == true /*|| _broadcast == true*/) {
-      broadcast_aqualinkstate(_mgr.conns);
+      broadcast_aquachemdstate(_mgr.conns);
       CLEAR_DIRTY(_aquachemd_data->is_dirty);
     } else {
       //LOG(LOG_DEBUG, "No state change, not broadcasting\n");
