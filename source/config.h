@@ -22,36 +22,6 @@ void check_print_config (struct aquachemdata *acdata);
 
 #define MAXCFGLINE 256
 
-typedef enum acd_condition_type {
-  COND_MQTT,
-  COND_GPIO
-} acd_condition_type;
-
-typedef struct acd_condition {
-  acd_condition_type type;
-  char *label;
-  char *ID;
-  uint8_t index; //values from 0 to 255
-  bool met; // Whether the condition is currently met or not.
-
-  union {
-    struct {
-      char *mqtt_topic;
-      char *mqtt_value; // Good value for the topic to be considered "met"
-      //char *mqtt_current_value; // Store the current value of the topic so we can check if it has changed in the main loop
-    };
-    struct {
-      int gpio_pin;
-      bool gpio_value; // Good value for the topic to be considered "met"
-      //bool gpio_current_value; // Store the current value of the GPIO pin so we can check if it has changed in the main loop
-      gpio_handle_t *gpio_handle; // Store the GPIO handle for this condition so we can read it in the main loop
-    };
-  };
-  
-  struct acd_condition *next;
-} acd_condition;
-
-
 
 struct acdconfig
 {
@@ -66,7 +36,7 @@ struct acdconfig
   unsigned int mg_log_level;
   char *web_directory;
 
-  bool deamonize;
+  //bool deamonize;
 
   char *mqtt_aquachemd_topic;
   char *mqtt_aqualinkd_topic;
@@ -82,6 +52,9 @@ struct acdconfig
   bool convert_mqtt_temp;
   bool mqtt_timed_update;
   
+  int ph_reading_temp_max;
+  int ph_reading_temp_min;
+
   int sensor_poll_time;
 
   bool post_condition; // Whether to post & display conditions that are met/unmet
@@ -91,7 +64,7 @@ struct acdconfig
   float test_float;
   uint16_t test_bitmask;
 
-  acd_condition *conditions;
+  acd_condition_t *conditions;
   acd_key_t *sensors;
 };
 
@@ -138,7 +111,13 @@ typedef struct cfgParam {
 #ifndef CONFIG_C
 extern struct acdconfig _acdconfig_;
 #else
-struct acdconfig _acdconfig_;
+//struct acdconfig _acdconfig_;
+// Initialize config with safe defaults
+struct acdconfig _acdconfig_ = {
+    .log_level      = LOG_INFO,  // Start with INFO so we see boot messages
+    .listen_address = "0.0.0.0:8080",
+    .config_file    = "/etc/aquachemd.conf"
+};
 #endif
 
 

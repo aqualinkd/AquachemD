@@ -15,6 +15,12 @@ typedef enum {
   GPIO_ACTIVE_LOW  = 1    // line is active when value = 0 (some relay boards)
 } gpio_active_t;
 
+// GPIO logical requirement — Is the condition met when the device is ON or OFF?
+typedef enum {
+  GPIO_REQ_OFF = 0,
+  GPIO_REQ_ON  = 1
+} gpio_req_t;
+
 // GPIO return codes
 #define GPIO_SUCCESS   0
 #define GPIO_ERROR    -1
@@ -29,7 +35,8 @@ typedef struct {
   int                        pin;
   gpio_dir_t                 direction;
   gpio_active_t              active;
-  char                       label[32];   // consumer label shown by gpioinfo
+  gpio_req_t                 required;    // Logical Target (0=OFF, 1=ON)
+  //char                       label[32];   // consumer label shown by gpioinfo
 } gpio_handle_t;
 
 // ─── Bus utilities ────────────────────────────────────────────────────────────
@@ -49,7 +56,7 @@ void gpio_detect(bool deepscan);
 // label:      consumer name shown by gpioinfo (e.g. "ph_pump", "cl_pump")
 // Returns GPIO_SUCCESS or GPIO_ERROR
 int gpio_open(gpio_handle_t *h, const char *chip_path, int pin,
-              gpio_dir_t direction, gpio_active_t active, const char *label);
+              gpio_dir_t direction, gpio_active_t active/*, const char *label*/);
 
 // Release the GPIO line and close the chip
 void gpio_close(gpio_handle_t *h);
@@ -75,5 +82,8 @@ int relay_off(gpio_handle_t *h);
 
 // Returns 1 if relay is on, 0 if off, GPIO_ERROR on failure
 int relay_is_on(gpio_handle_t *h);
+
+// Returns 1 if the sensor is in the state required by the config. GPIO_ERROR on failure
+int sensor_is_met(gpio_handle_t *h);
 
 #endif

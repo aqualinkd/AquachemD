@@ -7,13 +7,20 @@
 //#include <stdbool.h>
 //#include <stdint.h>
 //#include <time.h>
+#include "acd_types.h"
+
 
 void LOG(const int msg_level, const char * format, ...);
 void FORCE_LOG(const int msg_level, const char * format, ...);
 
+void init_logging_backend();
+
 char *cleanwhitespace(char *str);
 bool text2bool(char *str);
 char *bool2text(bool val);
+char *gpioactive2text(gpio_active_t val);
+gpio_active_t text2gpioactive(char *str);
+
 float degFtoC(float degF);
 float degCtoF(float degC);
 
@@ -21,7 +28,13 @@ float degCtoF(float degC);
 const char *strncasestr(const char *haystack, const char *needle, int length);
 char *cleanalloc(char *str, int length);
 char *strcsub(char *dst, int dst_len, const char *src, char find, char replace);
+int strtrimcasecmp(const char *haystack, const char *needle);
+void precise_delay(long nanoseconds);
 
+const char* acd_state_to_str(acd_state_t state);
+
+
+#define STR_MATCH(s1, s2) (strtrimcasecmp(s1, s2) == 0)
 
 #define isMASKSET(bitmask, mask) ((bitmask & mask) == mask)
 #define setMASK(bitmask, mask)    (bitmask |= mask)

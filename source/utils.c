@@ -1,60 +1,85 @@
 
 
+#define _POSIX_C_SOURCE 200809L // clock_nanosleep()
 #define SYSLOG_NAMES
 #include <stdlib.h>
 #include <syslog.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <systemd/sd-journal.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
+#ifdef USE_SYSTEMD
+#include <systemd/sd-journal.h>
+#endif
 
 #include "utils.h"
 #include "config.h"
+#include "acd_types.h"
+#include "gpio.h"
 
 
+static bool _use_journal = false;
 
-void FORCE_LOG(const int msg_level, const char * format, ...)
-{
-  va_list args;
-
-  va_start(args, format);
-  vfprintf(stdout, format, args);
-  sd_journal_printv(msg_level, format, args);
-  va_end(args);
+void init_logging_backend() {
+  _use_journal = false; // Default to false
+#ifdef USE_SYSTEMD
+  if (getenv("JOURNAL_STREAM")) {
+    _use_journal = true;
+  }
+#endif
 }
 
-void LOG(const int msg_level, const char * format, ...)
-{
-  va_list args;
+/* Internal helper that does the actual work */
+static void _do_log(const int msg_level, const char *format, va_list args) {
+    va_list args_copy;
+    
+#ifdef USE_SYSTEMD
+    if (_use_journal) {
+        va_copy(args_copy, args);
+        sd_journal_printv(msg_level, format, args_copy);
+        va_end(args_copy);
+        return; 
+    }
+#endif
 
-  if ( msg_level > _acdconfig_.log_level) {
-    return;
-  }
-
-  va_start(args, format);
-  sd_journal_printv(msg_level, format, args);
-  va_end(args);
-
-  if (_acdconfig_.deamonize == false || msg_level <= LOG_ERR) {
     char message[1024];
-    va_list args;
-    va_start(args, format);
-    int len = vsnprintf(message, sizeof(message), format, args);
-    va_end(args);
+    va_copy(args_copy, args);
+    int len = vsnprintf(message, sizeof(message), format, args_copy);
+    va_end(args_copy);
 
-    // Trim all trailing newlines and carriage returns
-    while (len > 0 && (message[len - 1] == '\n' || message[len - 1] == '\r')) {
-      message[--len] = '\0';
+    while (len > 0 && isspace(message[len - 1])) {
+        message[--len] = '\0';
     }
 
     printf("%-7.7s: %s\n", log_priority_to_str(msg_level), message);
-    //if (msg_level <= LOG_ERR)
-    //  fprintf(stderr, "%s: %s\n", log_priority_to_str(msg_level), message);
-  }
+    fflush(stdout);
 }
+
+/* Always prints */
+void FORCE_LOG(const int msg_level, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    _do_log(msg_level, format, args);
+    va_end(args);
+}
+
+/* Only prints if msg_level <= config limit */
+void LOG(const int msg_level, const char *format, ...) {
+    // Standard Unix/Syslog: 0 (Emerg) is most important, 7 (Debug) is least.
+    if (msg_level > _acdconfig_.log_level) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, format);
+    _do_log(msg_level, format, args);
+    va_end(args);
+}
+
+
 
 //Move existing pointer
 char *cleanwhitespace(char *str)
@@ -158,6 +183,38 @@ const char *strncasestr(const char *haystack, const char *needle, int length)
   return NULL;
 }
 
+/**
+ * strtrimcasecmp: Perfectly matches two strings, ignoring case and 
+ * surrounding whitespace. Returns 0 on success, -1 on mismatch.
+ */
+int strtrimcasecmp(const char *haystack, const char *needle)
+{
+    if (!haystack || !needle) return -1;
+
+    // Skip leading whitespace
+    while (isspace((unsigned char)*haystack)) haystack++;
+    while (isspace((unsigned char)*needle)) needle++;
+
+    // Find ends to calculate trimmed length
+    const char *h_end = haystack + strlen(haystack) - 1;
+    const char *n_end = needle + strlen(needle) - 1;
+
+    // Move backwards to skip trailing whitespace
+    while (h_end > haystack && isspace((unsigned char)*h_end)) h_end--;
+    while (n_end > needle && isspace((unsigned char)*n_end)) n_end--;
+
+    // Calculate effective lengths
+    size_t h_len = (h_end >= haystack) ? (size_t)(h_end - haystack + 1) : 0;
+    size_t n_len = (n_end >= needle) ? (size_t)(n_end - needle + 1) : 0;
+
+    // Must be same length and not empty for a perfect match
+    if (h_len != n_len || h_len == 0)
+        return -1;
+
+    // Compare actual content
+    return strncasecmp(haystack, needle, h_len);
+}
+
 // Replace all occurrences of 'find' with 'replace' in 'src', copying to 'dst'.
 // dst: destination buffer to write result (must be pre-allocated by caller)
 // dst_len is the total size of the destination buffer, including space for null terminator.
@@ -202,6 +259,23 @@ char *bool2text(bool val)
     return "NO";
 }
 
+gpio_active_t text2gpioactive(char *str)
+{
+  str = cleanwhitespace(str);
+  if (strcasecmp (str, "ACTIVE_LOW") == 0 || strcasecmp (str, "ACTIVE LOW") == 0)
+    return GPIO_ACTIVE_LOW;
+  else
+    return GPIO_ACTIVE_HIGH;
+}
+
+char *gpioactive2text(gpio_active_t val)
+{
+  if(val == GPIO_ACTIVE_HIGH)
+    return "Active High";
+  else
+    return "Active Low";
+}
+
 // (50°F - 32) x .5556 = 10°C
 float degFtoC(float degF)
 {
@@ -211,4 +285,31 @@ float degFtoC(float degF)
 float degCtoF(float degC)
 {
   return (degC * 1.8 + 32);
+}
+
+
+
+
+#include <time.h>
+
+void precise_delay(long nanoseconds) {
+    struct timespec ts;
+    ts.tv_sec = nanoseconds / 1000000000L;
+    ts.tv_nsec = nanoseconds % 1000000000L;
+    
+    // TIMER_ABSTIME = 0 means relative sleep
+    clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
+}
+
+
+
+const char* acd_state_to_str(acd_state_t state) {
+    switch (state) {
+        case ACD_LED_OFF:      return "OFF";
+        case ACD_LED_ON:       return "ON";
+        case ACD_LED_ENABLED:  return "ENABLED";
+        case ACD_LED_DISABLED: return "DISABLED";
+        case ACD_LED_UNKNOWN: 
+        default:               return "UNKNOWN";
+    }
 }

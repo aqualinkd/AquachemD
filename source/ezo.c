@@ -595,7 +595,11 @@ int orp_sleep()                                { return ezo_sleep(EZO_ORP_ADDR);
 
 rtd_reading_t rtd_get_reading()
 {
-  return (rtd_reading_t){ 28.5f + dummy_drift(0.5f), RTD_SCALE_CELSIUS, EZO_SUCCESS };
+  // Return between 28 and 29
+  //return (rtd_reading_t){ 28.5f + dummy_drift(0.5f), RTD_SCALE_CELSIUS, EZO_SUCCESS };
+
+  // Return between -5 and 75
+  return (rtd_reading_t){ 35.0f + dummy_drift(40.0f), RTD_SCALE_CELSIUS, EZO_SUCCESS };
 }
 
 int rtd_set_scale(rtd_scale_t scale)

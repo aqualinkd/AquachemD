@@ -1,0 +1,203 @@
+{
+  "theme": "",
+  "background_image": {
+    "-url": "hk/background.jpg",
+    "-url-light": "hk/background-light.jpg",
+    "-url-dark": "hk/background-dark.jpg",
+    "-url_reload": 0
+  },
+  "colors-light": {
+    "body_background": "#EBEBEB",
+    "body_text": "#000000",
+    "options_pane_background": "#F5F5F5",
+    "options_pane_bordercolor": "#7C7C7C",
+    "options_slider_highlight": "#2196F3",
+    "options_slider_lowlight": "#D3D3D3",
+    "head_background": "#2B6A8F",
+    "head_text": "#FFFFFF",
+    "error_background": "#8F2B2B",
+    "tile_background": "#DCDCDC",
+    "tile_text": "#6E6E6E",
+    "tile_on_background": "#FFFFFF",
+    "tile_on_text": "#000000",
+    "tile_status_text": "#575757",
+    "value_tile_normal_color": "#049FF8",
+    "value_tile_attention_color": "#FF8000",
+    "value_tile_outofrange_color": "#FF6400",
+    "options_radio_highlight": "#2196F3",
+    "options_radio_lowlight": "#D3D3D3",
+    "tile_icon_background_color_heat": "rgb(255, 123, 0)",
+    "tile_icon_background_color_cool": "rgb(4, 159, 248)",
+    "tile_icon_background_color_enabled": "rgb(78, 196, 0)",
+    "tile_icon_background_color_disabled": "rgb(110, 110, 110)",
+    "tile_off_opacity": "0.90"
+  },
+  "colors-dark": {
+    "body_background": "#121212",
+    "body_text": "#FFFFFF",
+    "options_pane_background": "#1E1E1E",
+    "options_pane_bordercolor": "#555555",
+    "options_slider_highlight": "#64B5F6",
+    "options_slider_lowlight": "#555555",
+    "head_background": "#004d7a",
+    "head_text": "#FFFFFF",
+    "error_background": "#b00020",
+    "tile_background": "#333333",
+    "tile_text": "#AAAAAA",
+    "tile_on_background": "#BBBBBB",
+    "tile_on_text": "#000000",
+    "tile_status_text": "#7b7b7b",
+    "value_tile_normal_color": "#049FF8",
+    "value_tile_attention_color": "#b04300",
+    "value_tile_outofrange_color": "#b02300",
+    "options_radio_highlight": "#64B5F6",
+    "options_radio_lowlight": "#555555",
+    "tile_icon_background_color_heat": "rgb(255, 123, 0)",
+    "tile_icon_background_color_cool": "rgb(4, 159, 248)",
+    "tile_icon_background_color_enabled": "rgb(78, 196, 0)",
+    "tile_icon_background_color_disabled": "rgb(110, 110, 110)",
+    "tile_off_opacity": "0.90",
+    "csinputcell_background": "#555555",
+    "options_button_background": "#555555"
+  },
+  "devices": {
+    "AquachemD": {
+      "display": true,
+      "_____enabled_text": "Enabled"
+    },
+    "PMP_1": {
+      "display": true
+    },
+    "PMP_2": {
+      "display": true
+    },
+    "TEMP_1": {
+      "display": true,
+      "uom": "&deg;",
+      "precision": 0,
+      "thresholds": {
+        "outofrange": {
+          "min": 1,
+          "max": 60,
+          "mintext": "To Cold",
+          "maxtext": "To Hot"
+        }
+      }
+    },
+    "PH_1": {
+      "display": true,
+      "on_text": "Sampling",
+      "off_text": "Off",
+      "precision": 1,
+      "thresholds": {
+        "outofrange": {
+          "min": 7,
+          "max": 8
+        },
+        "attention": {
+          "min": 7.2,
+          "max": 7.8,
+          "mintext": "Low",
+          "maxtext": "High"
+        }
+      }
+    },
+    "ORP_1": {
+      "display": true,
+      "uom": "mv",
+      "on_text": "Sampling",
+      "off_text": "Off",
+      "precision": 0,
+      "thresholds": {
+        "outofrange": {
+          "min": 560,
+          "max": 900
+        },
+        "attention": {
+          "min": 650,
+          "max": 850,
+          "mintext": "Low",
+          "maxtext": "High"
+        }
+      }
+    },
+    "CS_1": {
+      "display": true
+    },
+     "CS_2": {
+      "display": true
+    },
+     "CS_3": {
+      "display": true
+    },
+     "CS_4": {
+      "display": true
+    }
+  },
+  "slider_range": {
+    "heater_slider_min": 36,
+    "heater_slider_max": 104,
+    "timer_slider_min": 0,
+    "timer_slider_max": 240,
+    "timer_slider_step": 1
+  },
+  "_OLD_tile_thresholds_OLD_": {
+    "SWG/PPM": {
+      "outofrange": {
+        "min": 2600,
+        "max": 3500,
+        "mintext": "Add Salt"
+      },
+      "attention": {
+        "min": 2700,
+        "max": 3400,
+        "mintext": "Add Salt"
+      }
+    },
+    "CHEM/pH": {
+      "outofrange": {
+        "min": 7,
+        "max": 8
+      },
+      "attention": {
+        "min": 7.2,
+        "max": 7.8,
+        "mintext": "Low",
+        "maxtext": "High"
+      }
+    },
+    "CHEM/ORP": {
+      "outofrange": {
+        "min": 560,
+        "max": 900
+      },
+      "attention": {
+        "min": 650,
+        "max": 850,
+        "mintext": "Low",
+        "maxtext": "High"
+      }
+    }
+  },
+  "swg_status": {
+    "0": "On",
+    "1": "No flow",
+    "2": "Low salt",
+    "4": "High salt",
+    "8": "Clean cell",
+    "9": "Turning off",
+    "16": "High current",
+    "32": "Low volts",
+    "64": "Low temp",
+    "128": "Check PCB",
+    "253": "General Fault",
+    "254": "Unknown",
+    "255": "Off"
+  },
+  "tile_settings": {
+    "turn_off_sensortiles": "true",
+    "show_vsp_gpm": "true",
+    "disable_off_icon_background": "true",
+    "light_program_use_dropdown": "false"
+  }
+}

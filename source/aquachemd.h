@@ -9,10 +9,17 @@
 #include "config.h"
 #include "acd_types.h"
 
-void intHandler(int sig_num);
 
 #define SET_DIRTY(flag)    ((flag) = true)
 #define CLEAR_DIRTY(flag)  ((flag) = false)
+
+
+
+//void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
+bool stateChangeRequest(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
+
+void intHandler(int sig_num);
+
 
 /**
  * SET_IF_CHANGED: Updates a variable and sets a flag if the value has changed.
@@ -44,7 +51,7 @@ void intHandler(int sig_num);
     })
 
 
-
+#define DISPLAY_MSG_SIZE 64
 
 struct aquachemdata
 {
@@ -57,8 +64,10 @@ struct aquachemdata
   //orp_reading_t orp_reading;
   //rtd_reading_t temp_reading;
 
-  acd_condition *conditions;
+  acd_condition_t *conditions;
   acd_key_t *keys; // Linked list of all keys (sensors, pumps, GPIOs, etc.) for easy access and management
+
+  char display_message[DISPLAY_MSG_SIZE];
 };
 
 

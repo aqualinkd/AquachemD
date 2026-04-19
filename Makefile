@@ -1,5 +1,5 @@
 #
-# EZO I2C Probe Library - Makefile
+# AquachemD - Makefile
 #
 # Targets:
 #   make                    - native build
@@ -14,6 +14,7 @@
 #
 # Options (append to any target):
 #   WITH_GPIOD=0            - disable GPIO support, removes libgpiod dependency
+#.  WITH_SYSTEMD=0          - disable systemd
 #   DOCKER_IMAGE=<name>     - override Docker image for release builds
 #
 # Examples:
@@ -26,6 +27,13 @@
 #   docker build -f Dockerfile.build -t ezo-buildenv .
 #
 
+
+# ─── Options ─────────────────────────────────────────────────────────────────
+#
+#
+WITH_GPIOD ?= 1
+WITH_SYSTEMD ?= 1
+
 # ─── Compilers ────────────────────────────────────────────────────────────────
 
 CC        = gcc
@@ -36,39 +44,30 @@ CC_ARMHF  = arm-linux-gnueabihf-gcc
 #   make release DOCKER_IMAGE=aqualinkd-releasebin
 DOCKER_IMAGE = aquachemd-releasebin
 
-# ─── Options ─────────────────────────────────────────────────────────────────
-#
-# WITH_GPIOD — enable GPIO support via libgpiod
-# Default: 1 (enabled)
-# Override on command line: make WITH_GPIOD=0
-#                           make arm64 WITH_GPIOD=0
-#                           make release WITH_GPIOD=0
-#
-WITH_GPIOD ?= 1
-
 # ─── Flags ────────────────────────────────────────────────────────────────────
 
+# Standard build: optimised, all warnings
+# Note: CFLAGS already contains the -D flags now because of the += above
+CFLAGS    += -Wall -O2 -std=c11
+DFLAGS    += -Wall -O0 -g -std=c11
+
 # Base libs — always required
-LIBS      = -lpthread -lm -lsystemd
+LIBS      = -lpthread -lm
+
+# Conditionally add systemd
+ifeq ($(strip $(WITH_SYSTEMD)), 1)
+  LIBS    += -lsystemd
+  CFLAGS  += -D USE_SYSTEMD
+  DFLAGS  += -D USE_SYSTEMD
+endif
 
 # Conditionally add libgpiod
-ifeq ($(WITH_GPIOD), 1)
+ifeq ($(strip $(WITH_GPIOD)), 1)
   LIBS    += -lgpiod
-endif
-
-# Standard build: optimised, all warnings
-CFLAGS    = -Wall -O2 -std=c11
-
-# Conditionally add -D WITH_GPIOD compile flag
-ifeq ($(WITH_GPIOD), 1)
   CFLAGS  += -D WITH_GPIOD
-endif
-
-# Debug build: no optimisation, full debug info
-DFLAGS    = -Wall -O0 -g -std=c11
-ifeq ($(WITH_GPIOD), 1)
   DFLAGS  += -D WITH_GPIOD
 endif
+
 
 # Mongoose 7.19 flags
 #CFLAGS += -D MG_TLS=2 #(2=MG_TLS_OPENSSL. 3=MG_TLS_BUILTIN) --or--  -DMG_TLS=MG_TLS_BUILTIN
@@ -86,7 +85,8 @@ OBJ_ARM64  = $(OBJ_DIR)/arm64
 OBJ_ARMHF  = $(OBJ_DIR)/armhf
 OBJ_DEBUG  = $(OBJ_DIR)/debug
 
-INCLUDES   = -I$(SRC_DIR)
+#INCLUDES   = -I$(SRC_DIR)
+INCLUDES  = -I$(SRC_DIR) -I./deps/cJSON -I./deps/mongoose
 
 # Create all build directories upfront at parse time.
 # This avoids defining a $(REL_DIR) rule that would conflict with the
@@ -104,16 +104,45 @@ $(shell mkdir -p $(REL_DIR) $(OBJ_NATIVE) $(OBJ_ARM64) $(OBJ_ARMHF) $(OBJ_DEBUG)
 
 SRCS      = $(wildcard $(SRC_DIR)/*.c)
 
-ifeq ($(WITH_GPIOD), 0)
+# Explicitly add the external dependencies
+SRCS     += deps/cJSON/cJSON.c
+SRCS     += deps/mongoose/mongoose.c
+
+# filter out logic for GPIO
+ifeq ($(strip $(WITH_GPIOD)), 0)
   SRCS    := $(filter-out $(SRC_DIR)/gpio.c, $(SRCS))
 endif
 
 # ─── Object files per architecture ────────────────────────────────────────────
 
-OBJ_FILES_NATIVE = $(patsubst $(SRC_DIR)/%.c, $(OBJ_NATIVE)/%.o, $(SRCS))
-OBJ_FILES_ARM64  = $(patsubst $(SRC_DIR)/%.c, $(OBJ_ARM64)/%.o,  $(SRCS))
-OBJ_FILES_ARMHF  = $(patsubst $(SRC_DIR)/%.c, $(OBJ_ARMHF)/%.o,  $(SRCS))
-OBJ_FILES_DEBUG  = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DEBUG)/%.o,  $(SRCS))
+#OBJ_FILES_NATIVE = $(patsubst $(SRC_DIR)/%.c, $(OBJ_NATIVE)/%.o, $(SRCS))
+#OBJ_FILES_ARM64  = $(patsubst $(SRC_DIR)/%.c, $(OBJ_ARM64)/%.o,  $(SRCS))
+#OBJ_FILES_ARMHF  = $(patsubst $(SRC_DIR)/%.c, $(OBJ_ARMHF)/%.o,  $(SRCS))
+#OBJ_FILES_DEBUG  = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DEBUG)/%.o,  $(SRCS))
+
+# Search paths for source files (No spaces around the colons!)
+vpath %.c $(SRC_DIR):deps/cJSON:deps/mongoose
+
+# Update the Object file list (Flattened)
+# This takes "deps/cJSON/cJSON.c" -> "cJSON.o" -> "build/native/cJSON.o"
+OBJ_FILES_NATIVE = $(patsubst %.c, $(OBJ_NATIVE)/%.o, $(notdir $(SRCS)))
+OBJ_FILES_ARM64  = $(patsubst %.c, $(OBJ_ARM64)/%.o,  $(notdir $(SRCS)))
+OBJ_FILES_ARMHF  = $(patsubst %.c, $(OBJ_ARMHF)/%.o,  $(notdir $(SRCS)))
+OBJ_FILES_DEBUG  = $(patsubst %.c, $(OBJ_DEBUG)/%.o,  $(notdir $(SRCS)))
+
+# Remove $(SRC_DIR)/ from the right side of the colon
+$(OBJ_NATIVE)/%.o: %.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+
+$(OBJ_DEBUG)/%.o: %.c
+	$(CC) $(DFLAGS) $(INCLUDES) -c -o $@ $<
+
+$(OBJ_ARM64)/%.o: %.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+
+$(OBJ_ARMHF)/%.o: %.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+
 
 # ─── Output binaries ──────────────────────────────────────────────────────────
 
@@ -163,8 +192,8 @@ dummy: $(TARGET)
 $(TARGET): $(OBJ_FILES_NATIVE)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
 
-$(OBJ_NATIVE)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+#$(OBJ_NATIVE)/%.o: $(SRC_DIR)/%.c
+#	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
 # ─── Debug build ──────────────────────────────────────────────────────────────
 
@@ -174,8 +203,8 @@ debug: $(TARGET_DEBUG)
 $(TARGET_DEBUG): $(OBJ_FILES_DEBUG)
 	$(CC) $(DFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
 
-$(OBJ_DEBUG)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(DFLAGS) $(INCLUDES) -c -o $@ $<
+#$(OBJ_DEBUG)/%.o: $(SRC_DIR)/%.c
+#	$(CC) $(DFLAGS) $(INCLUDES) -c -o $@ $<
 
 # ─── arm64 cross-compile ──────────────────────────────────────────────────────
 
@@ -186,8 +215,8 @@ arm64: $(TARGET_ARM64)
 $(TARGET_ARM64): $(OBJ_FILES_ARM64)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
 
-$(OBJ_ARM64)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+#$(OBJ_ARM64)/%.o: $(SRC_DIR)/%.c
+#	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
 # ─── armhf cross-compile ──────────────────────────────────────────────────────
 
@@ -198,8 +227,8 @@ armhf: $(TARGET_ARMHF)
 $(TARGET_ARMHF): $(OBJ_FILES_ARMHF)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
 
-$(OBJ_ARMHF)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+#$(OBJ_ARMHF)/%.o: $(SRC_DIR)/%.c
+#	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
 # ─── Install ──────────────────────────────────────────────────────────────────
 

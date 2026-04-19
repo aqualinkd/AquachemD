@@ -1,4 +1,7 @@
 
+#define _POSIX_C_SOURCE 200809L // for strdup
+#include <string.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,6 +15,8 @@
 #include "net_services.h"
 #include "mqtt_discovery.h"
 #include "net_interface.h"
+#include "json_messages.h"
+
 
 static struct aquachemdata *_aquachemd_data;
 //static char *_web_root;
@@ -27,7 +32,7 @@ static struct mg_http_serve_opts _http_server_opts_nocache;
 void reset_last_mqtt_status();
 void broadcast_aquachemdstate(struct mg_connection *nc);
 void start_mqtt(struct mg_mgr *mgr);
-
+static void ws_send(struct mg_connection *nc, char *msg);
 
 #define FAST_SUFFIX_3_CI(str, len, SUFFIX) ( \
     (len) >= 3 && \
@@ -35,6 +40,15 @@ void start_mqtt(struct mg_mgr *mgr);
     tolower((unsigned char)(str)[(len)-2]) == tolower((unsigned char)(SUFFIX)[1]) && \
     tolower((unsigned char)(str)[(len)-1]) == tolower((unsigned char)(SUFFIX)[2]) \
 )
+
+#define FAST_SUFFIX_4_CI(str, len, SUFFIX) ( \
+    (len) >= 4 && \
+    tolower((unsigned char)(str)[(len)-4]) == tolower((unsigned char)(SUFFIX)[0]) && \
+    tolower((unsigned char)(str)[(len)-3]) == tolower((unsigned char)(SUFFIX)[1]) && \
+    tolower((unsigned char)(str)[(len)-2]) == tolower((unsigned char)(SUFFIX)[2]) && \
+    tolower((unsigned char)(str)[(len)-1]) == tolower((unsigned char)(SUFFIX)[3]) \
+)
+
 
 struct mg_connection *mg_next(struct mg_mgr *s, struct mg_connection *conn) {
   return conn == NULL ? s->conns : conn->next;
@@ -91,6 +105,7 @@ void log_mg_str(int level, char *name, struct mg_str str) {
   LOG(level, "%s: %s", name, buf);
 }
 
+
 void send_mqtt(struct mg_connection *nc, const char *toppic, const char *message)
 {
   //static uint16_t msg_id = 0;
@@ -108,37 +123,295 @@ void send_mqtt(struct mg_connection *nc, const char *toppic, const char *message
 }
 
 
+void send_ws(struct mg_connection *nc, const char *msg)
+{
+  int size = strlen(msg);
+  
+  mg_ws_send(nc, msg, size, WEBSOCKET_OP_TEXT);
+  
+  //LOG(NET_LOG,LOG_DEBUG, "WS: Sent %d characters '%s'\n",size, msg);
+}
+
+/**
+ * Sends a formatted JSON reply over a WebSocket.
+ * @param c       The mongoose connection.
+ * @param success True for success, false for error.
+ * @param msg     Optional custom message (can be NULL).
+ */
+void send_ws_reply(struct mg_connection *c, bool success, const char *msg) {
+  if (success) {
+        // Use "ok" as the default success message if NULL
+    mg_ws_printf(c, WEBSOCKET_OP_TEXT, JSON_GOOD_FMT, (msg == NULL) ? "ok" : msg);
+  } else {
+        // Use "unknown error" as the default failure message if NULL
+    mg_ws_printf(c, WEBSOCKET_OP_TEXT, JSON_ERROR_FMT, (msg == NULL) ? "unknown error" : msg);
+  }
+}
+
+/*
+  Quicker and more accurate for us than normal strncmp, since we check for the trailing / at right position
+  check Spa against uri /Spa/set /Spa_mode/set / Spa_heater/set
+*/
+bool uri_strcmp(const char *uri, const char *string) {
+  int i;
+  int len = strlen(string);
+
+  // Check the trailing / on length first.
+  if (uri[len] != '/') {
+    return false;
+  }
+
+  // Now check all characters
+  for (i=0; i < len; i++) {
+    if ( uri[i] != string[i] ){
+      return false;
+    } 
+  }
+
+  return true;
+}
+
+void serve_file(struct mg_connection *nc, struct mg_http_message *http_msg)
+{
+  // Anything with .json should not be cached.
+  // NSF FIX mg_http_serve_dir fails when directory does not exist and holds up webbrowser.
+  if (FAST_SUFFIX_4_CI(http_msg->uri.buf, http_msg->uri.len, "json"))
+  {
+    /*
+    if (_acdconfig_.web_directory != NULL && strncmp(http_msg->uri.buf, "/config.json", 12) == 0)
+    {
+      mg_http_serve_file(nc, http_msg, _acdconfig_.web_directory, &_http_server_opts_nocache);
+      LOG(LOG_NOTICE, "Using %s for web config\n", _acdconfig_.web_directory);
+    }
+    else*/
+    {
+      mg_http_serve_dir(nc, http_msg, &_http_server_opts_nocache);
+    }
+  }
+  else // can cache anything here.
+  {
+    if (http_msg->uri.len <= 12 && strncmp(http_msg->uri.buf, "/acdmanager", 10) == 0) {
+      char buf[256];
+      snprintf(buf, 256, "%s/acdmanager.html", _acdconfig_.web_directory);
+      mg_http_serve_file(nc, http_msg, buf, &_http_server_opts);
+    } else {
+      mg_http_serve_dir(nc, http_msg, &_http_server_opts);
+    }
+  }
+}
+
+typedef enum {uActioned, uBad, uDevices, uConfig, uSaveConfig, uSaveWebConfig, uSaveSchedules,  uSchedules} uriAtype;
+
+#define NO_DEVICE         "No matching Device found"
+#define INVALID_VALUE     "Invalid value"
+#define UNKNOWN_REQUEST   "Didn't understand request"
+#define REJECTED_REQUEST  "Request was rejected"
+
+uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTemp, char **rtnmsg) 
+{
+  uriAtype rtn = uBad;
+  bool found = false;
+  int i;
+  char *ri1 = (char *)URI;
+  char *ri2 = NULL;
+  char *ri3 = NULL;
+
+  LOG(LOG_DEBUG, "URI Request '%.*s': value %.2f\n", uri_length, URI, value);
+
+  // Split up the URI into parts.
+  for (i=1; i < uri_length; i++) {
+    if ( URI[i] == '/' ) {
+      if (ri2 == NULL) {
+        ri2 = (char *)&URI[++i];
+      } else if (ri3 == NULL) {
+        ri3 = (char *)&URI[++i];
+        break;
+      }
+    }
+  }
+
+  if (strncmp(ri1, "devices", 7) == 0) {
+    return uDevices;
+  //} else if (strncmp(ri1, "status", 6) == 0) {
+  //  return uStatus;
+  //} else if (strncmp(ri1, "homebridge", 10) == 0) {
+  //  return uHomebridge;
+  } else if (strncmp(ri1, "schedules/set", 13) == 0) {
+    return uSaveSchedules;
+  } else if (strncmp(ri1, "schedules", 9) == 0) {
+    return uSchedules;
+  } else if (strncmp(ri1, "config/set", 10) == 0) {
+    return uSaveConfig;
+  } else if (strncmp(ri1, "webconfig/set", 13) == 0) {
+    return uSaveWebConfig;
+  } else if (strncmp(ri1, "config", 6) == 0) {
+    return uConfig;
+  } else if (ri2 != NULL && (strncasecmp(ri2, "set", 3) == 0)) {
+    for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+      if (uri_strcmp(ri1, curr->ID) && (value == ACD_LED_OFF || value == ACD_LED_ON || value == ACD_LED_ENABLED)) {
+        LOG(LOG_INFO, "Request to set '%s' to '%s'", curr->label, acd_state_to_str(value));
+        if (stateChangeRequest(_aquachemd_data, curr, value)) {
+          return uActioned;
+        } else {
+          *rtnmsg = REJECTED_REQUEST;
+        }
+      }
+    }
+  } else {
+    *rtnmsg = UNKNOWN_REQUEST;
+  }
+
+  return uBad;
+}
 
 void action_web_request(struct mg_connection *nc, struct mg_http_message *http_msg)
 {
+  char buf[256];
   char *msg = NULL;
+  float value = 0;
 
   log_mg_str(LOG_DEBUG, "URI request", http_msg->uri);
   log_mg_str(LOG_DEBUG, "Query request", http_msg->query);
+
+  //const char* devices_json = get_devices_json(_aquachemd_data);
+
+  if (strncmp(http_msg->uri.buf, "/api", 4) != 0)
+  {
+    serve_file(nc, http_msg);
+    return;
+  }
+  
+  // If query string.
+  if (http_msg->query.len > 1)
+  {
+    // mg_get_http_var(&http_msg->query, "value", buf, sizeof(buf)); // Old mosquitto
+    mg_http_get_var(&http_msg->query, "value", buf, sizeof(buf));
+    value = atof(buf);
+  }
+  else if (http_msg->body.len > 1)
+  {
+    value = parse_payload_value(http_msg->body.buf, http_msg->body.len);
+  }
+
+  int len = mg_url_decode(http_msg->uri.buf, http_msg->uri.len, buf, 50, 0);
+
+  if (strncmp(http_msg->uri.buf, "/api/", 4) == 0)
+  {
+    switch (action_URI(&buf[5], len - 5, value, false, &msg)){
+      case uActioned:
+        mg_http_reply(nc, 200, CONTENT_TEXT, GET_RTN_OK);
+        break;
+      case uDevices:
+        const char* devices_json = get_devices_json(_aquachemd_data);
+        mg_http_reply(nc, 200, CONTENT_JSON, devices_json);
+        break;
+      default:
+        mg_http_reply(nc, 400, CONTENT_TEXT, GET_RTN_UNKNOWN);
+        break;
+    }
+  }
+
 }
 
 void action_websocket_request(struct mg_connection *nc, struct mg_ws_message *wm) 
 {
-  log_mg_str(LOG_DEBUG, "Websocket message", wm->data);
+  char uri[URI_LEN];
+  float val;
+  char *msg = NULL;
+
+  log_mg_str(LOG_DEBUG, "WS: Websocket message", wm->data);
+
+  if (!parse_json_uri_command(wm->data.buf, wm->data.len, uri, &val)) {
+    LOG(LOG_ERR, "Failed to parse command payload '%.*s'\n",wm->data.len,wm->data.buf);
+    send_ws_reply(nc, false, "Failed to parse command");
+    return;
+  }
+
+  LOG(LOG_DEBUG, "WS: URI %s, Value: %.1f\n", uri, val);
+
+  switch (action_URI(uri, strlen(uri), val, false, &msg)){
+    case uActioned:
+      send_ws_reply(nc, true, NULL);
+      break;
+    case uDevices:
+      const char* devices_json = get_devices_json(_aquachemd_data);
+      send_ws(nc, devices_json);
+      break;
+    default:
+      send_ws_reply(nc, false, msg);
+      break;
+  }
+
+  // Send updated devices
+  ws_send(nc, get_devices_json(_aquachemd_data)); 
 }
 
 void action_mqtt_message(struct mg_connection *nc, struct mg_mqtt_message *msg) 
 {
-  log_mg_str(LOG_DEBUG, "MQTT message topic", msg->topic);
-  log_mg_str(LOG_DEBUG, "MQTT message payload", msg->data);
+    char *rtnmsg = NULL;
+    float value = 0;
+    char *endptr;
+
+    // 1. Logging using the original Mongoose strings
+    log_mg_str(LOG_DEBUG, "MQTT: message topic", msg->topic);
+    log_mg_str(LOG_DEBUG, "MQTT: message payload", msg->data);
+
+    // Convert payload to float
+    value = strtof(msg->data.buf, &endptr);
+
+    // Handle Non-Numeric Payloads (Home Assistant compat)
+    // If endptr didn't move, or if the payload is clearly a string command
+    if (endptr == msg->data.buf) {
+        // Create a temporary stack string for our trim comparison
+        char payload[32];
+        snprintf(payload, sizeof(payload), "%.*s", (int)msg->data.len, msg->data.buf);
+        if (strtrimcasecmp(payload, "on") == 0 || 
+            strtrimcasecmp(payload, "heat") == 0 || 
+            strtrimcasecmp(payload, "cool") == 0) {
+            value = 1.0f;
+        }
+        LOG(LOG_DEBUG, "MQTT: Map '%s' -> %.0f for topic %.*s\n", payload, value, (int)msg->topic.len, msg->topic.buf);
+    }
+
+    // Assuming the topic starts with base topic,  skip it to get the "Command" part
+    size_t base_len = strlen(_acdconfig_.mqtt_aquachemd_topic);
+    size_t offset = base_len + 1; // +1 to skip the trailing slash
+
+    if (msg->topic.len > offset) {
+        const char *uri_part = &msg->topic.buf[offset];
+        size_t uri_len = msg->topic.len - offset;
+
+        // 5. Execute Action
+        if (action_URI(uri_part, uri_len, value, false, &rtnmsg) == uBad) {
+            LOG(LOG_WARNING, "MQTT: Action failed '%.*s'", (int)msg->topic.len, msg->topic.buf);
+        }
+    }
 }
 
-void action_mqtt_condition_message(acd_condition *condition, struct mg_mqtt_message *mqtt_msg)
+void action_mqtt_condition_message(acd_condition_t *condition, struct mg_mqtt_message *mqtt_msg)
 {
   LOG(LOG_INFO, "MQTT: Received message for condition '%s': %.*s\n", condition->label, mqtt_msg->data.len, mqtt_msg->data.buf);
   
-  if (strncmp(mqtt_msg->data.buf, condition->mqtt_value, mqtt_msg->data.len) == 0) {
-    LOG(LOG_INFO, "MQTT: Condition '%s' met\n", condition->label);
+  if (strncmp(mqtt_msg->data.buf, condition->data.mqtt.target_value, mqtt_msg->data.len) == 0) {
+    LOG(LOG_INFO, "MQTT: Condition '%s' met - value %.*s\n", condition->label, mqtt_msg->data.len, mqtt_msg->data.buf);
     SET_IF_CHANGED(condition->met, true, _aquachemd_data->is_dirty); // Mark data as dirty so it gets sent to clients right away instead of waiting for next sensor read. 
   } else {
-    LOG(LOG_INFO, "MQTT: Condition '%s' not met\n", condition->label);
+    LOG(LOG_INFO, "MQTT: Condition '%s' NOT met - value %.*s\n", condition->label, mqtt_msg->data.len, mqtt_msg->data.buf);
     SET_IF_CHANGED(condition->met, false, _aquachemd_data->is_dirty);
   }
+
+  return;
+/*
+  if (condition->data.mqtt.current_value != NULL) {free(condition->data.mqtt.current_value);}
+  condition->data.mqtt.current_value = strndup(mqtt_msg->data.buf, mqtt_msg->data.len); // Duplicate the MQTT message payload
+
+  if (strncmp(mqtt_msg->data.buf, condition->data.mqtt.current_value, mqtt_msg->data.len) == 0) {
+    LOG(LOG_INFO, "MQTT: Condition '%s' met - value %s\n", condition->label, condition->data.mqtt.current_value);
+    SET_IF_CHANGED(condition->met, true, _aquachemd_data->is_dirty); // Mark data as dirty so it gets sent to clients right away instead of waiting for next sensor read. 
+  } else {
+    LOG(LOG_INFO, "MQTT: Condition '%s' not met - value %s\n", condition->label, condition->data.mqtt.current_value);
+    SET_IF_CHANGED(condition->met, false, _aquachemd_data->is_dirty);
+  }*/
 }
 
 void action_mqtt_sensor_message(acd_key_t *sensor, struct mg_mqtt_message *mqtt_msg)
@@ -279,12 +552,12 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       mg_mqtt_sub(nc, &sub_opts);
 
       // Any MQTT conditions we need to subscribe to?
-      for (acd_condition *curr = _aquachemd_data->conditions; curr != NULL; curr = curr->next) {
+      for (acd_condition_t *curr = _aquachemd_data->conditions; curr != NULL; curr = curr->next) {
         if (curr->type == COND_MQTT) {
           memset(&sub_opts, 0, sizeof(sub_opts));
-          sub_opts.topic = mg_str(curr->mqtt_topic);
+          sub_opts.topic = mg_str(curr->data.mqtt.topic);
           sub_opts.qos = qos;
-          LOG(LOG_INFO, "MQTT: Subscribing to '%s'\n", curr->mqtt_topic);
+          LOG(LOG_INFO, "MQTT: Subscribing to '%s'\n", curr->data.mqtt.topic);
           mg_mqtt_sub(nc, &sub_opts);
         }
       }
@@ -324,9 +597,9 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       action_mqtt_message(nc, mqtt_msg);
       found=true;
     } else {
-      for (acd_condition *curr = _aquachemd_data->conditions; curr != NULL; curr = curr->next) {
+      for (acd_condition_t *curr = _aquachemd_data->conditions; curr != NULL; curr = curr->next) {
         if (curr->type == COND_MQTT) {
-          if (strncasecmp(mqtt_msg->topic.buf, curr->mqtt_topic, mqtt_msg->topic.len) == 0) {
+          if (strncasecmp(mqtt_msg->topic.buf, curr->data.mqtt.topic, mqtt_msg->topic.len) == 0) {
             LOG(LOG_DEBUG, "MQTT: received (msg_id: %d), %.*s checking\n", mqtt_msg->id, mqtt_msg->topic.len, mqtt_msg->topic.buf);
             action_mqtt_condition_message(curr, mqtt_msg);
             found=true;
@@ -361,21 +634,21 @@ static void ws_send(struct mg_connection *nc, char *msg)
   //LOG(LOG_DEBUG, "WS: Sent %d characters '%s'\n",size, msg);
 }
 
-void send_mqtt_int_msg(struct mg_connection *nc, char *dev_name, int value) {
+void send_mqtt_int_msg(struct mg_connection *nc, char *ID, int value) {
   static char mqtt_pub_topic[250];
   static char msg[11];
 
   sprintf(msg, "%d", value);
-  sprintf(mqtt_pub_topic, "%s/%s", _acdconfig_.mqtt_aquachemd_topic, dev_name);
+  sprintf(mqtt_pub_topic, "%s/%s", _acdconfig_.mqtt_aquachemd_topic, ID);
   send_mqtt(nc, mqtt_pub_topic, msg);
 }
 
-void send_mqtt_float_msg(struct mg_connection *nc, char *dev_name, float value) {
+void send_mqtt_float_msg(struct mg_connection *nc, char *ID, float value) {
   static char mqtt_pub_topic[250];
   static char msg[11];
 
   sprintf(msg, "%.2f", value);
-  sprintf(mqtt_pub_topic, "%s/%s", _acdconfig_.mqtt_aquachemd_topic, dev_name);
+  sprintf(mqtt_pub_topic, "%s/%s", _acdconfig_.mqtt_aquachemd_topic, ID);
   send_mqtt(nc, mqtt_pub_topic, msg);
 }
 
@@ -400,19 +673,19 @@ void send_mqtt_acd_state_msg(struct mg_connection *nc, char *ID, acd_state_t sta
   send_mqtt(nc, mqtt_pub_topic, msg);
 }
 
-/*
-void send_mqtt_string_msg(struct mg_connection *nc, const char *dev_name, const char *msg) {
+
+void send_mqtt_string_msg(struct mg_connection *nc, const char *ID, const char *msg) {
   static char mqtt_pub_topic[250];
 
-  sprintf(mqtt_pub_topic, "%s/%s", _aqconfig_.mqtt_aq_topic, dev_name);
+  sprintf(mqtt_pub_topic, "%s/%s", _acdconfig_.mqtt_aquachemd_topic, ID);
   send_mqtt(nc, mqtt_pub_topic, msg);
 }
-*/
 
-void send_mqtt_temp_msg(struct mg_connection *nc, char *dev_name, float value)
+
+void send_mqtt_temp_msg(struct mg_connection *nc, char *ID, float value)
 {
   // Incase we need to do degc to f conversion, we can do it here.
-  send_mqtt_float_msg(nc, dev_name, (float)value);
+  send_mqtt_float_msg(nc, ID, (float)value);
 }
 
 void mqtt_broadcast_aquachemdstate(struct mg_connection *nc)
@@ -423,11 +696,20 @@ void mqtt_broadcast_aquachemdstate(struct mg_connection *nc)
 
   // Post main ACD state
   send_mqtt_acd_state_msg(nc, _aquachemd_data->keys->ID, _aquachemd_data->keys->state);
-
+  send_mqtt_string_msg(nc, "display_message", _aquachemd_data->display_message);
+  
   // Post conditions if enabled.  
   if (_acdconfig_.post_condition == true) {
-    for (acd_condition *curr = _aquachemd_data->conditions; curr != NULL; curr = curr->next) {
+    for (acd_condition_t *curr = _aquachemd_data->conditions; curr != NULL; curr = curr->next) {
       send_mqtt_acd_state_msg(nc, curr->ID, curr->met?ACD_LED_ON:ACD_LED_OFF);
+    
+      /*
+      if (curr->type == COND_MQTT) {
+        send_mqtt_string_msg(nc, curr->ID, curr->data.mqtt.current_value);
+      } else if (curr->type == COND_GPIO) {
+        send_mqtt_int_msg(nc, curr->ID, curr->met);
+      }
+      */
     }
   }
 
@@ -493,7 +775,8 @@ void broadcast_aquachemdstate(struct mg_connection *nc)
     //if (is_websocket(c) && !is_websocket_simulator(c)) // No need to broadcast status messages to simulator.
     if (is_websocket(c)) {
       LOG(LOG_DEBUG, "ws_send not implimented");
-      //ws_send(c, data); // Data should be JSON string 
+      //ws_send(c, data); // Data should be JSON string
+      ws_send(c, get_devices_json(_aquachemd_data));
     } else if (is_mqtt(c)) {
       mqtt_broadcast_aquachemdstate(c);
     }

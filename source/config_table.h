@@ -43,6 +43,10 @@ CFG_ENTRY( "gpio_chip",              gpio_chip,              "/dev/gpiochip0",  
 CFG_ENTRY( "sensor_poll_time",       sensor_poll_time,       60,                   CFG_INT,     0,                                  0,                NULL )
 CFG_ENTRY( "mqtt_convert_to_degF",   convert_mqtt_temp,      false,                CFG_BOOL,    0,                                  0,                CFG_V_BOOL )
 
+
+CFG_ENTRY( "ph_reading_temp_min",    ph_reading_temp_min,    1,                    CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "ph_reading_temp_max",    ph_reading_temp_max,    60,                   CFG_INT,     0,                                  0,                NULL )
+
 /* --- 5. SECURITY / TLS (Conditional) --- */
 #if MG_TLS > 0
 CFG_ENTRY( "cert_dir",               cert_dir,               NULL,                 CFG_STRING,  CFG_GRP_ADVANCED|CFG_FORCE_RESTART, 0,                NULL )
@@ -66,7 +70,10 @@ CFG_ENTRY( "mqtt_condition_value",   conditions,             NULL,              
 
 CFG_ENTRY( "gpio_condition_label",   conditions,             NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_pin",     conditions,             NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_condition_value",   conditions,             NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "gpio_condition_value",   conditions,             NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
+CFG_ENTRY( "gpio_condition_pin_mode",conditions,             NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_condition_required_state", conditions,      NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 /* --- SENSORS --- */
 
@@ -87,6 +94,15 @@ CFG_ENTRY( "orp_sensor_type",        sensors,                NULL,              
 CFG_ENTRY( "orp_sensor_address",     sensors,                NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "orp_sensor_label",       sensors,                NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
+/* --- DOSER -- */
+
+CFG_ENTRY( "doser_label",            sensors,                NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "doser_type",             sensors,                NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "doser_pin",              sensors,                NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "doser_value",            sensors,                NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "doser_address",          sensors,                NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "doser_pin_mode",         sensors,                NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "doser_required_state",   sensors,                NULL,                 CFG_CUSTOM,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 /* --- JSON Metadata --- */
 #define CFG_V_log_level  "[\"DEBUG_SERIAL\", \"DEBUG\", \"INFO\", \"NOTICE\", \"WARNING\", \"ERROR\"]"
