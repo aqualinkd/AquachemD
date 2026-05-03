@@ -1,0 +1,23 @@
+[Unit]
+Description=AquachemD - Chemical Monitoring & Dosing System
+# Ensure network is up before starting
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# 'notify' is required since you use sd_notify in your C code
+Type=notify
+ExecStart=/usr/local/bin/aquachemd -c /etc/aquachemd.conf
+WorkingDirectory=/usr/local/bin
+
+# Automatically restart if the process crashes
+Restart=on-failure
+RestartSec=5s
+
+# Security and Logging
+StandardOutput=inherit
+StandardError=inherit
+SyslogIdentifier=aquachemd
+
+[Install]
+WantedBy=multi-user.target

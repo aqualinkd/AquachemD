@@ -60,12 +60,14 @@ struct acdconfig
   bool post_condition; // Whether to post & display conditions that are met/unmet
   bool temp_compensated_ph;
 
+  unsigned int default_dose_time;
+  /*
   unsigned char test_hex;
   float test_float;
   uint16_t test_bitmask;
+  */
 
-  acd_condition_t *conditions;
-  acd_key_t *sensors;
+  acd_key_t *keys;
 };
 
 

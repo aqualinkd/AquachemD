@@ -50,6 +50,7 @@ Usage:
 #include "net_services.h"
 #include "acd_timer.h"
 #include "gpio_monitor.h"
+#include "state_manager.h"
 
 #ifdef USE_SYSTEMD
 #include <systemd/sd-daemon.h>
@@ -59,10 +60,20 @@ Usage:
 #include "gpio.h"
 #endif
 
-void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
+//void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
 
 void intHandler(int sig_num)
 {
+  LOG(LOG_NOTICE, "Stopping!\n");
+
+  for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
+    if (curr->type == ACD_TYPE_GPIO_PMP) {
+      LOG(LOG_NOTICE,"Making sure pump %s if off\n", curr->label, curr->data.gpio.pin);
+      if (gpio_write(&curr->data.gpio, 0) == GPIO_ERROR) {
+        LOG(LOG_ERR,"GPIO Failed, manually turn %s off\n", curr->label);
+      }
+    }
+  }
   /*******************
    * ADD
    * safety guard so the stop task can't be skipped if the process is killed mid-dose. 
@@ -107,7 +118,7 @@ void intHandler(int sig_num)
   stopPacketLogger();
   close_serial_port(-1);
   */
-  LOG(LOG_NOTICE, "Stopping!\n");
+  
   exit(EXIT_SUCCESS);
 }
 
@@ -127,8 +138,6 @@ typedef enum {
 void update_display_message(struct aquachemdata *acddata, display_message_t type, const char *message) {
     // 1. Check for the "Clear" condition first
     // If type is CLEAR/NONE and the message is NULL, empty the buffer and exit.
-
-    LOG(LOG_NOTICE,"Update Display Message '%s'\n",message);
 
     if ((type == ACD_MSG_CLEAR || type == ACD_MSG_NONE) && message == NULL) {
       if (acddata->display_message[0] != '\0') {
@@ -170,6 +179,7 @@ void update_display_message(struct aquachemdata *acddata, display_message_t type
     LOG(LOG_DEBUG, "Display Message Updated: %s", acddata->display_message);
 }
 
+/*
 void masterStateChange(struct aquachemdata *acdata) {
 
   acd_state_t new_sensor_state = ACD_LED_ENABLED;
@@ -187,12 +197,14 @@ void masterStateChange(struct aquachemdata *acdata) {
     setKeyLed(acdata, curr, new_sensor_state);
   }
 }
+  */
+ /*
 // This is a request from MQTT/WebSocket/Web, NOT for a system change
 bool stateChangeRequest(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state)
 {
   // Bunch of logic for different key states.
   switch(key->type) {
-    case KEY_TYPE_MASTER:
+    case ACD_TYPE_MASTER:
       if (key->state == ACD_LED_OFF && state == ACD_LED_ON) { //if we are off, use the on state as enabled.
         SET_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty);
       } else if (key->state == ACD_LED_DISABLED && state == ACD_LED_ON) { // if disabled, can't turn on
@@ -202,8 +214,8 @@ bool stateChangeRequest(struct aquachemdata *acdata, acd_key_t *key, acd_state_t
         SET_IF_CHANGED(key->state , state, acdata->is_dirty);
       }
       break;
-    case KEY_TYPE_GPIO_DOSER:
-    case KEY_TYPE_EZO_DOSER:
+    case ACD_TYPE_GPIO_PMP:
+    case ACD_TYPE_EZO_PMP:
       // If we are in an off state, don't disable or enable 
       if (key->state == ACD_LED_OFF && (state == ACD_LED_DISABLED || state == ACD_LED_ENABLED)) {
         LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
@@ -237,7 +249,9 @@ bool stateChangeRequest(struct aquachemdata *acdata, acd_key_t *key, acd_state_t
 
   return true;
 }
+*/
 
+/*
 void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state)
 {
   if (key->state == ACD_LED_OFF && (state == ACD_LED_DISABLED || state == ACD_LED_ENABLED))
@@ -246,7 +260,7 @@ void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state)
   SET_IF_CHANGED(key->state , state, acdata->is_dirty);
   //return;
 }
-
+*/
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 int main(int argc, char *argv[])
@@ -370,7 +384,7 @@ int main(int argc, char *argv[])
 
   acddata.keys = malloc(sizeof(acd_key_t));
   acddata.keys->ID = "AquachemD";
-  acddata.keys->type = KEY_TYPE_MASTER;
+  acddata.keys->type = ACD_TYPE_MASTER;
   acddata.keys->label = "AquachemD";
   acddata.keys->state = ACD_LED_ENABLED;
 
@@ -379,26 +393,38 @@ int main(int argc, char *argv[])
 
   start_net_services(&acddata);
 
-  // Setup any GPIO based condition monitoring
-  for (acd_condition_t *curr = acddata.conditions; curr != NULL; curr = curr->next) {
-    if (curr->type == COND_GPIO) {
+
+  // Setup any specifics for GPIO / D1W etc
+  for (acd_key_t *curr = acddata.keys; curr != NULL; curr = curr->next) {
+    if (curr->type == ACD_TYPE_GPIO_COND) {
       LOG(LOG_DEBUG,"Setting up GPIO Condition: %s, pin %d\n", curr->label, curr->data.gpio.pin);
       if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_INPUT, curr->data.gpio.active) != 0) {
         LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
       }
-    }
-  }
-
-  for (acd_key_t *curr = acddata.keys; curr != NULL; curr = curr->next) {
-    //if (IS_DOSER_TYPE(curr->type)) {
-      if (curr->type == KEY_TYPE_GPIO_DOSER) {
-        LOG(LOG_DEBUG,"Setting up GPIO Doser: %s, pin %d\n", curr->label, curr->data.gpio.pin);
-        if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_OUTPUT, curr->data.gpio.active) != 0) {
-          LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
-        }
+    } else if (curr->type == ACD_TYPE_GPIO_PMP) {
+      LOG(LOG_DEBUG,"Setting up GPIO Pump: %s, pin %d\n", curr->label, curr->data.gpio.pin);
+      if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_OUTPUT, curr->data.gpio.active) != 0) {
+        LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
+      } else {
+        gpio_write(&curr->data.gpio, 0); // Turn pump off
+        //sync_pump_state(&acddata, curr);
       }
-      curr->state = ACD_LED_ENABLED; // DON'T use setKeyLed() here, startup need to force to enabled.
-    //}
+    } else if (curr->type == ACD_TYPE_D1W_TEMP) {
+      w1_init_generic(&curr->data.w1, curr->data.w1.path, curr->data.w1.scale, curr->data.w1.offset, curr->data.w1.label);
+    }
+
+    if (curr->type == ACD_TYPE_MASTER) {
+      curr->state = ACD_LED_ENABLED;
+    } else if (IS_INPUT(curr->type)) {
+      curr->state = ACD_LED_DISABLED; // DON'T use setKeyLed() here, startup need to force to enabled.
+    } else if (IS_OUTPUT(curr->type)) {
+      // GPIO status will be set from sync_pump_state() above
+      //if (curr->type != ACD_TYPE_GPIO_PMP) {
+        curr->state = ACD_LED_ENABLED;
+      //}
+    } else if (IS_CONDITION(curr->type)) {
+      curr->state = ACD_LED_OFF;
+    }
   }
 
   start_gpio_monitor(&acddata);
@@ -415,70 +441,59 @@ int main(int argc, char *argv[])
   while (1)
   {
     float temp_reading_for_ph = UNKNOWN;
-    bool all_conditions_met = true;
+    bool all_conditions_met = true; // Should be able to get rid of this all together now, and just use acddata.keys->state 
 
     LOG(LOG_NOTICE,"--- loop ---\n");
     update_display_message(&acddata, ACD_MSG_CLEAR, NULL);
 
-    for (acd_condition_t *curr = acddata.conditions; curr != NULL; curr = curr->next) {
-
-      if (curr->type == COND_GPIO) {
-        SET_IF_CHANGED(curr->met, sensor_is_met(&curr->data.gpio), acddata.is_dirty);
-      }
-
-      if (!curr->met) {
-        LOG(LOG_WARNING,"Condition not met: %s, not taking reading\n", curr->label);
-        update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, curr->label);
-        all_conditions_met = false;
-
-        if (acddata.keys->state == ACD_LED_ON)
-          SET_IF_CHANGED(acddata.keys->state, ACD_LED_ENABLED, acddata.is_dirty);
-
-        masterStateChange(&acddata);
-
-        // if we are not posting conditions, we can skip the rest of the loop and go straight to sleep as soon as we find one that is not met. If we are posting conditions, we want to keep going through the loop to update the state of all conditions and sensors so that the UI will reflect the current status.
-        if (_acdconfig_.post_condition == false) {
-          goto next_wake; // Skip the rest of the loop and go straight to sleep if any condition is not met
-        }
-        
-      }
-    }
-    
     if (acddata.keys->state == ACD_LED_OFF) {
       LOG(LOG_DEBUG,"AquachemD is off, skipping sensor read\n");
-      //for (acd_key_t *curr = acddata.keys->next; curr != NULL; curr = curr->next) {
-      //  setKeyLed(&acddata, curr, ACD_LED_DISABLED);
-      //}
-      masterStateChange(&acddata);
       goto next_wake; // Skip the rest of the loop and go straight to sleep if any condition is not met
     }
 
-    if (all_conditions_met && acddata.keys->state != ACD_LED_OFF) {
-      LOG(LOG_DEBUG,"All Conditions met: turning on %s\n", acddata.keys->label);
-      SET_IF_CHANGED(acddata.keys->state, ACD_LED_ON, acddata.is_dirty);
-
-      // Move to 2nd key and set dosers to enabled
-      for (acd_key_t *curr = acddata.keys->next; curr != NULL; curr = curr->next) {
-        if (IS_DOSER_TYPE(curr->type)) {
-          setKeyLed(&acddata, curr, ACD_LED_ENABLED);
+    for (acd_key_t *curr = acddata.keys; curr != NULL; curr = curr->next) {
+     if (IS_CONDITION(curr->type)) {
+        if (curr->type == ACD_TYPE_GPIO_COND) {
+          // This should have been changed from the gpio_monitor, but 2nd check doesn't hurt
+          if (sensor_is_met(&curr->data.gpio) > 0 && !curr->met) {
+            SET_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty);
+            set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
+          }
         }
+        if (!curr->met) {
+          LOG(LOG_WARNING,"Condition not met: %s, not taking reading\n", curr->label);
+          update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, curr->label);
+          all_conditions_met = false;
+        }
+      } else if (curr->type == ACD_TYPE_GPIO_PMP) {
+        check_pump_state(&acddata, curr);
       }
-
-      update_display_message(&acddata, ACD_MSG_CLEAR, NULL);
-    } 
-
+    }
+    
     if (!all_conditions_met || acddata.keys->state != ACD_LED_ON) {
       goto next_wake; // Skip the rest of the loop and go straight to sleep if any condition is not met
     }
 
+
     for (acd_key_t *key = acddata.keys->next; key != NULL; key = key->next) {
       
       switch (key->type) {
-        case KEY_TYPE_MQTT_TEMP:          
+        case ACD_TYPE_MQTT_TEMP:          
           if (key->index == MASTER_ID) { temp_reading_for_ph = key->value; }// If this is the master temp sensor, also update the temp reading for pH compensation
           LOG(LOG_DEBUG, "MQTT Sensor '%s' current value: %.2f\n", key->label, key->value);
           break;
-        case KEY_TYPE_D1W_TEMP:{
+        case ACD_TYPE_D1W_TEMP:{
+          w1_reading_t temp_reading = w1_read(&key->data.w1);
+          if (temp_reading.status == W1_SUCCESS) {
+            LOG(LOG_NOTICE,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
+            if (key->index == MASTER_ID) { temp_reading_for_ph = temp_reading.value; }// If this is the master temp sensor, also update the temp reading for pH compensation
+            SET_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty);
+            SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
+          } else {
+            LOG(LOG_WARNING, "D1w Temp Sensor '%s' read failed (status %d)\n", key->label, temp_reading.status);
+            SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+            update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+          }
           /*
             float new_value = d1w_get_temp(key->data.d1w.id);
             LOG(LOG_DEBUG, "D1W Sensor '%s' read value: %.2f\n", key->label, new_value);
@@ -491,7 +506,7 @@ int main(int argc, char *argv[])
             }
               */
         } break;
-        case KEY_TYPE_EZO_TEMP: {
+        case ACD_TYPE_EZO_TEMP: {
           rtd_reading_t temp_reading = rtd_get_reading();
           if (temp_reading.status == EZO_SUCCESS) {
             LOG(LOG_NOTICE,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
@@ -504,7 +519,7 @@ int main(int argc, char *argv[])
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
           }
         } break;
-        case KEY_TYPE_EZO_PH: {
+        case ACD_TYPE_EZO_PH: {
           ph_reading_t ph_reading;
           if (_acdconfig_.temp_compensated_ph == false) {
             ph_reading = ph_get_reading();
@@ -534,7 +549,7 @@ int main(int argc, char *argv[])
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
           }
         } break;
-        case KEY_TYPE_EZO_ORP: {
+        case ACD_TYPE_EZO_ORP: {
           orp_reading_t orp_reading = orp_get_reading();
           if (orp_reading.status == EZO_SUCCESS) {
             LOG(LOG_NOTICE,"ORP %s : %.2f mV\n", key->label, orp_reading.value);
@@ -546,8 +561,10 @@ int main(int argc, char *argv[])
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
           }
          } break;
-        case KEY_TYPE_GPIO_DOSER:
-        case KEY_TYPE_EZO_DOSER:
+        case ACD_TYPE_GPIO_PMP:
+        case ACD_TYPE_EZO_PMP:
+        case ACD_TYPE_MQTT_COND:
+        case ACD_TYPE_GPIO_COND:
         break;
         default:
           LOG(LOG_WARNING, "Unknown sensor type for sensor '%s'\n", key->label);

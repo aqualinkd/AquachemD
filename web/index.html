@@ -1413,6 +1413,7 @@
       });
     }
 
+    // ***** NSF Need to change subtype to an attributes array below ******
     function add_tile(id, name, status, type, subtype, off_imgurl, on_imgurl) {
     //function add_tile(id, name, status, type, subtype) {
       var height = getComputedStyle(document.documentElement).getPropertyValue('--tile_icon-height');
@@ -1736,8 +1737,10 @@
 
       LOG("Status for "+id+" = "+status);
       setTileOn(id, status);
-      if (text != '')
+      if (text != '') {
+        //LOG("setting tile text "+id+" to "+text);
         setTileOnText(id, text);
+      }
     }
 
     function setTileUOM(id, uom) {
@@ -1757,7 +1760,11 @@
     */
 
     function setTileOnText(id, text) {
-      //LOG("setTileOnText() "+id+" "+text);
+      LOG("setTileOnText() "+id+" "+text);
+      if (id == "PMP_1") {
+        console.trace("Debugging the trace");
+      }
+
       try {
         var tile = document.getElementById(id);
         if (tile.getAttribute('status') == 'on' || tile.getAttribute('status') == 'enabled') {
@@ -1910,6 +1917,31 @@
 
     }
 
+
+    function getTileExtraStatusText(id) {
+
+      if (_devices.devices[id].attributes?.includes('timer')) {
+        if (_devices.devices[id].timer_active == 'ON') {
+          if (_devices.devices[id].timer_duration) {
+            return 'Timer '+toHoursAndMinutes(_devices.devices[id].timer_duration);
+          } else {
+            return 'On (timer)';
+          }
+        } else {
+          LOG("ID="+id+" Has Timer OFF");
+        }
+      } else if (_devices.devices[id].attributes?.includes('switch_program')) {
+      } else if (_devices.devices[id].attributes?.includes('light_dimmer')) {
+      } else if (_devices.devices[id].attributes?.includes('switch_vsp')) {
+      } else if (_devices.devices[id].attributes?.includes('setpoint_swg')) {
+      } else if (_devices.devices[id].attributes?.includes('setpoint_freeze')) {
+      } else if (_devices.devices[id].attributes?.includes('setpoint_chiller')) {
+      } else if (_devices.devices[id].attributes?.includes('alt_label')) {
+      }
+
+      return null;
+    }
+
     function setTileOn(id, status) {
       LOG("setTileOn "+id+ " "+status);
       var tile;
@@ -1925,7 +1957,7 @@
       if (status != "on" && status != "off" && status != "enabled" && status != "disabled" && status != "flash" 
                          && status != "rangecritical" && status != "rangewarning" && status != "rangeoptimal") {
         if (status == "unknown") {
-          status = "off"; // Just set it off for the moment
+          status = "Off"; // Just set it off for the moment
         } else {
           console.log("Error unknown status '" + status + "' for '" + id + "'");
           return;
@@ -1933,13 +1965,12 @@
       }
       tile.setAttribute('status', status);
 
-      let status_text = _config?.devices?.[id]?.[`${status}_text` ] ?? status;
+      let status_text = _config?.devices?.[id]?.[`${status}_text` ] ?? formatSatus(status);
 
       if (isOff) {
         tile.classList.remove("on");
         tile.classList.remove("flash");
-        //if (status_text == status){status_text="Off";}
-        if (status_text == status){formatSatus(status);}
+        //if (status_text == status){status_text = formatSatus(status);}
       } else {
         if (status == 'flash') {
           tile.classList.add("flash");
@@ -1964,37 +1995,38 @@
       //}
 
       //if (type != "value" && type != "temperature") {
-      setElementHTML(id + '_status', status_text);
+      //setElementHTML(id + '_status', status_text);
+      LOG ("Final Status text = "+(getTileExtraStatusText(id) ?? status_text));
+      setElementHTML(id + '_status', getTileExtraStatusText(id) ?? status_text);
 
       var type;
       if ((type = tile.getAttribute('type')) != null) {
-
-      if (status != null) {
-        if (status == 'enabled' || status == 'flash') {
-          setTileIconClassList(id, "enabled");
-        } else if (status == 'off' || status == 'disabled') {
-          setTileIconClassList(id, "disabled");
-        } else if (status == 'on' && type == 'setpoint_thermo') {
-          setTileIconClassList(id, "heat");
-        } else if (status == 'on' && type == 'setpoint_chiller') {
-          var tile_icon = document.getElementById(id + '_tile_icon_value');
-          if ( tile_icon.parentElement.parentElement.getAttribute("mode") == "heat" ) {
+        if (status != null) {
+          if (status == 'enabled' || status == 'flash') {
+            setTileIconClassList(id, "enabled");
+          } else if (status == 'off' || status == 'disabled') {
+            setTileIconClassList(id, "disabled");
+          } else if (status == 'on' && type == 'setpoint_thermo') {
             setTileIconClassList(id, "heat");
-          } else {
-            setTileIconClassList(id, "cool");
+          } else if (status == 'on' && type == 'setpoint_chiller') {
+            var tile_icon = document.getElementById(id + '_tile_icon_value');
+            if (tile_icon.parentElement.parentElement.getAttribute("mode") == "heat") {
+              setTileIconClassList(id, "heat");
+            } else {
+              setTileIconClassList(id, "cool");
+            }
+          } else if (status == 'on') {
+            if (type == 'value' || type == 'sensor') {
+              setTileIconClassList(id, "rangeoptimal");
+            } else {
+              setTileIconClassList(id, "cool");
+            }
+          } else if (status == 'rangecritical') {
+            setTileIconClassList(id, "rangecritical");
+          } else if (status == 'rangewarning') {
+            setTileIconClassList(id, "rangewarning");
           }
-        } else if (status == 'on') {
-          if (type == 'value' || type == 'sensor') {
-            setTileIconClassList(id, "rangeoptimal");
-          }else{
-            setTileIconClassList(id, "cool");
-          }
-        } else if (status == 'rangecritical') {
-          setTileIconClassList(id, "rangecritical");
-        } else if (status == 'rangewarning') {
-          setTileIconClassList(id, "rangewarning");
         }
-      }
       }
     }
 
@@ -2316,6 +2348,43 @@ if (totalSeconds < 0) totalSeconds = 0;
         LOG("Device "+object.id+" exists and display is enabled.");
       }
 
+      switch (object.type) {
+        case 'switch':
+        case 'binary_sensor':
+          var img = object.id.replace('/', '_');
+          ext_type = object.type;
+
+          if ( _config?.devices && _config?.devices[object.id] && _config?.devices[object.id]?.on_icon && _config?.devices[object.id]?.off_icon) {
+            add_tile(object.id, object.label, object.status, 'switch', ext_type, _config?.devices[object.id]?.off_icon, _config?.devices[object.id]?.on_icon);
+          } else {
+            add_tile(object.id, object.label, object.status, 'switch', ext_type);
+          }
+          break;
+        case 'value':
+        case 'temperature':
+        case 'sensor':
+          add_tile(object.id, object.label, object.status, 'value', object.type);
+          if (object.uom !== undefined) {
+            setTileUOM(object.id, object.uom);
+          } else {
+            if (_config.devices[object.id]?.uom) {
+              LOG("From config UOM for "+object.id+" is set to: " + _config.devices[object.id].uom);
+              setTileUOM(object.id, _config.devices[object.id].uom);
+            }
+          }
+          break;
+        case 'setpoint_thermo':
+        case 'setpoint_swg':
+        case 'setpoint_freeze':
+        case 'setpoint_chiller':
+          add_tile(object.id, object.label, object.status, 'thermostat', object.type);
+          document.getElementById(object.id).setAttribute('setpoint', object.spvalue);
+          break;
+        default:
+          LOG("Unknown type '"+object.type+"' for Device "+object.label);
+          break;
+      }
+/*
       if (object.type == 'switch' || object.type == 'binary_sensor') {
         var img = object.id.replace('/', '_');
         var ext_type;
@@ -2329,6 +2398,28 @@ if (totalSeconds < 0) totalSeconds = 0;
         } else {
           add_tile(object.id, object.label, object.status, 'switch', ext_type);
         }
+      } else if (object.type == 'value' || object.type == 'temperature' || object.type== 'sensor' ) {
+        add_tile(object.id, object.label, object.status, 'value', object.type);
+        if (object.uom !== undefined) {
+          setTileUOM(object.id, object.uom);
+        } else {
+          if (_config.devices[object.id]?.uom) {
+            LOG("From config UOM for "+object.id+" is set to: " + _config.devices[object.id].uom);
+            setTileUOM(object.id, _config.devices[object.id].uom);
+          }
+        }
+      } else if (object.type == 'setpoint_thermo' || object.type == 'setpoint_swg' || object.type == 'setpoint_freeze' || object.type == 'setpoint_chiller') {
+        add_tile(object.id, object.label, object.status, 'thermostat', object.type);
+        document.getElementById(object.id).setAttribute('setpoint', object.spvalue);
+      } else {
+        LOG("Unknown type '"+object.type+"' for Device "+object.label);   
+      }
+*/
+
+// NSF The below IF's are for AqualinkD json old structure, need to replace with above attributes.
+/* **************** ADD THE BELOW CODE TO getTileExtraStatusText()
+// ADD THE BELOW CODE TO getTileExtraStatusText()
+
         //setTileOn(object.id, object.status, null);
         if (typeof object.type_ext !== 'undefined' && (object.type_ext == 'switch_program' || object.type_ext == 'light_dimmer')) {
           if (typeof object.Light_Type !== 'undefined') {
@@ -2346,6 +2437,7 @@ if (totalSeconds < 0) totalSeconds = 0;
           }
           // Other switch_program types (other than light_type) GO HERE 
         } else if (typeof object.type_ext !== 'undefined' && object.type_ext == 'switch_timer') {
+        //} else if (typeof object.attributes !== 'undefined' && object.attributes == 'timer') {
           if (typeof object.timer_active !== 'undefined' && object.timer_active) {
             //LOG("Timer for "+object.label+" = "+object.timer_active);
             if (object.timer_active == 'on') {
@@ -2376,12 +2468,12 @@ if (totalSeconds < 0) totalSeconds = 0;
             setTileUOM(object.id, _config.devices[object.id].uom);
           }
         }
-        /*
-        if (_config.devices[object.id]?.precision) {
-          LOG("From config Precision for "+object.id+" is set to: " + _config.devices[object.id].precision);
-          setTilePrecision(object.id, _config.devices[object.id].precision);
-        }
-        */
+        
+        //if (_config.devices[object.id]?.precision) {
+        //  LOG("From config Precision for "+object.id+" is set to: " + _config.devices[object.id].precision);
+        //  setTilePrecision(object.id, _config.devices[object.id].precision);
+        //}
+        
         //setTileValue(object.id, object.value);
       } else if (object.type == 'setpoint_thermo' || object.type == 'setpoint_swg' || object.type == 'setpoint_freeze' || object.type == 'setpoint_chiller') {
         add_tile(object.id, object.label, object.status, 'thermostat', object.type);
@@ -2400,7 +2492,7 @@ if (totalSeconds < 0) totalSeconds = 0;
         document.getElementById(object.id).setAttribute('label', object.label);
         //document.getElementById(object.id).setAttribute('id', object.id + '_status_line2');
       }
-      
+    */  
     }
 
 

@@ -13,6 +13,7 @@
 #include "acd_types.h"
 #include "utils.h"
 #include "gpio.h"
+#include "state_manager.h"
 
 #define MAX_GPIO_FDS 20
 
@@ -111,10 +112,10 @@ void *gpio_monitor_worker(void *ptr) {
     LOG(LOG_NOTICE, "GPIO: Starting hardware monitor thread\n");
 
     //pthread_mutex_lock(&_ll_mutex);
-    
-    // 1. Register Keys (Outputs) - Monitor for ERRORS ONLY
+
     for (acd_key_t *curr = acddata->keys; curr; curr = curr->next) {
-        if (curr->type == KEY_TYPE_GPIO_DOSER && curr->data.gpio.request) {
+        // Register Keys (Outputs) - Monitor for ERRORS ONLY
+        if (curr->type == ACD_TYPE_GPIO_PMP && curr->data.gpio.request) {
             int fd = gpiod_line_request_get_fd(curr->data.gpio.request);
             if (fd >= 0) {
                 poll_fds[num_lines].fd = fd;
@@ -122,12 +123,8 @@ void *gpio_monitor_worker(void *ptr) {
                 ctx_map[num_lines] = (monitor_ctx_t){curr, &curr->data.gpio, false};
                 num_lines++;
             }
-        }
-    }
-
-    // 2. Register Conditions (Inputs) - Monitor for EVENTS + ERRORS
-    for (acd_condition_t *curr = acddata->conditions; curr; curr = curr->next) {
-        if (curr->type == COND_GPIO && curr->data.gpio.request) {
+        } else if (curr->type == ACD_TYPE_GPIO_COND && curr->data.gpio.request) {
+            // Register Conditions (Inputs) - Monitor for EVENTS + ERRORS
             int fd = gpiod_line_request_get_fd(curr->data.gpio.request);
             if (fd >= 0) {
                 poll_fds[num_lines].fd = fd;
@@ -137,6 +134,7 @@ void *gpio_monitor_worker(void *ptr) {
             }
         }
     }
+
     //pthread_mutex_unlock(&_ll_mutex);
 
     // Add shutdown handle
@@ -171,7 +169,7 @@ void *gpio_monitor_worker(void *ptr) {
                 int met = sensor_is_met(ctx_map[i].handle);
                 
                 if (met != GPIO_ERROR) {
-                    acd_condition_t *c = (acd_condition_t *)ctx_map[i].parent_obj;
+                    acd_key_t *c = (acd_key_t *)ctx_map[i].parent_obj;
                     
                     // Only act if the state actually changed
                     if (c->met != (bool)met) {
@@ -182,6 +180,7 @@ void *gpio_monitor_worker(void *ptr) {
                             c->met ? "SATISFIED" : "NOT MET");
                             
                         SET_DIRTY(acddata->is_dirty);
+                        set_key_state(acddata, c, (c->met ? ACD_LED_ON : ACD_LED_OFF));
                     }
                 }
             }

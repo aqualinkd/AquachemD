@@ -113,8 +113,9 @@ int gpio_open(gpio_handle_t *h, const char *chip_path, int pin,
   {
     gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_OUTPUT);
     // Default to de-asserted (relay off) on open
-    gpiod_line_settings_set_output_value(settings,
-      active == GPIO_ACTIVE_LOW ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE);
+    //gpiod_line_settings_set_output_value(settings, active == GPIO_ACTIVE_LOW ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE);
+    // FIX: always start de-asserted (relay off)
+    gpiod_line_settings_set_output_value(settings, GPIOD_LINE_VALUE_INACTIVE);
   }
   else
   {
@@ -219,15 +220,17 @@ int gpio_read(gpio_handle_t *h)
 int relay_on(gpio_handle_t *h)
 {
   // If ACTIVE_LOW, we need to write a physical 0 to turn it "ON"
-  int physical_value = (h->active == GPIO_ACTIVE_LOW) ? 0 : 1;
-  return gpio_write(h, physical_value);
+  //int physical_value = (h->active == GPIO_ACTIVE_LOW) ? 0 : 1;
+  //return gpio_write(h, physical_value);
+  return gpio_write(h, 1);  // relay on  — gpio_write handles active_low
 }
 
 int relay_off(gpio_handle_t *h)
 {
   // If ACTIVE_LOW, we need to write a physical 1 to turn it "OFF"
-  int physical_value = (h->active == GPIO_ACTIVE_LOW) ? 1 : 0;
-  return gpio_write(h, physical_value);
+  //int physical_value = (h->active == GPIO_ACTIVE_LOW) ? 1 : 0;
+  //return gpio_write(h, physical_value);
+  return gpio_write(h, 0);  // relay off
 }
 
 int relay_is_on(gpio_handle_t *h)
@@ -249,4 +252,15 @@ int sensor_is_met(gpio_handle_t *h)
   // Compare the current logical state (0 or 1) 
   // to the required logical state (GPIO_REQ_OFF or GPIO_REQ_ON)
   return (logical_state == (int)h->required);
+}
+
+/**
+ * pump_is_on
+ * Returns 1 if the pump is on.
+ * (e.g. If required=ON and sensor is ON, returns 1)
+ */
+int pump_is_on(gpio_handle_t *h)
+{
+  // Simply returns the logical state
+    return gpio_read(h); 
 }

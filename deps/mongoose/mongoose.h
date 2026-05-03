@@ -24,7 +24,6 @@
 
 #define MG_VERSION "7.19"
 
-#include "mongoose-addition.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -1662,7 +1661,7 @@ struct mg_connection {
   unsigned is_readable : 1;       // Connection is ready to read
   unsigned is_writable : 1;       // Connection is ready to write
 
-  unsigned short aq_flags;        // Added for AqualinkD.
+  //unsigned short aq_flags;        // Added for AqualinkD.
 };
 
 void mg_mgr_poll(struct mg_mgr *, int ms);

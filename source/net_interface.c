@@ -1,5 +1,5 @@
 
- #define _GNU_SOURCE 1 // for strcasestr
+//#define _GNU_SOURCE 1 // for strcasestr
 
 
 #include <stdio.h>

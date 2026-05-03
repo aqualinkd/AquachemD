@@ -68,22 +68,31 @@ ifeq ($(strip $(WITH_GPIOD)), 1)
   DFLAGS  += -D WITH_GPIOD
 endif
 
-
 # Mongoose 7.19 flags
 #CFLAGS += -D MG_TLS=2 #(2=MG_TLS_OPENSSL. 3=MG_TLS_BUILTIN) --or--  -DMG_TLS=MG_TLS_BUILTIN
 CFLAGS += -D MG_TLS=0 -D MG_ENABLE_SSI=0
+
+# Force-include the custom Mongoose additions in every file (ie make sure mongoose.c/.h include this file without modifying the source)
+CFLAGS += -include deps/mongoose/aqd_mg_compat.h
+DFLAGS += -include deps/mongoose/aqd_mg_compat.h
 
 # ─── Directories ──────────────────────────────────────────────────────────────
 
 SRC_DIR    = ./source
 OBJ_DIR    = ./build
 REL_DIR    = ./release
+DIR_ARM64  = arm64
+DIR_ARMHF  = armhf
 
 # Per-architecture object directories
 OBJ_NATIVE = $(OBJ_DIR)/native
-OBJ_ARM64  = $(OBJ_DIR)/arm64
-OBJ_ARMHF  = $(OBJ_DIR)/armhf
+OBJ_ARM64  = $(OBJ_DIR)/$(DIR_ARM64)
+OBJ_ARMHF  = $(OBJ_DIR)/$(DIR_ARMHF)
 OBJ_DEBUG  = $(OBJ_DIR)/debug
+
+# Full paths for release binaries
+REL_ARM64  = $(REL_DIR)/$(DIR_ARM64)
+REL_ARMHF  = $(REL_DIR)/$(DIR_ARMHF)
 
 #INCLUDES   = -I$(SRC_DIR)
 INCLUDES  = -I$(SRC_DIR) -I./deps/cJSON -I./deps/mongoose
@@ -92,21 +101,20 @@ INCLUDES  = -I$(SRC_DIR) -I./deps/cJSON -I./deps/mongoose
 # This avoids defining a $(REL_DIR) rule that would conflict with the
 # 'release' phony Docker target (Make treats './release' and 'release' as
 # the same target and warns about duplicate recipes).
-$(shell mkdir -p $(REL_DIR) $(OBJ_NATIVE) $(OBJ_ARM64) $(OBJ_ARMHF) $(OBJ_DEBUG))
+$(shell mkdir -p $(REL_DIR) $(REL_ARM64) $(REL_ARMHF) $(OBJ_NATIVE) $(OBJ_ARM64) $(OBJ_ARMHF) $(OBJ_DEBUG))
 
-# ─── Sources ──────────────────────────────────────────────────────────────────
-#
-# Wildcard picks up all .c files in source/ automatically.
-# As the project grows, just add new .c files to source/ — no Makefile changes needed.
-#
-# Optional modules are filtered out here when their feature flag is disabled.
-#
 
-SRCS      = $(wildcard $(SRC_DIR)/*.c)
+# ─── Dependencies & Sources ──────────────────────────────────────────────────
 
-# Explicitly add the external dependencies
-SRCS     += deps/cJSON/cJSON.c
-SRCS     += deps/mongoose/mongoose.c
+# Add new dependency folders here and everything below updates automatically
+DEP_ROOTS = deps/cJSON deps/mongoose
+
+# Automatic VPATH (No spaces after colons)
+vpath %.c $(SRC_DIR):$(subst  ,:,$(DEP_ROOTS))
+
+# Finds all .c files in source/ and all .c files in your DEP_ROOTS
+SRCS = $(wildcard $(SRC_DIR)/*.c)
+SRCS += $(foreach dir,$(DEP_ROOTS),$(wildcard $(dir)/*.c))
 
 # filter out logic for GPIO
 ifeq ($(strip $(WITH_GPIOD)), 0)
@@ -115,45 +123,24 @@ endif
 
 # ─── Object files per architecture ────────────────────────────────────────────
 
-#OBJ_FILES_NATIVE = $(patsubst $(SRC_DIR)/%.c, $(OBJ_NATIVE)/%.o, $(SRCS))
-#OBJ_FILES_ARM64  = $(patsubst $(SRC_DIR)/%.c, $(OBJ_ARM64)/%.o,  $(SRCS))
-#OBJ_FILES_ARMHF  = $(patsubst $(SRC_DIR)/%.c, $(OBJ_ARMHF)/%.o,  $(SRCS))
-#OBJ_FILES_DEBUG  = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DEBUG)/%.o,  $(SRCS))
-
-# Search paths for source files (No spaces around the colons!)
-vpath %.c $(SRC_DIR):deps/cJSON:deps/mongoose
-
-# Update the Object file list (Flattened)
-# This takes "deps/cJSON/cJSON.c" -> "cJSON.o" -> "build/native/cJSON.o"
+# This uses 'notdir' to handle files coming from different subdirectories 
+# and puts them all into a flat build folders.
 OBJ_FILES_NATIVE = $(patsubst %.c, $(OBJ_NATIVE)/%.o, $(notdir $(SRCS)))
-OBJ_FILES_ARM64  = $(patsubst %.c, $(OBJ_ARM64)/%.o,  $(notdir $(SRCS)))
-OBJ_FILES_ARMHF  = $(patsubst %.c, $(OBJ_ARMHF)/%.o,  $(notdir $(SRCS)))
-OBJ_FILES_DEBUG  = $(patsubst %.c, $(OBJ_DEBUG)/%.o,  $(notdir $(SRCS)))
-
-# Remove $(SRC_DIR)/ from the right side of the colon
-$(OBJ_NATIVE)/%.o: %.c
-	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
-
-$(OBJ_DEBUG)/%.o: %.c
-	$(CC) $(DFLAGS) $(INCLUDES) -c -o $@ $<
-
-$(OBJ_ARM64)/%.o: %.c
-	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
-
-$(OBJ_ARMHF)/%.o: %.c
-	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+OBJ_FILES_ARM64  = $(patsubst %.c, $(OBJ_ARM64)/%.o, $(notdir $(SRCS)))
+OBJ_FILES_ARMHF  = $(patsubst %.c, $(OBJ_ARMHF)/%.o, $(notdir $(SRCS)))
+OBJ_FILES_DEBUG  = $(patsubst %.c, $(OBJ_DEBUG)/%.o, $(notdir $(SRCS)))
 
 
 # ─── Output binaries ──────────────────────────────────────────────────────────
 
 TARGET        = $(REL_DIR)/aquachemd
-TARGET_ARM64  = $(REL_DIR)/aquachemd-arm64
-TARGET_ARMHF  = $(REL_DIR)/aquachemd-armhf
+TARGET_ARM64  = $(REL_ARM64)/aquachemd
+TARGET_ARMHF  = $(REL_ARMHF)/aquachemd
 TARGET_DEBUG  = $(REL_DIR)/aquachemd-debug
 
 # ─── Phony targets ────────────────────────────────────────────────────────────
 
-.PHONY: all debug arm64 armhf release _release_inside_container clean clean-build install
+.PHONY: all debug arm64 armhf release _release_inside_container clean clean-objs distclean install
 
 .DEFAULT_GOAL := all
 
@@ -167,7 +154,7 @@ release:
 	@echo "Release binaries built in $(REL_DIR)/"
 
 # Called inside the Docker container — do not invoke directly
-_release_inside_container: clean arm64 armhf
+_release_inside_container: distclean arm64 armhf
 
 # ─── Docker release target without clean ───────────────────────────────────────
 quick:
@@ -192,8 +179,8 @@ dummy: $(TARGET)
 $(TARGET): $(OBJ_FILES_NATIVE)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
 
-#$(OBJ_NATIVE)/%.o: $(SRC_DIR)/%.c
-#	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+$(OBJ_NATIVE)/%.o: %.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
 # ─── Debug build ──────────────────────────────────────────────────────────────
 
@@ -203,8 +190,8 @@ debug: $(TARGET_DEBUG)
 $(TARGET_DEBUG): $(OBJ_FILES_DEBUG)
 	$(CC) $(DFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
 
-#$(OBJ_DEBUG)/%.o: $(SRC_DIR)/%.c
-#	$(CC) $(DFLAGS) $(INCLUDES) -c -o $@ $<
+$(OBJ_DEBUG)/%.o: %.c
+	$(CC) $(DFLAGS) $(INCLUDES) -c -o $@ $<
 
 # ─── arm64 cross-compile ──────────────────────────────────────────────────────
 
@@ -215,8 +202,8 @@ arm64: $(TARGET_ARM64)
 $(TARGET_ARM64): $(OBJ_FILES_ARM64)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
 
-#$(OBJ_ARM64)/%.o: $(SRC_DIR)/%.c
-#	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+$(OBJ_ARM64)/%.o: %.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
 # ─── armhf cross-compile ──────────────────────────────────────────────────────
 
@@ -227,8 +214,8 @@ armhf: $(TARGET_ARMHF)
 $(TARGET_ARMHF): $(OBJ_FILES_ARMHF)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
 
-#$(OBJ_ARMHF)/%.o: $(SRC_DIR)/%.c
-#	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
+$(OBJ_ARMHF)/%.o: %.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
 # ─── Install ──────────────────────────────────────────────────────────────────
 
@@ -236,12 +223,32 @@ install: $(TARGET)
 	install -m 755 $(TARGET) /usr/local/bin/aquachemd
 	@echo "Installed to /usr/local/bin/aquachemd"
 
-# ─── Clean ────────────────────────────────────────────────────────────────────
 
-# Remove object files only — keeps binaries
-clean-build:
+# ─── Clean Targets ────────────────────────────────────────────────────────────
+
+#.PHONY: clean clean-objs distclean
+
+# List of binaries
+ALL_TARGETS = $(TARGET) $(TARGET_ARM64) $(TARGET_ARMHF) $(TARGET_DEBUG)
+
+# #1 Normal Clean: Deletes binaries and standard .o files
+# Keeps cJSON.o and mongoose.o
+clean:
+	@echo "Cleaning binaries and standard objects (keeping heavy deps)..."
+	$(RM) $(ALL_TARGETS)
+	$(RM) $(filter-out %cJSON.o %mongoose.o, $(OBJ_FILES_NATIVE) $(OBJ_FILES_ARM64) $(OBJ_FILES_ARMHF) $(OBJ_FILES_DEBUG))
+
+# #2 Light Clean: Just the standard objects
+clean-objs:
+	@echo "Cleaning standard objects only..."
+	$(RM) $(filter-out %cJSON.o %mongoose.o, $(OBJ_FILES_NATIVE) $(OBJ_FILES_ARM64) $(OBJ_FILES_ARMHF) $(OBJ_FILES_DEBUG))
+
+# #3 Distclean: The "Nuclear" option for code
+# Removes ALL binaries and ALL .o files (including heavy deps)
+# Safely leaves scripts and .service files in the release directory
+distclean:
+	@echo "Deep cleaning all build artifacts..."
+	$(RM) $(ALL_TARGETS)
 	$(RM) $(OBJ_FILES_NATIVE) $(OBJ_FILES_ARM64) $(OBJ_FILES_ARMHF) $(OBJ_FILES_DEBUG)
-
-# Remove everything
-clean: clean-build
-	$(RM) $(TARGET) $(TARGET_ARM64) $(TARGET_ARMHF) $(TARGET_DEBUG)
+	@# Optional: If you want to remove the empty sub-dirs in release, but keep the root:
+	@# find $(REL_DIR) -type d -empty -delete

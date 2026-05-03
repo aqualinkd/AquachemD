@@ -16,7 +16,7 @@
 
 
 //void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
-bool stateChangeRequest(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
+//bool stateChangeRequest(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
 
 void intHandler(int sig_num);
 
@@ -64,7 +64,7 @@ struct aquachemdata
   //orp_reading_t orp_reading;
   //rtd_reading_t temp_reading;
 
-  acd_condition_t *conditions;
+  //acd_condition_t *conditions;
   acd_key_t *keys; // Linked list of all keys (sensors, pumps, GPIOs, etc.) for easy access and management
 
   char display_message[DISPLAY_MSG_SIZE];

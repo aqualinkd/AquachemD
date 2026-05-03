@@ -12,6 +12,7 @@
 #include "aquachemd.h"
 #include "utils.h"
 #include "acd_timer.h"
+#include "state_manager.h"
 
 struct timerthread {
   pthread_t thread_id;
@@ -179,7 +180,7 @@ void *timer_worker(void *ptr)
     precise_delay(WAIT_TIME_BEFORE_ON_CHECK);
     if (cnt++ == 5) {
        LOG(LOG_NOTICE, "turning on '%s'\n", tmthread->key->label);
-       stateChangeRequest(tmthread->acddata, tmthread->key, ACD_LED_OFF);
+       state_change_request(tmthread->acddata, tmthread->key, ACD_LED_OFF);
     } else if (cnt == 10) {
        LOG(LOG_ERR, "key state never turned on '%s'\n", tmthread->key->label);
        break;
@@ -211,7 +212,9 @@ void *timer_worker(void *ptr)
     }
 
     tmthread->timeout = now;
-    tmthread->timeout.tv_sec += (remaining_sec > 60) ? 60 : remaining_sec; // Wakes exactly when done if < 60s
+    //tmthread->timeout.tv_sec += (remaining_sec > 60) ? 60 : remaining_sec; // Wakes exactly when done if < 60s
+    //tmthread->timeout.tv_sec += (remaining_sec >= 60) ? 60 : 1; // Wake ever second if under 1 minute left on timer
+    tmthread->timeout.tv_sec += (remaining_sec > 60) ? (remaining_sec - 60) : 1; // Wake ever second if under 1 minute left on timer
 
     retval = pthread_cond_timedwait(&tmthread->thread_cond, &tmthread->thread_mutex, &tmthread->timeout);
 
@@ -234,7 +237,7 @@ void *timer_worker(void *ptr)
   // Determine if we timed out naturally or were cancelled
   if ((tmthread->duration_min != 0 || tmthread->duration_sec != 0) && tmthread->key->state != ACD_LED_OFF && tmthread->key->state != ACD_LED_ENABLED) {
     LOG(LOG_INFO, "Timer waking turning '%s' off\n", tmthread->key->label);
-    stateChangeRequest(tmthread->acddata, tmthread->key, ACD_LED_OFF);
+    state_change_request(tmthread->acddata, tmthread->key, ACD_LED_OFF);
   } else if (tmthread->key->state != ACD_LED_ON) {
     LOG(LOG_INFO, "Timer waking '%s' is already off\n", tmthread->key->label);
   }

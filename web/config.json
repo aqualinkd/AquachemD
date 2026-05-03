@@ -74,7 +74,7 @@
     "TEMP_1": {
       "display": true,
       "uom": "&deg;",
-      "precision": 0,
+      "precision": 1,
       "thresholds": {
         "outofrange": {
           "min": 1,
@@ -83,6 +83,11 @@
           "maxtext": "To Hot"
         }
       }
+    },
+    "TEMP_3": {
+      "display": true,
+      "uom": "&deg;",
+      "precision": 1
     },
     "PH_1": {
       "display": true,

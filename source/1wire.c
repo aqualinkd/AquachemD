@@ -170,6 +170,10 @@ void w1_init_generic(w1_sensor_t *s, const char *path,
   strncpy(s->label, label ? label : "w1_generic", sizeof(s->label) - 1);
 }
 
+
+
+#ifndef DUMMY_SENSORS
+
 // ─── Reading ─────────────────────────────────────────────────────────────────
 
 // Read using the simple 'temperature' sysfs file (preferred).
@@ -204,6 +208,24 @@ w1_reading_t w1_read(const w1_sensor_t *s)
   result.status = W1_SUCCESS;
   return result;
 }
+
+#endif // ifndef DUMMY_SENSORS
+#ifdef DUMMY_SENSORS
+w1_reading_t w1_read(const w1_sensor_t *s)
+{
+  /*
+  w1_reading_t result = {0.0f, 0, W1_ERROR};
+
+  result.status = W1_SUCCESS;
+  return result;
+  */
+  char temp_path[512];
+  build_temperature_path(s->path, temp_path, sizeof(temp_path));
+
+  float val = ((float)(rand() % 1000) / 1000.0f - 0.5f) * 2.0f * 40.0f;
+  return (w1_reading_t){ 35.0f + val, 0, W1_SUCCESS };
+}
+#endif // DUMMY_SENSORS
 
 // Read using 'w1_slave' file with explicit CRC check in userspace.
 // w1_slave format:

@@ -86,4 +86,6 @@ int relay_is_on(gpio_handle_t *h);
 // Returns 1 if the sensor is in the state required by the config. GPIO_ERROR on failure
 int sensor_is_met(gpio_handle_t *h);
 
+int pump_is_on(gpio_handle_t *h);
+
 #endif

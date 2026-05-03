@@ -14,6 +14,7 @@
 #include "utils.h"
 #include "version.h"
 #include "net_services.h"
+#include "acd_timer.h"
 
 #define MAX_JSON_BUFFER_SIZE 8192
 
@@ -145,27 +146,46 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
   cJSON_AddStringToObject(device, "status", acd_state_to_str(acddata->keys->state));
   cJSON_AddNumberToObject(device, "int_status", acddata->keys->state);
   cJSON_AddStringToObject(device, "type", "switch");
+  cJSON_AddStringToObject(device, "type", "switch");
+  cJSON *attributes = cJSON_CreateArray();
+  cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_str(ACD_LED_OFF)));
+  cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_str(ACD_LED_ON)));
+  cJSON_AddItemToObject(device, "attributes", attributes);
   cJSON_AddItemToObject(devices, acddata->keys->ID, device);
 
   for (acd_key_t *curr = acddata->keys->next; curr != NULL; curr = curr->next) { 
     device = cJSON_CreateObject();
     cJSON_AddStringToObject(device, "id", curr->ID);
     cJSON_AddStringToObject(device, "label", curr->label);
-    cJSON_AddStringToObject(device, "status", acd_state_to_str(curr->state));
-    cJSON_AddNumberToObject(device, "int_status", curr->state);
-    cJSON_AddNumberToObject(device, "value", curr->value);
-    cJSON_AddItemToObject(devices, curr->ID, device);
-
-    if (curr->type == KEY_TYPE_GPIO_DOSER || curr->type == KEY_TYPE_EZO_DOSER) {
-      cJSON_AddStringToObject(device, "type", "switch");
-      cJSON *attributes = cJSON_CreateArray();
-      cJSON_AddItemToArray(attributes, cJSON_CreateString("timer"));
-      cJSON_AddItemToObject(device, "attributes", attributes);
+    
+    if (IS_CONDITION(curr->type)) {
+      cJSON_AddStringToObject(device, "status", acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
+      cJSON_AddNumberToObject(device, "int_status", curr->met);
+      cJSON_AddStringToObject(device, "type", "binary_sensor");
     } else {
-      cJSON_AddStringToObject(device, "type", "sensor");
-    }
-  }
+      cJSON_AddStringToObject(device, "status", acd_state_to_str(curr->state));
+      cJSON_AddNumberToObject(device, "int_status", curr->state);
+      cJSON_AddNumberToObject(device, "value", curr->value);
+      if (IS_OUTPUT(curr->type)) {
+        cJSON_AddStringToObject(device, "type", "switch");
+        cJSON *attributes = cJSON_CreateArray();
+        cJSON_AddItemToArray(attributes, cJSON_CreateString("timer"));
+        cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_str(ACD_LED_ON)));
+        cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_str(ACD_LED_OFF)));
+        cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_str(ACD_LED_ENABLED)));
+        cJSON_AddItemToObject(device, "attributes", attributes);
 
+        uint32_t remaining_sec = get_timer_left_sec(curr);
+        cJSON_AddStringToObject(device, "timer_active", acd_state_to_str(remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF));
+        cJSON_AddNumberToObject(device, "timer_duration", remaining_sec);
+      } else {
+        cJSON_AddStringToObject(device, "type", "sensor");
+      }
+    }
+
+    cJSON_AddItemToObject(devices, curr->ID, device);
+  }
+/*
   for (acd_condition_t *curr = acddata->conditions; curr != NULL; curr = curr->next) { 
     device = cJSON_CreateObject();
     cJSON_AddStringToObject(device, "id", curr->ID);
@@ -175,6 +195,7 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
     cJSON_AddStringToObject(device, "type", "binary_sensor");
     cJSON_AddItemToObject(devices, curr->ID, device);
   }
+*/
 }
 
 const char* get_devices_json(struct aquachemdata *acddata) {
@@ -194,15 +215,28 @@ const char* get_devices_json(struct aquachemdata *acddata) {
 
     for (acd_key_t *curr = acddata->keys->next; curr != NULL; curr = curr->next) { 
       item = cJSON_GetObjectItemCaseSensitive(devices_map, curr->ID);
-      cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), curr->value);
-      cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->state));
-      cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), curr->state);
+
+      if (IS_CONDITION(curr->type)) {
+        cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
+        cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), curr->met);
+      } else {
+        cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), curr->value);
+        cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->state));
+        cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), curr->state);
+        if (IS_OUTPUT(curr->type)) {
+          uint32_t remaining_sec = get_timer_left_sec(curr);
+          cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "timer_active"), acd_state_to_str(remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF));
+          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "timer_duration"), remaining_sec);
+        }
+      } 
     }
+    /*
     for (acd_condition_t *curr = acddata->conditions; curr != NULL; curr = curr->next) { 
       cJSON *item = cJSON_GetObjectItemCaseSensitive(devices_map, curr->ID);
       cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
       cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), curr->met);
     }
+    */
   }
 
   cJSON_AddStringToObject(root, AQUACHEMD_SHORT_NAME, AQUACHEMD_VERSION);

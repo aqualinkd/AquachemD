@@ -26,38 +26,28 @@ void set_config_defaults();
 
 
 // Temporary storage for conditions being parsed from the file
-/*
-static struct {
-  char *label; 
-  char *mqtt_topic;
-  char *mqtt_value;
-  int gpio_pin;
-  bool gpio_value;
-  bool has_gpio_pin;
-  int type;
-  char *path;
-} _staging = {0};
-*/
 
 static struct {
     char *label;
     char *topic_path;
     char *char_value;
+    float value;
+    float value2;
     int   pin;
     bool  pin_mode;
     bool  pin_state;
     unsigned char address; // Added for EZO hex address
-    acd_sensor_type_t pending_type; // Uses KEY_TYPE_PH, KEY_TYPE_ORP, etc.
+    acd_type_t pending_type; // Uses ACD_TYPE_PH, ACD_TYPE_ORP, etc.
     //bool  has_pin;
 } _staging;
 
 void add_condition_mqtt(const char *label, const char *topic, const char *value);
 void add_condition_gpio(const char *label, int pin, gpio_active_t pin_mode, gpio_req_t pin_state);
 
-void add_sensor_gpio(const char *label, acd_sensor_type_t type, int pin, gpio_active_t pin_mode, gpio_req_t pin_state);
-void add_sensor_ezo(const char *label, acd_sensor_type_t type, unsigned char address);
-void add_sensor_d1w(const char *label, acd_sensor_type_t type, const char *value);
-void add_sensor_mqtt(const char *label, acd_sensor_type_t type, const char *value);
+void add_sensor_gpio(const char *label, acd_type_t type, int pin, gpio_active_t pin_mode, gpio_req_t pin_state, int runtime);
+void add_sensor_ezo(const char *label, acd_type_t type, unsigned char address);
+void add_sensor_d1w(const char *label, acd_type_t type, const char *path, float offset, float scale);
+void add_sensor_mqtt(const char *label, acd_type_t type, const char *topic);
 
 
 void init_cfg_parameters()
@@ -103,7 +93,9 @@ void clear_staging() {
     _staging.pin = 0;
     _staging.pin_mode = 0;
     _staging.pin_state = 0;
-    _staging.pending_type = KEY_TYPE_MASTER; // Using Master as not set
+    _staging.value = 0;
+    _staging.value2 = 0;
+    _staging.pending_type = ACD_TYPE_MASTER; // Using Master as not set
 }
 
 void action_staging() {
@@ -113,22 +105,29 @@ void action_staging() {
   }
 
   switch ( _staging.pending_type) {
-    case KEY_TYPE_EZO_PH:
-    case KEY_TYPE_EZO_ORP:
-    case KEY_TYPE_EZO_TEMP:
-    case KEY_TYPE_EZO_DOSER:
+    case ACD_TYPE_EZO_PH:
+    case ACD_TYPE_EZO_ORP:
+    case ACD_TYPE_EZO_TEMP:
+    case ACD_TYPE_EZO_PMP:
       add_sensor_ezo(_staging.label, _staging.pending_type, _staging.address);
       break;
-    case KEY_TYPE_MQTT_TEMP:
+    case ACD_TYPE_MQTT_TEMP:
       add_sensor_mqtt(_staging.label, _staging.pending_type, _staging.topic_path);
       break;
-    case KEY_TYPE_D1W_TEMP:
-      add_sensor_d1w(_staging.label, _staging.pending_type, _staging.topic_path);
+    case ACD_TYPE_D1W_TEMP:
+      add_sensor_d1w(_staging.label, _staging.pending_type, _staging.topic_path, _staging.value, _staging.value2);
       break;
-    case KEY_TYPE_GPIO_DOSER:
-      add_sensor_gpio(_staging.label, _staging.pending_type, _staging.pin, _staging.pin_mode, _staging.pin_state );
+    case ACD_TYPE_GPIO_PMP:
+      add_sensor_gpio(_staging.label, _staging.pending_type, _staging.pin, _staging.pin_mode, _staging.pin_state, (int)_staging.value);
       break;
-    case KEY_TYPE_NONE: // Logic Conditions
+    case ACD_TYPE_MQTT_COND:
+      add_condition_mqtt(_staging.label, _staging.topic_path, _staging.char_value);
+      break;
+    case ACD_TYPE_GPIO_COND:
+      add_condition_gpio(_staging.label, _staging.pin, _staging.pin_mode, _staging.pin_state);
+      break;
+    case ACD_TYPE_NONE: // No need anymore, fall through to default.
+      /*
       if (_staging.topic_path != NULL) {
       // If we have a topic, it MUST be MQTT
         add_condition_mqtt(_staging.label, _staging.topic_path, _staging.char_value);
@@ -136,8 +135,8 @@ void action_staging() {
         // If no topic but we have a pin, it's GPIO
         add_condition_gpio(_staging.label, _staging.pin, _staging.pin_mode, _staging.pin_state);
       }
-  break;
-    case KEY_TYPE_MASTER:
+      break;*/
+    case ACD_TYPE_MASTER:
     default:
       LOG(LOG_ERR, "Did't create config entry for %s",_staging.label);
       break;
@@ -149,7 +148,7 @@ void action_staging() {
 
 bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
   bool rtn = false;
-  char *tmpval;
+  //char *tmpval;
 
   value = cleanwhitespace(value);
  
@@ -204,9 +203,12 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
           *(unsigned char *)_cfgParams[i].value_ptr = strtoul(value, NULL, 16); 
         break;
         case CFG_FLOAT:
+          *(float *)_cfgParams[i].value_ptr =  strtof(value, NULL);
+          /*
           tmpval = cleanalloc(value, STR_FULL_LENGTH);
           *(float *)_cfgParams[i].value_ptr = atof(tmpval);
           free(tmpval);
+          */
         break;
         case CFG_BITMASK:
           if (text2bool(value))
@@ -229,20 +231,20 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
           }
           else if (strstr(param, "_type")) {
             if (strcasecmp(value, "ezo") == 0) {
-              if (strstr(param, "ph_sensor")) _staging.pending_type = KEY_TYPE_EZO_PH;
-              else if (strstr(param, "orp_sensor")) _staging.pending_type = KEY_TYPE_EZO_ORP;
-              else if (strstr(param, "temp_sensor")) _staging.pending_type = KEY_TYPE_EZO_TEMP;
-              else if (strstr(param, "doser")) _staging.pending_type = KEY_TYPE_EZO_DOSER;
+              if (strstr(param, "ph_sensor")) _staging.pending_type = ACD_TYPE_EZO_PH;
+              else if (strstr(param, "orp_sensor")) _staging.pending_type = ACD_TYPE_EZO_ORP;
+              else if (strstr(param, "temp_sensor")) _staging.pending_type = ACD_TYPE_EZO_TEMP;
+              else if (strstr(param, "doser")) _staging.pending_type = ACD_TYPE_EZO_PMP;
               else {
                 LOG(LOG_ERR, "Unknown sensor type for parameter '%s'\n", param);
                 return false;
               }
             } 
-            else if (strcasecmp(value, "d1w") == 0) _staging.pending_type = KEY_TYPE_D1W_TEMP;
-            else if (strcasecmp(value, "mqtt") == 0)_staging.pending_type = KEY_TYPE_MQTT_TEMP;
+            else if (strcasecmp(value, "d1w") == 0) _staging.pending_type = ACD_TYPE_D1W_TEMP;
+            else if (strcasecmp(value, "mqtt") == 0)_staging.pending_type = ACD_TYPE_MQTT_TEMP;
             else if (strcasecmp(value, "gpio") == 0){
               if (strstr(param, "doser")) {
-                _staging.pending_type = KEY_TYPE_GPIO_DOSER;
+                _staging.pending_type = ACD_TYPE_GPIO_PMP;
               } else {
                 LOG(LOG_ERR, "Unknown sensor type for parameter '%s'\n", param);
                 return false;
@@ -250,7 +252,7 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
             }
           }
           else if (strncasecmp(param, "mqtt_condition_topic", 20) == 0) {
-            _staging.pending_type = KEY_TYPE_NONE;
+            _staging.pending_type = ACD_TYPE_MQTT_COND;
             if (_staging.topic_path) free(_staging.topic_path);
             _staging.topic_path = strdup(value);
           }
@@ -268,32 +270,41 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
             if (_staging.topic_path) free(_staging.topic_path);
             _staging.topic_path = strdup(value);
           }
+          else if (strncasecmp(param, "temp_sensor_offset", 18) == 0) {
+            _staging.value = strtof(value, NULL);
+          }
+          else if (strncasecmp(param, "temp_sensor_scale", 17) == 0) {
+            _staging.value2 = strtof(value, NULL);
+          }
           else if (strncasecmp(param, "gpio_condition_pin_mode", 23) == 0) {
             _staging.pin_mode = text2gpioactive(value);
-            _staging.pending_type = KEY_TYPE_NONE;
+            _staging.pending_type = ACD_TYPE_GPIO_COND;
           }
           else if (strncasecmp(param, "gpio_condition_required_state", 29) == 0) {
             _staging.pin_state = text2bool(value);
-            _staging.pending_type = KEY_TYPE_NONE;
+            _staging.pending_type = ACD_TYPE_GPIO_COND;
           }
           else if (strncasecmp(param, "doser_pin_mode", 14) == 0) {
             _staging.pin_mode = text2gpioactive(value);
+          }
+          else if (strncasecmp(param, "doser_runtime", 13) == 0) {
+            _staging.value = (int)strtoul(value, NULL, 10);
           }
           else if (strncasecmp(param, "doser_required_state", 20) == 0) {
             _staging.pin_state = text2bool(value);
           }
           else if (strncasecmp(param, "gpio_condition_pin", 18) == 0 || strncasecmp(param, "doser_pin", 9) == 0) {
             _staging.pin = (int)strtoul(value, NULL, 10);
-            LOG(LOG_ERR, "*********** Pin %d *********** -- %s",_staging.pin,param);
             if (strncasecmp(param, "gpio_condition", 14) == 0) {
-              _staging.pending_type = KEY_TYPE_NONE;
+              _staging.pending_type = ACD_TYPE_GPIO_COND;
             }
           }
           else if (strncasecmp(param, "mqtt_condition_value", 20) == 0) {
             if (_staging.char_value) free(_staging.char_value);
             _staging.char_value = strdup(value);
-            _staging.pending_type = KEY_TYPE_NONE; 
+            _staging.pending_type = ACD_TYPE_MQTT_COND; 
           }
+          
         break;
       } // Switch to Handle standard entries
       return rtn;
@@ -316,12 +327,12 @@ void parse_config_file(struct aquachemdata *acdata)
   char *b_ptr;
 
   // If -v was passed on cmd line, we need to keep logging in debug and override any config value in default value 
-  int log_level = _acdconfig_.log_level; // Save log level since it may will be reset in init_cfg_parameters.
+  bool log_debug = (_acdconfig_.log_level >= LOG_DEBUG);
 
   init_cfg_parameters();
 
-  if (log_level > 0) {
-    _acdconfig_.log_level = log_level; // Restore log level since it may have been reset to default above.
+  if (log_debug) {
+    _acdconfig_.log_level = LOG_DEBUG; // Restore log level since it may have been reset to default above.
   }
 
   LOG(LOG_DEBUG, "Reading config file");
@@ -345,8 +356,8 @@ void parse_config_file(struct aquachemdata *acdata)
               LOG(LOG_ERR, "Unknown config parameter '%.*s'\n",end-b_ptr+1, b_ptr);
             } else {
               // restore debug from config values overiding it if -v was used on cmd line
-              if (log_level > 0 && _acdconfig_.log_level != log_level) {
-                _acdconfig_.log_level = log_level; // Restore log level since it may have been reset to default above.
+              if (log_debug) {
+                _acdconfig_.log_level = LOG_DEBUG; // Restore log level since it may have been reset to default above.
               }
             }
           } 
@@ -363,8 +374,8 @@ void parse_config_file(struct aquachemdata *acdata)
     exit (EXIT_FAILURE);
   }
 
-  acdata->conditions = _acdconfig_.conditions; // Make conditions available in main data struct for future use.
-  acdata->keys->next = _acdconfig_.sensors; // Make sensors available in main data struct keys, first key is pre-set 
+  //acdata->conditions = _acdconfig_.conditions; // Make conditions available in main data struct for future use.
+  acdata->keys->next = _acdconfig_.keys; // Make sensors available in main data struct keys, first key is pre-set 
   check_print_config(acdata);
 }
 
@@ -458,7 +469,7 @@ bool write_config_file (struct aquachemdata *acdata)
     }
     lastName = _cfgParams[i].name;
   }
-
+/*
   for (acd_condition_t *curr = _acdconfig_.conditions; curr != NULL; curr = curr->next) {
     if (curr->type == COND_MQTT) {
       fprintf(fp, "mqtt_condition_label=%s\n", curr->label);
@@ -470,51 +481,63 @@ bool write_config_file (struct aquachemdata *acdata)
       fprintf(fp, "gpio_condition_value=%d\n", curr->data.gpio.active);
     }
   }
-
+*/
   /* --- Sensors Section --- */
-  for (acd_key_t *curr = _acdconfig_.sensors; curr != NULL; curr = curr->next) {
+  for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
     fprintf(fp, "\n"); // Add a newline between sensor blocks for readability
 
     switch (curr->type) {
-        case KEY_TYPE_EZO_PH:
+        case ACD_TYPE_MQTT_COND:
+          fprintf(fp, "mqtt_condition_label=%s\n", curr->label);
+          fprintf(fp, "mqtt_condition_topic=%s\n", curr->data.mqtt.topic);
+          fprintf(fp, "mqtt_condition_value=%s\n", curr->data.mqtt.target_value);
+          break;
+        
+        case ACD_TYPE_GPIO_COND:
+          fprintf(fp, "gpio_condition_label=%s\n", curr->label);
+          fprintf(fp, "gpio_condition_pin=%d\n", curr->data.gpio.pin);
+          fprintf(fp, "gpio_condition_value=%d\n", curr->data.gpio.active);
+          break;
+
+        case ACD_TYPE_EZO_PH:
             if (curr->label) fprintf(fp, "ph_sensor_label=%s\n", curr->label);
             fprintf(fp, "ph_sensor_type=ezo\n");
             // address is a uchar, use hex_to_str or %02x directly
             fprintf(fp, "ph_sensor_address=0x%02x\n", curr->data.ezo.address);
             break;
 
-        case KEY_TYPE_EZO_ORP:
+        case ACD_TYPE_EZO_ORP:
             if (curr->label) fprintf(fp, "orp_sensor_label=%s\n", curr->label);
             fprintf(fp, "orp_sensor_type=ezo\n");
             fprintf(fp, "orp_sensor_address=0x%02x\n", curr->data.ezo.address);
             break;
 
-        case KEY_TYPE_EZO_TEMP:
+        case ACD_TYPE_EZO_TEMP:
             if (curr->label) fprintf(fp, "temp_sensor_label=%s\n", curr->label);
             fprintf(fp, "temp_sensor_type=ezo\n");
             fprintf(fp, "temp_sensor_address=0x%02x\n", curr->data.ezo.address);
             break;
 
-        case KEY_TYPE_D1W_TEMP:
+        case ACD_TYPE_D1W_TEMP:
             if (curr->label) fprintf(fp, "temp_sensor_label=%s\n", curr->label);
             fprintf(fp, "temp_sensor_type=d1w\n");
             fprintf(fp, "temp_sensor_path=%s\n", curr->data.w1.path);
             break;
 
-        case KEY_TYPE_MQTT_TEMP:
+        case ACD_TYPE_MQTT_TEMP:
             if (curr->label) fprintf(fp, "temp_sensor_label=%s\n", curr->label);
             fprintf(fp, "temp_sensor_type=mqtt\n");
             fprintf(fp, "temp_sensor_topic=%s\n", curr->data.mqtt.topic);
             break;
 
-        case KEY_TYPE_GPIO_DOSER:
+        case ACD_TYPE_GPIO_PMP:
             if (curr->label) fprintf(fp, "doser_label=%s\n", curr->label);
             fprintf(fp, "doser_type=gpio\n");
             fprintf(fp, "doser_pin=%d\n", curr->data.gpio.pin);
             fprintf(fp, "doser_value=%d\n", curr->data.gpio.active);
             break;
 
-        case KEY_TYPE_EZO_DOSER:
+        case ACD_TYPE_EZO_PMP:
             if (curr->label) fprintf(fp, "doser_label=%s\n", curr->label);
             fprintf(fp, "doser_type=ezo\n");
             fprintf(fp, "doser_address=0x%02x\n", curr->data.ezo.address);
@@ -543,9 +566,9 @@ void check_print_config (struct aquachemdata *acdata)
   //uint32_t errors=0;
 
   // Should already be set, but just in case, make conditions available.
-  acdata->conditions = _acdconfig_.conditions; // Make conditions available in main data struct for future use.
+  //acdata->conditions = _acdconfig_.conditions; // Make conditions available in main data struct for future use.
 
-  acdata->keys->next = _acdconfig_.sensors; // Make sensors available in main data struct keys, first key is pre-set 
+  acdata->keys->next = _acdconfig_.keys; // Make sensors available in main data struct keys, first key is pre-set 
 
   // Anything that's not in the config table should be added as a special case here until it's added to the table. This is for handling things that need to be displayed in a special way or that aren't actually stored in the config struct but are still important to display.
   LOG(LOG_NOTICE, "%-*s = %s\n",MAX_PRINTLEN,"Configuration file", _acdconfig_.config_file);
@@ -600,7 +623,7 @@ void check_print_config (struct aquachemdata *acdata)
       break;
     }
   }
-
+/*
   // Now print the dynamic conditions list
   for (acd_condition_t *curr = _acdconfig_.conditions; curr != NULL; curr = curr->next) {
     if (curr->type == COND_MQTT) {
@@ -609,22 +632,24 @@ void check_print_config (struct aquachemdata *acdata)
         LOG(LOG_NOTICE, "%-*s = %-15s | Pin %d -> %d\n", MAX_PRINTLEN, "condition (GPIO)", curr->label, curr->data.gpio.pin, curr->data.gpio.active);
     }
   }
-
-  for (acd_key_t *curr = _acdconfig_.sensors; curr != NULL; curr = curr->next) {
+*/
+  for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
     const char *type_str = "UNKNOWN";
     switch (curr->type) {
-      case KEY_TYPE_EZO_TEMP: type_str = "sensor (EZO Temp)"; break;
-      case KEY_TYPE_EZO_PH: type_str = "sensor (EZO pH)"; break;
-      case KEY_TYPE_EZO_ORP: type_str = "sensor (EZO ORP)"; break;
-      case KEY_TYPE_D1W_TEMP: type_str = "sensor (1-Wire Temp)"; break;
-      case KEY_TYPE_MQTT_TEMP: type_str = "sensor (MQTT Temp)"; break;
-      case KEY_TYPE_GPIO_DOSER: type_str = "doser (GPIO)"; break;
-      case KEY_TYPE_EZO_DOSER: type_str = "doser (EZO PMP)"; break;
-      //case KEY_TYPE_EZO_PUMP: type_str = "sensor (EZO Pump)"; break;
-      //case KEY_TYPE_GPIO: type_str = "sensor (GPIO)"; break;
+      case ACD_TYPE_MQTT_COND: type_str = "condition (MQTT)"; break;
+      case ACD_TYPE_GPIO_COND: type_str = "condition (GPIO)"; break;
+      case ACD_TYPE_EZO_TEMP: type_str = "sensor (EZO Temp)"; break;
+      case ACD_TYPE_EZO_PH: type_str = "sensor (EZO pH)"; break;
+      case ACD_TYPE_EZO_ORP: type_str = "sensor (EZO ORP)"; break;
+      case ACD_TYPE_D1W_TEMP: type_str = "sensor (1-Wire Temp)"; break;
+      case ACD_TYPE_MQTT_TEMP: type_str = "sensor (MQTT Temp)"; break;
+      case ACD_TYPE_GPIO_PMP: type_str = "pump (GPIO)"; break;
+      case ACD_TYPE_EZO_PMP: type_str = "pump (EZO PMP)"; break;
+      //case ACD_TYPE_EZO_PUMP: type_str = "sensor (EZO Pump)"; break;
+      //case ACD_TYPE_GPIO: type_str = "sensor (GPIO)"; break;
       default: type_str = "sensor (UNKNOWN)"; break;
     }
-    LOG(LOG_NOTICE, "%-*s = %-15s | %s\n", MAX_PRINTLEN, type_str, curr->label, curr->ID);
+    LOG(LOG_NOTICE, "%-*s = %-8.8s| %s\n", MAX_PRINTLEN, type_str, curr->ID, curr->label );
   }
 }
 
@@ -650,7 +675,8 @@ const char* int_to_str(int i) {
 
 /* Helper to generate ID and set Master status */
 
-void generate_condition_id(acd_condition_t *node) {
+//void generate_condition_id(acd_condition_t *node) {
+void generate_condition_id(acd_key_t *node) {
    static int count = MASTER_ID;
 
    char buf[32];
@@ -671,22 +697,22 @@ void generate_sensor_id(acd_key_t *node) {
     const char *prefix = "";
 
     switch (node->type) {
-        case KEY_TYPE_EZO_PH:
+        case ACD_TYPE_EZO_PH:
             prefix = "PH";
             node->index = count_ph++;
             break;
-        case KEY_TYPE_EZO_ORP:
+        case ACD_TYPE_EZO_ORP:
             prefix = "ORP";
             node->index = count_orp++;
             break;
-        case KEY_TYPE_EZO_TEMP:
-        case KEY_TYPE_MQTT_TEMP:
-        case KEY_TYPE_D1W_TEMP:
+        case ACD_TYPE_EZO_TEMP:
+        case ACD_TYPE_MQTT_TEMP:
+        case ACD_TYPE_D1W_TEMP:
             prefix = "TEMP";
             node->index = count_temp++;
             break;
-        case KEY_TYPE_GPIO_DOSER:
-        case KEY_TYPE_EZO_DOSER:
+        case ACD_TYPE_GPIO_PMP:
+        case ACD_TYPE_EZO_PMP:
             prefix = "PMP";
             node->index = count_pmp++;
             break;
@@ -719,85 +745,64 @@ char	*generate_label(const char *base, acd_label_type_t type, const char *label)
         }  
       }
       break;
-      case ACD_LABEL_GPIO:
-        snprintf(buf, sizeof(buf), "GPIO_%s", base);
+    case ACD_LABEL_GPIO:
+      snprintf(buf, sizeof(buf), "GPIO_%s", base);
       break;
-      case ACD_LABEL_EZO:
-        snprintf(buf, sizeof(buf), "EZO_%s", base);
+    case ACD_LABEL_EZO:
+      snprintf(buf, sizeof(buf), "EZO_%s", base);
       break;
-      case ACD_LABEL_PMP:
-        snprintf(buf, sizeof(buf), "PMP_%s", base);
+    case ACD_LABEL_PMP:
+      snprintf(buf, sizeof(buf), "PMP_%s", base);
       break;
-      default:
-        snprintf(buf, sizeof(buf), "%s_UNKNOWN", base);
+    default:
+      snprintf(buf, sizeof(buf), "%s_UNKNOWN", base);
+      break;
   }
   return strdup(buf);
 }
 
 
 
-// Helper to handle the linked list boilerplate
-void append_to_conditions_list(acd_condition_t *new_node) {
-    new_node->next = NULL;
-    
-    if (_acdconfig_.conditions == NULL) {
-        _acdconfig_.conditions = new_node;
-    } else {
-        acd_condition_t *curr = _acdconfig_.conditions;
-        while (curr->next != NULL) {
-            curr = curr->next;
-        }
-        curr->next = new_node;
-    }
+
+// Priority groups — lower number = closer to head
+static int node_priority(acd_type_t type) {
+    if (type == ACD_TYPE_MASTER)                return 0;
+    if (IS_CONDITION(type))                     return 1;
+    if (type == ACD_TYPE_EZO_TEMP  ||
+        type == ACD_TYPE_MQTT_TEMP ||
+        type == ACD_TYPE_D1W_TEMP)              return 2;
+    if (IS_INPUT(type))                         return 3;  // PH, ORP, etc.
+    if (IS_OUTPUT(type))                        return 4;
+    return 5;                                              // unknown/safety
 }
 
-void append_to_sensor_list(acd_key_t *new_node) {
+void append_to_key_list(acd_key_t *new_node) {
     new_node->next = NULL;
+    int new_prio = node_priority(new_node->type);
 
-    bool is_temp = (new_node->type == KEY_TYPE_EZO_TEMP || 
-                    new_node->type == KEY_TYPE_MQTT_TEMP || 
-                    new_node->type == KEY_TYPE_D1W_TEMP);
-
-    if (_acdconfig_.sensors == NULL) {
-        _acdconfig_.sensors = new_node;
+    // Insert at head if list is empty or new node beats the head
+    if (_acdconfig_.keys == NULL ||
+        node_priority(_acdconfig_.keys->type) > new_prio) {
+        new_node->next = _acdconfig_.keys;
+        _acdconfig_.keys = new_node;
         return;
     }
 
-    if (is_temp) {
-        // If head isn't temp, new_node becomes new head
-        if (!(_acdconfig_.sensors->type == KEY_TYPE_EZO_TEMP || 
-              _acdconfig_.sensors->type == KEY_TYPE_MQTT_TEMP || 
-              _acdconfig_.sensors->type == KEY_TYPE_D1W_TEMP)) {
-            new_node->next = _acdconfig_.sensors;
-            _acdconfig_.sensors = new_node;
-        } else {
-            // Find the last temperature node and insert after it
-            acd_key_t *curr = _acdconfig_.sensors;
-            while (curr->next != NULL && 
-                  (curr->next->type == KEY_TYPE_EZO_TEMP || 
-                   curr->next->type == KEY_TYPE_MQTT_TEMP || 
-                   curr->next->type == KEY_TYPE_D1W_TEMP)) {
-                curr = curr->next;
-            }
-            new_node->next = curr->next;
-            curr->next = new_node;
-        }
-    } else {
-        // Standard append to the very end of the whole list
-        acd_key_t *curr = _acdconfig_.sensors;
-        while (curr->next != NULL) {
-            curr = curr->next;
-        }
-        curr->next = new_node;
+    // Walk until the next node has a strictly higher priority
+    acd_key_t *curr = _acdconfig_.keys;
+    while (curr->next != NULL && node_priority(curr->next->type) <= new_prio) {
+        curr = curr->next;
     }
+    new_node->next = curr->next;
+    curr->next = new_node;
 }
 
 // Specialized function for MQTT
 void add_condition_mqtt(const char *label, const char *topic, const char *value) {
-    acd_condition_t *new_node = malloc(sizeof(acd_condition_t));
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
     if (!new_node) return;
 
-    new_node->type = COND_MQTT;
+    new_node->type = ACD_TYPE_MQTT_COND;
     
     new_node->label = generate_label(topic, ACD_LABEL_MQTT, label);
     new_node->data.mqtt.topic = strdup(topic);
@@ -807,15 +812,15 @@ void add_condition_mqtt(const char *label, const char *topic, const char *value)
 
     //new_node->target_value = UNKNOWN;
 
-    append_to_conditions_list(new_node);
+    append_to_key_list(new_node);
 }
 
 // Specialized function for GPIO
 void add_condition_gpio(const char *label, int pin, gpio_active_t pin_mode, gpio_req_t pin_state) {
-    acd_condition_t *new_node = malloc(sizeof(acd_condition_t));
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
     if (!new_node) return;
 
-    new_node->type = COND_GPIO;
+    new_node->type = ACD_TYPE_GPIO_COND;
 
     new_node->label = generate_label(int_to_str(pin), ACD_LABEL_GPIO, label);
     new_node->data.gpio.pin = pin;
@@ -824,12 +829,12 @@ void add_condition_gpio(const char *label, int pin, gpio_active_t pin_mode, gpio
     new_node->met = false; // Initial state, not met.
     generate_condition_id(new_node);
     
-    append_to_conditions_list(new_node);
+    append_to_key_list(new_node);
 
     //LOG(LOG_ERR, "GPIO %s Pin %d, active %d, state %d",new_node->label, new_node->data.gpio.pin, new_node->data.gpio.active, pin_state);
 }
 
-void add_sensor_ezo(const char *label, acd_sensor_type_t type, unsigned char address) {
+void add_sensor_ezo(const char *label, acd_type_t type, unsigned char address) {
   acd_key_t *new_node = malloc(sizeof(acd_key_t));
   
   //LOG(LOG_DEBUG, "Committing EZO: Label=%s, Type=%d, Addr=0x%02x ---- %s", label, type, address, hex_to_str(address));
@@ -839,10 +844,10 @@ void add_sensor_ezo(const char *label, acd_sensor_type_t type, unsigned char add
   new_node->data.ezo.address = address;
   generate_sensor_id(new_node);
 
-  append_to_sensor_list(new_node);
+  append_to_key_list(new_node);
 }
 
-void add_sensor_mqtt(const char *label, acd_sensor_type_t type, const char *topic) {
+void add_sensor_mqtt(const char *label, acd_type_t type, const char *topic) {
   acd_key_t *new_node = malloc(sizeof(acd_key_t));
   
   new_node->type = type;
@@ -850,21 +855,23 @@ void add_sensor_mqtt(const char *label, acd_sensor_type_t type, const char *topi
   new_node->data.mqtt.topic = strdup(topic);
   generate_sensor_id(new_node);
 
-  append_to_sensor_list(new_node);
+  append_to_key_list(new_node);
 }
 
-void add_sensor_d1w(const char *label, acd_sensor_type_t type, const char *path) {
+void add_sensor_d1w(const char *label, acd_type_t type, const char *path, float offset, float scale) {
   acd_key_t *new_node = malloc(sizeof(acd_key_t));
   
   new_node->type = type;
   new_node->label = generate_label(path, ACD_LABEL_D1W, label);
   strcpy(new_node->data.w1.path, path);
+  new_node->data.w1.offset = offset;
+  new_node->data.w1.scale = scale;
   generate_sensor_id(new_node);
 
-  append_to_sensor_list(new_node);
+  append_to_key_list(new_node);
 }
 
-void add_sensor_gpio(const char *label, acd_sensor_type_t type, int pin, gpio_active_t pin_mode, gpio_req_t pin_state) {
+void add_sensor_gpio(const char *label, acd_type_t type, int pin, gpio_active_t pin_mode, gpio_req_t pin_state, int runtime) {
   acd_key_t *new_node = malloc(sizeof(acd_key_t));
   
   new_node->type = type;
@@ -872,9 +879,16 @@ void add_sensor_gpio(const char *label, acd_sensor_type_t type, int pin, gpio_ac
   new_node->data.gpio.pin = pin;
   new_node->data.gpio.active = pin_mode;
   new_node->data.gpio.required = pin_state;
+
+  if (runtime <= 0) {
+    new_node->runtime = _acdconfig_.default_dose_time;
+  } else {
+    new_node->runtime = runtime;
+  }
+
   generate_sensor_id(new_node);
 
-  append_to_sensor_list(new_node);
+  append_to_key_list(new_node);
 
   //LOG(LOG_ERR, "GPIO %s Pin %d, active %d, state %d",new_node->label, new_node->data.gpio.pin, new_node->data.gpio.active, pin_state);
 }

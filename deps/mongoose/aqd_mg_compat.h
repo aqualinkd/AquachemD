@@ -1,0 +1,42 @@
+
+#ifndef AQD_MG_COMPAT_H_
+#define AQD_MG_COMPAT_H_
+
+/*
+ * Mongoose Compatibility & Project Flags Bridge
+ * -------------------------------------------
+ * Provides abstraction for Mongoose 7.x API changes (label vs fn_data)
+ * and defines custom bitmask flags for AquaDaemon's, AqualinkD & AquachemD connection states.
+ *
+ * REQUIRED: Must be force-included via Makefile:
+ * This is so mongoose.c/.h include it without modifying the source
+ * CFLAGS += -include deps/mongoose/aqd_mg_compat.h
+ */
+
+
+// Mongose auto arch configure seems to silently fail without this 
+#define _GNU_SOURCE
+
+
+#include <stdint.h>
+#include "mongoose.h"
+
+// Define your flags
+#define AQD_MG_CON_MQTT            (1 << 0)
+#define AQD_MG_CON_WS_SIM          (1 << 1)
+#define AQD_MG_CON_WS_AQM          (1 << 2)
+#define AQD_MG_CON_MQTT_CONNECTING (1 << 3)
+
+
+// Helper Macros to handle the pointer casting
+// Mongoose 7.19+ Pointer Mapping. We are using fn_data
+#define GET_AQD_FLAGS(nc)    ((uintptr_t)(nc)->fn_data)
+#define SET_AQD_FLAGS(nc, f) ((nc)->fn_data = (void *)(uintptr_t)(f))
+
+#define IS_MQTT_CONNECTING(nc) (GET_AQD_FLAGS(nc) & AQD_MG_CON_MQTT_CONNECTING)
+#define IS_WEBSOCKET(nc)       ((nc)->is_websocket)
+
+
+
+
+#endif //AQD_MG_COMPAT_H_

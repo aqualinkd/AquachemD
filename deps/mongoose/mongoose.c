@@ -20,7 +20,6 @@
 #include "mongoose.h"
 
 
-#include "mongoose-addition.h"
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/base64.c"
