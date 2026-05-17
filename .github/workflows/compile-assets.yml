@@ -2,7 +2,6 @@ name: Compile Release Assets
 
 on:
   push:
-    branches: [ main ]
     tags:
       - 'v*.*.*'
   workflow_dispatch: # Allows manual run fallback
