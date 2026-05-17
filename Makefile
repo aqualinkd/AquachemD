@@ -151,7 +151,7 @@ TARGET_DEBUG  = $(REL_DIR)/aquachemd-debug
 # ─── Phony targets ────────────────────────────────────────────────────────────
 
 #.PHONY: all debug arm64 armhf release _release_inside_container clean clean-objs distclean install
-.PHONY: all debug dummy dummy-debug arm64 armhf release _release_inside_container clean clean-objs distclean install
+.PHONY: all debug dummy dummy-debug arm64 armhf release _release_inside_container clean clean-objs distclean install buildrelease
 
 .DEFAULT_GOAL := all
 
@@ -176,6 +176,10 @@ quick:
 _quick_inside_container: arm64 armhf
 
 
+# ─── Native build used for github workflow ────────────────────────────────────
+buildrelease: distclean $(TARGET)
+	@echo "Built: $(TARGET)"
+
 # ─── Native build ─────────────────────────────────────────────────────────────
 
 all: $(TARGET)
@@ -193,33 +197,23 @@ $(TARGET): $(OBJ_FILES_NATIVE)
 $(OBJ_NATIVE)/%.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c -o $@ $<
 
-# ─── Debug build ──────────────────────────────────────────────────────────────
+# ─── Debug build & Dummy Sensors Debug ────────────────────────────────────────
 
+# Both targets just point to the same binary target, but dummy-debug appends the flag
 debug: $(TARGET_DEBUG)
 	@echo "Built: $(TARGET_DEBUG) (** DEBUG **)"
 
-$(TARGET_DEBUG): $(OBJ_FILES_DEBUG)
-	$(CC) $(DFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
-
-$(OBJ_DEBUG)/%.o: %.c
-	$(CC) $(DFLAGS) $(INCLUDES) -c -o $@ $<
-
-# ─── Dummy Sensors & Debug build ───────────────────────────────────────────────
-
-debug: $(TARGET_DEBUG)
-	@echo "Built: $(TARGET_DEBUG) (** DEBUG **)"
-
-# NEW: Dummy Debug build
 dummy-debug: DFLAGS += -D DUMMY_SENSORS
 dummy-debug: $(TARGET_DEBUG)
 	@echo "Built: $(TARGET_DEBUG) (** DUMMY SENSORS + DEBUG **)"
 
+# Consolidated single rule to compile the debug binary
 $(TARGET_DEBUG): $(OBJ_FILES_DEBUG)
 	$(CC) $(DFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
 
+# Consolidated single rule to compile the debug object files
 $(OBJ_DEBUG)/%.o: %.c
 	$(CC) $(DFLAGS) $(INCLUDES) -c -o $@ $<
-
 
 # ─── arm64 cross-compile ──────────────────────────────────────────────────────
 
