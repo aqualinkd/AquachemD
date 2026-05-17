@@ -1,0 +1,53 @@
+name: Manual Production Release
+
+on:
+  workflow_dispatch:
+    # This enables the manual "Run workflow" button in the GitHub Actions UI
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Crucial: Allows the action to create tags and releases
+
+    steps:
+      # 1. Check out the repository code
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Extract and parse the version string
+      - name: Parse Version from Header
+        id: get_version
+        run: |
+          # Extract the line containing the version macro
+          VERSION_LINE=$(grep '#define AQUACHEMD_VERSION' source/version.h)
+          
+          # Strip away the C syntax to isolate just the raw version string
+          VERSION=$(echo "$VERSION_LINE" | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "Extracted Version: $VERSION"
+          
+          # Check if the version is strictly 3 sets of digits (e.g., 0.1.0 or 1.12.4)
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "make_latest=true" >> $GITHUB_OUTPUT
+          else
+            # If it contains anything else (e.g., 0.1.0-Dev-1), mark as pre-release
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "make_latest=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Save the clean version string to outputs for subsequent steps
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # 3. Create the GitHub Release using the parsed outputs
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: ${{ steps.get_version.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ steps.get_version.outputs.make_latest }}
+          generate_release_notes: true # Automatically summarizes merged PRs and commits
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Provided automatically by GitHub Actions
