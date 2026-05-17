@@ -72,12 +72,11 @@ typedef struct acd_key_t {
     char *label;
     char *ID;
     uint8_t index; //values from 0 to 255
-    uint8_t special_mask; // Any special masks (like timer active)
-
-    union {
-      float value; // Maybe needs to be moved into sensor typedef's?????
-      int runtime; // default runtime for pumps
-    };
+    uint8_t flags; // Any bitmasks (like timer active, or pump type)
+    uint8_t err_cnt;
+    
+    float value; // sensor uses for current value, pump uses for value of ph/orp when turned on.
+    float flow_rate; // ml per second rate for pumps
 
     union {
       bool met;    // For conditions, met or not.
@@ -94,11 +93,46 @@ typedef struct acd_key_t {
     struct acd_key_t *next;
 } acd_key_t;
 
+typedef struct runtime_range_t{
+  float threshold;
+  uint32_t seconds;
+} runtime_range_t;
+
+
+
+#define MAX_DOSING_RANGES 5
+
 
 #define TIMER_ACTIVE   (1 << 0) // For special_mask's
+#define PH_PUMP        (1 << 1) // For special_mask's
+#define ORP_PUMP       (1 << 2) // For special_mask's
+/*
+#define XXX            (1 << 3) // For special_mask's
+#define XXX            (1 << 4) // For special_mask's
+#define XXX            (1 << 5) // For special_mask's
+#define XXX            (1 << 6) // For special_mask's
+#define XXX            (1 << 7) // For special_mask's
+// Change acd_key_t->flags & config.c - _staging->flags before defining more,
+*/
+
+/*
+#define isMASKSET(bitmask, mask) ((bitmask & mask) == mask)
+#define setMASK(bitmask, mask)    (bitmask |= mask)
+*/
 
 #define UNKNOWN -9999 
 #define MASTER_ID 1
 
+
+
+/*
+   Logic for dosing events / Pull information like.
+   journalctl PUMP_ID=PMP_1 --since "7 days ago" -o json | jq -r '.RUNTIME_SEC' | awk '{sum+=$1} END {print sum}'
+
+   Hash string "ACD-PMP-Event", you get valid 32-character ID
+   The 128-bit Message ID 332918807d4b46949f50e93149872583
+*/
+#define SD_PUMP_EVENT_ID "332918807d4b46949f50e93149872583"
+#define SD_MESSAGE_STARTUP_ID "5e982c7a12344567890abcdef1234567"
 
 #endif // ACD_TYPES_H_

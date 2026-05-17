@@ -12,17 +12,34 @@
 
 void LOG(const int msg_level, const char * format, ...);
 void FORCE_LOG(const int msg_level, const char * format, ...);
+void LOG_SYSTEM_ERR(int errnum, const char *format, ...);
+void LOG_PUMP_EVENT(acd_key_t *key, uint32_t seconds, float reading, float ml);
+void LOG_STARTUP_EVENT();
 
+bool is_running_under_systemd();
 void init_logging_backend();
 
+void set_loglevel( int level);
+int get_loglevel();
+
 char *cleanwhitespace(char *str);
+
+bool parse_bool(const char *str);
+const char *bool_to_str(bool val);
+gpio_active_t parse_gpio_active(char *str);
+const char *gpio_active_to_str(gpio_active_t val);
+gpio_req_t parse_gpio_req(char *str);
+const char *gpio_req_to_str(gpio_req_t val);
+/*
 bool text2bool(char *str);
 char *bool2text(bool val);
 char *gpioactive2text(gpio_active_t val);
 gpio_active_t text2gpioactive(char *str);
+*/
 
-float degFtoC(float degF);
-float degCtoF(float degC);
+float temp_c_to_f(float celsius);
+float temp_f_to_c(float fahrenheit);
+float temp_c_to_k(float celsius);
 
 #define STR_FULL_LENGTH  -1. // For function strncasefind(), cleanalloc(), etc.
 const char *strncasestr(const char *haystack, const char *needle, int length);
@@ -32,7 +49,17 @@ int strtrimcasecmp(const char *haystack, const char *needle);
 void precise_delay(long nanoseconds);
 
 const char* acd_state_to_str(acd_state_t state);
+const char* acd_state_to_set_attrib(acd_state_t status);
 
+
+#define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))  
+//#define roundf(a) (float) ((a*100)/100) // 2 decimal places
+//#define roundf3(a) (float) ((a*1000)/1000) // 3 decimal places
+
+
+#ifdef DUMMY_SENSORS
+float dummy_drift(float range);
+#endif
 
 #define STR_MATCH(s1, s2) (strtrimcasecmp(s1, s2) == 0)
 

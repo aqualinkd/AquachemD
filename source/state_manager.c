@@ -5,15 +5,98 @@
 #include "aquachemd.h"
 #include "utils.h"
 #include "acd_timer.h"
+#include "net_services.h"
 
 bool set_cond_state(struct aquachemdata *acdata, acd_key_t *cond, acd_state_t state);
 void set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
 
+void check_master(struct aquachemdata *acdata);
+
+
+float get_sensor_value(struct aquachemdata *acdata, acd_type_t type)
+{
+// ACD_TYPE_EZO_ORP
+// ACD_TYPE_EZO_PH
+  for (acd_key_t *key = acdata->keys->next; key != NULL; key = key->next) {
+    if( key->type == type) {
+      return key->value;
+    }
+  }
+  return 0;
+}
+
+uint32_t get_ph_dose_time(float current_ph) {
+  if (_acdconfig_.ph_step_count <= 0) {
+    return _acdconfig_.ph_default_dose_time;
+  }
+  // Iterate through the ranges defined in config
+  for (int i = 0; i < _acdconfig_.ph_step_count; i++) {
+    if (current_ph >= _acdconfig_.ph_steps[i].threshold) {
+      return _acdconfig_.ph_steps[i].seconds;
+    }
+  }
+
+  //return 0; // Default if under minimum
+  // If we reach here, the pH is lower than the lowest threshold.
+  // Return the seconds from the very last entry in the list (the minimum dose).
+  return _acdconfig_.ph_steps[_acdconfig_.ph_step_count - 1].seconds;
+}
+
+
+uint32_t get_orp_dose_time(float current_orp) { // Changed name to current_orp for clarity
+  if (_acdconfig_.orp_step_count <= 0) {
+    return _acdconfig_.orp_default_dose_time;
+  }
+
+  // Iterate through ranges (Sorted Low to High: e.g., 600, 650, 700)
+  for (int i = 0; i < _acdconfig_.orp_step_count; i++) {
+    // If current ORP is BELOW or AT the threshold, we need that dose
+    if (current_orp <= _acdconfig_.orp_steps[i].threshold) {
+      return _acdconfig_.orp_steps[i].seconds;
+    }
+  }
+
+  // If we are ABOVE the highest threshold (pool is clean), return the last/lowest dose
+  return _acdconfig_.orp_steps[_acdconfig_.orp_step_count - 1].seconds;
+}
+
+uint32_t get_pump_runtime(struct aquachemdata *acdata, acd_key_t *key) {
+  // Find latest ph and orp values.
+  uint32_t runtime;
+
+  if (isMASKSET(key->flags, PH_PUMP)) {
+    float current_ph = get_sensor_value(acdata, ACD_TYPE_EZO_PH);
+    runtime = get_ph_dose_time(current_ph);
+    LOG(LOG_NOTICE, "Dosing time calculated as %s for %d(s) (pH %.1f)",key->label, runtime, current_ph);
+    return runtime;
+  } else if (isMASKSET(key->flags, ORP_PUMP)) {
+    float current_orp = get_sensor_value(acdata, ACD_TYPE_EZO_ORP);
+    runtime = get_orp_dose_time(current_orp);
+    LOG(LOG_NOTICE, "Dosing time calculated as %s for %d(s) (ORP %.1f)",key->label, runtime, current_orp);
+    return runtime;
+  }
+
+  LOG(LOG_ERR,"Unable to get pump runtime for %s", key->label);
+
+  return 0;
+}
+
 // This is a request from MQTT/WebSocket/Web, NOT for a system change
 
 
-void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key) {
+void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration_sec) {
   
+  int runtime = duration_sec<=0?get_pump_runtime(acdata,key):duration_sec;
+
+  if (runtime <= 0) {
+    LOG(LOG_NOTICE, "Pump %s runtime is %d, not turning on", key->label, runtime);
+    if (_acdconfig_.log_zerorun_pump_events) {
+      LOG_PUMP_EVENT(key, 0, 0, 0);
+      post_dosing_event(key, 0, 0);
+    }
+    return;
+  }
+
   if (key->type == ACD_TYPE_GPIO_PMP) {
     relay_on(&key->data.gpio);
     key->ison = pump_is_on(&key->data.gpio);
@@ -21,10 +104,19 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key) {
     LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_on()");
   }
   SET_IF_CHANGED(key->state , ACD_LED_ON, acdata->is_dirty);
-  start_timer(acdata, key, 0, key->runtime);
+  
+  if (isMASKSET(key->flags, PH_PUMP)) {
+    key->value = get_sensor_value(acdata, ACD_TYPE_EZO_PH);
+  } else if (isMASKSET(key->flags, ORP_PUMP)) {
+    key->value = get_sensor_value(acdata, ACD_TYPE_EZO_ORP);
+  }
+
+  start_timer(acdata, key, 0, duration_sec<=0?runtime:duration_sec);
 }
 
 void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
+  time_t start = get_timer_started_at(key);
+  time_t now = time(NULL);
 
   if (key->type == ACD_TYPE_GPIO_PMP) {
     relay_off(&key->data.gpio);
@@ -32,10 +124,39 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
   } else {
     LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_off()");
   }
+
+  // Calculate actual runtime and log the event
+  if (start > 0) {
+    uint32_t actual_runtime = (uint32_t)(now - start);
+    float dose_ml = actual_runtime * key->flow_rate;
+    LOG_PUMP_EVENT(key, actual_runtime, dose_ml, dose_ml);
+    post_dosing_event(key, actual_runtime, dose_ml);
+  }
+  
+  SET_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty);
+  clear_timer(acdata, key);
+  key->value = 0;
+}
+/*
+void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
+
+  time_t start = get_timer_started_at(key);
+
+  if (key->type == ACD_TYPE_GPIO_PMP) {
+    relay_off(&key->data.gpio);
+    key->ison = pump_is_on(&key->data.gpio);
+  } else {
+    LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_off()");
+  }
+
+  if (start != NULL) {
+
+  }
+
   SET_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty);
   clear_timer(acdata, key);
 }
-
+*/
 void check_pump_state(struct aquachemdata *acdata, acd_key_t *key) {
   /*
   LOG(LOG_NOTICE, "Output %s, GPIO %d is in %d/%s state",key->label,key->data.gpio.pin,pump_is_on(&key->data.gpio),(pump_is_on(&key->data.gpio)?"ON":"OFF"));
@@ -51,7 +172,19 @@ void check_pump_state(struct aquachemdata *acdata, acd_key_t *key) {
   }
 }
 
+bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state, uint32_t value);
+
 bool state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state)
+{
+  return _state_change_request(acdata, key, state, 0);
+}
+
+bool state_change_request_extended(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state, uint32_t value)
+{
+  return _state_change_request(acdata, key, state, value);
+}
+
+bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state, uint32_t value)
 {
   // Remember.
   //  Master         off / on / enabled ----> Means a condition is not met.
@@ -70,32 +203,44 @@ bool state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state
     case ACD_TYPE_MASTER:
       if (key->state == ACD_LED_OFF && state == ACD_LED_ON) { //if we are off, use the on state as enabled.
         SET_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty);
+        check_master(acdata); // Set things to enabled
       } else if (key->state == ACD_LED_DISABLED && state == ACD_LED_ON) { // if disabled, can't turn on
         LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
         return false;
+      } else if (state == ACD_LED_OFF) { // Turn sensors off.
+        SET_IF_CHANGED(key->state , state, acdata->is_dirty);
+        check_master(acdata); // Set things to disabled
       } else {
         SET_IF_CHANGED(key->state , state, acdata->is_dirty);
       }
       break;
     case ACD_TYPE_GPIO_PMP:
     case ACD_TYPE_EZO_PMP:
-      // If we are in an off state, don't disable or enable 
+      // If we are in an off state, don't disable.  This is when pump is off and condition is not met, leave pump on off state.
       if (key->state == ACD_LED_OFF && (state == ACD_LED_DISABLED )) {
         LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
         return false;
       }
       //if we are off, use the on state as enabled.
       if (key->state == ACD_LED_OFF && (state == ACD_LED_ON || state == ACD_LED_ENABLED)) {
-        SET_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty);
+        if (acdata->keys->state == ACD_LED_OFF) {
+          SET_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty); // Master is off, can only set to disabled.
+        } else {
+          SET_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty); // Master is on, can only set enabled.
+        }
       } else if (state == ACD_LED_ON) {
         if (key->state == ACD_LED_ENABLED ) {
-          turn_pump_on(acdata, key);
+          turn_pump_on(acdata, key, value<=0?0:value);
         } else {
           LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
           return false;
         }
       } else if (key->state == ACD_LED_ON && state == ACD_LED_OFF) {
         turn_pump_off(acdata, key);
+      } else if (key->state == ACD_LED_ENABLED && state == ACD_LED_OFF) {
+        SET_IF_CHANGED(key->state , ACD_LED_OFF, acdata->is_dirty);
+       } else if (key->state == ACD_LED_DISABLED && state == ACD_LED_OFF) {
+        SET_IF_CHANGED(key->state , ACD_LED_OFF, acdata->is_dirty);
       } else {
         //SET_IF_CHANGED(key->state , state, acdata->is_dirty);
         LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
@@ -118,8 +263,13 @@ bool state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state
 void check_master(struct aquachemdata *acdata) {
   acd_key_t *failed_condition = NULL;
 //printf("***** check_master()\n");
-  if ( acdata->keys->state == ACD_LED_OFF )
+  if ( acdata->keys->state == ACD_LED_OFF ) {
+    for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
+      if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF)
+        set_key_state(acdata, curr, ACD_LED_DISABLED);
+    }
     return;
+  }
 
   for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
     if (IS_CONDITION(curr->type) && curr->met == false) {
@@ -130,8 +280,10 @@ void check_master(struct aquachemdata *acdata) {
   }
 
   if (failed_condition == NULL) {
+    //printf("***** check_master() - set ON\n");
     SET_IF_CHANGED(acdata->keys->state, ACD_LED_ON, acdata->is_dirty);
   } else {
+    //printf("***** check_master() - set ENABLED\n");
     SET_IF_CHANGED(acdata->keys->state, ACD_LED_ENABLED, acdata->is_dirty);
   }
 

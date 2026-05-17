@@ -84,11 +84,6 @@
         }
       }
     },
-    "TEMP_3": {
-      "display": true,
-      "uom": "&deg;",
-      "precision": 1
-    },
     "PH_1": {
       "display": true,
       "on_text": "Sampling",
@@ -135,18 +130,28 @@
      "CS_3": {
       "display": true
     },
-     "CS_4": {
-      "display": true
-    }
+    "_____comment_devices": "KEPT: Device configuration controls display and threshold settings for each device",
+    "TEMP_2": {
+      "display": true,
+      "uom": "&deg;C",
+      "precision": 1
+    },
+    "TEMP_3": {
+      "display": true,
+      "uom": "&deg;",
+      "precision": 1
+    },
+    "_comment_devices_end": "KEPT: Device configuration is actively used for display and thresholds"
   },
   "slider_range": {
-    "heater_slider_min": 36,
-    "heater_slider_max": 104,
+    "_heater_slider_min": 36,
+    "_heater_slider_max": 104,
     "timer_slider_min": 0,
-    "timer_slider_max": 240,
+    "timer_slider_max": 60,
     "timer_slider_step": 1
   },
-  "_OLD_tile_thresholds_OLD_": {
+  "_OLD_tile_thresholds_DEPRECATED": {
+    "_comment": "UNUSED: Threshold configuration has been moved to per-device config under 'devices[id].thresholds'. Keeping for reference only.",
     "SWG/PPM": {
       "outofrange": {
         "min": 2600,
@@ -184,7 +189,8 @@
       }
     }
   },
-  "swg_status": {
+  "_swg_status_UNUSED": {
+    "_comment": "UNUSED: SWG (Salt Water Generator) is an AqualinkD-specific feature. Not used in AquachemD.",
     "0": "On",
     "1": "No flow",
     "2": "Low salt",
@@ -200,9 +206,11 @@
     "255": "Off"
   },
   "tile_settings": {
-    "turn_off_sensortiles": "true",
-    "show_vsp_gpm": "true",
+    "_turn_off_sensortiles": "UNUSED: Not referenced in current code",
+    "_show_vsp_gpm": "UNUSED: VSP (Variable Speed Pump) is AqualinkD-specific",
     "disable_off_icon_background": "true",
-    "light_program_use_dropdown": "false"
+    "_light_program_use_dropdown": "UNUSED: Light programs are AqualinkD-specific features",
+    "_link_spa_and_spa_heater": "UNUSED: Spa heater is AqualinkD-specific",
+    "orp_runtime_in_minutes": true
   }
 }

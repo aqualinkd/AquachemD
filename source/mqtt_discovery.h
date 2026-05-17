@@ -6,4 +6,7 @@
 
 void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *nc);
 
+
+#define JSON_DISCOVERY_SIZE 2048
+
 #endif // HASSIO_H_

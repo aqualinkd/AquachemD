@@ -7,11 +7,22 @@ bool start_net_services(struct aquachemdata *acddata);
 
 void send_mqtt(struct mg_connection *nc, const char *toppic, const char *message);
 
+bool post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml);
+
 #define URI_LEN 32
 
 #define MQTT_ON "1"
 #define MQTT_OFF "0"
 #define MQTT_LWM_TOPIC "Alive"
+
+// Mqtt Topic Levels.
+#define MQTT_TL_STATE    "state"
+#define MQTT_TL_TIMER    "timer"
+#define MQTT_TL_DURATION "duration"
+#define MQTT_TL_DOSE_PH  "total_acid_ml"
+#define MQTT_TL_DOSE_ORP "total_chlorine_ml"
+#define MQTT_TL_DOSE_UNKNOWN "total_dose_ml"
+
 
 //#define MQTT_TEMP_TOPIC "temp"
 //#define MQTT_PH_TOPIC "ph"

@@ -89,6 +89,19 @@ uint32_t get_timer_left_sec(acd_key_t *key)
   return remaining_sec;
 }
 
+time_t get_timer_started_at(acd_key_t *key)
+{
+  pthread_mutex_lock(&_ll_mutex);
+  struct timerthread *t_ptr = find_timerthread(key);
+  pthread_mutex_unlock(&_ll_mutex);
+
+  if (t_ptr != NULL) {
+    return t_ptr->started_at;
+  }
+
+  return 0;
+}
+
 void clear_timer(struct aquachemdata *acddata, acd_key_t *key)
 {
   pthread_mutex_lock(&_ll_mutex);
@@ -172,7 +185,7 @@ void *timer_worker(void *ptr)
   int cnt = 0;
 
   LOG(LOG_NOTICE, "Start timer for '%s'\n", tmthread->key->label);
-  tmthread->key->special_mask |= TIMER_ACTIVE;
+  tmthread->key->flags |= TIMER_ACTIVE;
 
   // Wait for device to turn on
   while (tmthread->key->state == ACD_LED_OFF) {
@@ -242,7 +255,7 @@ void *timer_worker(void *ptr)
     LOG(LOG_INFO, "Timer waking '%s' is already off\n", tmthread->key->label);
   }
 
-  tmthread->key->special_mask &= ~TIMER_ACTIVE;
+  tmthread->key->flags &= ~TIMER_ACTIVE;
 
   // --- CRITICAL FIX: Lock Linked List before modifying and freeing ---
   pthread_mutex_lock(&_ll_mutex);
@@ -428,7 +441,7 @@ void *timer_worker( void *ptr )
   LOG( LOG_NOTICE, "Start timer for '%s'\n",tmthread->key->label);
 
   // Add mask so we know timer is active
-  tmthread->key->special_mask |= TIMER_ACTIVE;
+  tmthread->key->flags |= TIMER_ACTIVE;
 
   while (tmthread->key->led->state == OFF) {
     LOG( LOG_DEBUG, "waiting for key state '%s' to change\n",tmthread->key->label);
@@ -522,7 +535,7 @@ void *timer_worker( void *ptr )
   }
 
   // remove mask so we know timer is dead
-  tmthread->key->special_mask &= ~ TIMER_ACTIVE;
+  tmthread->key->flags &= ~ TIMER_ACTIVE;
 
   if (tmthread->next != NULL && tmthread->prev != NULL){
     // Middle of linked list

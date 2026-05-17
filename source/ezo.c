@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include "ezo.h"
+#include "utils.h"
 
 // ─── Real implementation ──────────────────────────────────────────────────────
 // All code in this block is compiled only when DUMMY_SENSORS is NOT defined.
@@ -480,12 +481,13 @@ int pump_sleep()                       { return ezo_sleep(EZO_PMP_ADDR); }
 
 #ifdef DUMMY_SENSORS
 
+/*
 // Small random float drift in range [-range, +range]
 static float dummy_drift(float range)
 {
   return ((float)(rand() % 1000) / 1000.0f - 0.5f) * 2.0f * range;
 }
-
+*/
 // ─── Bus / detect (dummy) ─────────────────────────────────────────────────────
 
 int ezo_bus_available()

@@ -55,6 +55,7 @@ void intHandler(int sig_num);
 
 struct aquachemdata
 {
+  char self[64];  // Filename being executed
   volatile bool is_dirty;
 
   int open_websockets;

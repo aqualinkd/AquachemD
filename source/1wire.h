@@ -4,6 +4,9 @@
 // Base path for all 1-wire devices on Linux
 #define W1_BASE_PATH    "/sys/bus/w1/devices"
 
+//#define W1_DEVICE_PATH  (sizeof(W1_BASE_PATH) + NAME_MAX + 2)
+#define W1_DEVICE_PATH  280 // Above is how we get to 280
+
 // DS18B20 family code prefix — all DS18B20 device dirs start with "28-"
 #define W1_DS18B20_PREFIX  "28-"
 
@@ -32,11 +35,13 @@ typedef enum {
 // offset:  add this after scaling (for calibration trim)
 // label:   human-readable name e.g. "pool_water", "ambient"
 typedef struct {
-  char              path[256];   // full path to sensor sysfs directory
+  char              path[W1_DEVICE_PATH];   // full path to sensor sysfs directory
+  char              temp_path[W1_DEVICE_PATH+32];   // prebuilt: path/temperature
+  char              slave_path[W1_DEVICE_PATH+32];  // prebuilt: path/w1_slave
   w1_sensor_type_t  type;
   float             scale;
   float             offset;
-  char              label[32];
+  //char              label[32];
 } w1_sensor_t;
 
 // Reading result
@@ -64,15 +69,14 @@ int w1_find_ds18b20(w1_sensor_t *sensors, int max);
 // path:   e.g. "/sys/bus/w1/devices/28-0304949760eb"
 //         or the full temperature file path — either is accepted
 // label:  human-readable name shown in output
-void w1_init_ds18b20(w1_sensor_t *s, const char *path, const char *label);
+void w1_init_ds18b20(w1_sensor_t *s, const char *path);
 
 // Initialise a generic 1-wire sensor handle with custom scale and offset.
 // path:   path to the sensor sysfs directory
 // scale:  multiply raw value by this to get engineering units
 // offset: add after scaling
 // label:  human-readable name
-void w1_init_generic(w1_sensor_t *s, const char *path,
-                     float scale, float offset, const char *label);
+void w1_init_generic(w1_sensor_t *s, const char *path, float scale, float offset);
 
 // ─── Reading ─────────────────────────────────────────────────────────────────
 
@@ -87,11 +91,6 @@ w1_reading_t w1_read_with_crc(const w1_sensor_t *s);
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
 
-// Convert Celsius to Fahrenheit
-float w1_c_to_f(float celsius);
-
-// Convert Celsius to Kelvin
-float w1_c_to_k(float celsius);
 
 // Return a human-readable error string for a W1_* status code
 const char *w1_strerror(int status);

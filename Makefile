@@ -5,16 +5,21 @@
 #   make                    - native build
 #   make debug              - native build with debug symbols, no optimisation
 #   make dummy              - native build with fake sensors (no I2C hardware)
+#   make dummy-debug        - native build with fake sensors (no I2C hardware) & debug symbols
 #   make arm64              - cross-compile for arm64 (native cross-toolchain)
 #   make armhf              - cross-compile for armhf (native cross-toolchain)
 #   make release            - build arm64 + armhf inside Docker container
 #   make clean              - remove all binaries and object files
 #   make clean-build        - remove object files only
+#   make distclean          - remove everything (above + library objects)
 #   make install            - install binary to /usr/local/bin
+#
+#  manually override.
+#   make debug DFLAGS="-Wall -O0 -g -std=c11 -D USE_SYSTEMD -D DUMMY_SENSORS -D WITH_GPIOD -D MG_TLS=0 -D MG_ENABLE_SSI=0 -include deps/mongoose/aqd_mg_compat.h -I./source -I./deps/cJSON -I./deps/mongoose"
 #
 # Options (append to any target):
 #   WITH_GPIOD=0            - disable GPIO support, removes libgpiod dependency
-#.  WITH_SYSTEMD=0          - disable systemd
+#   WITH_SYSTEMD=0          - disable systemd
 #   DOCKER_IMAGE=<name>     - override Docker image for release builds
 #
 # Examples:
@@ -27,6 +32,11 @@
 #   docker build -f Dockerfile.build -t ezo-buildenv .
 #
 
+# ─── Notes ─────────────────────────────────────────────────────────────────
+#
+# If we ever compile for container, we need to add this flag for compile.
+# -D ACD_CONTAINER_BUILD
+#
 
 # ─── Options ─────────────────────────────────────────────────────────────────
 #
@@ -140,7 +150,8 @@ TARGET_DEBUG  = $(REL_DIR)/aquachemd-debug
 
 # ─── Phony targets ────────────────────────────────────────────────────────────
 
-.PHONY: all debug arm64 armhf release _release_inside_container clean clean-objs distclean install
+#.PHONY: all debug arm64 armhf release _release_inside_container clean clean-objs distclean install
+.PHONY: all debug dummy dummy-debug arm64 armhf release _release_inside_container clean clean-objs distclean install
 
 .DEFAULT_GOAL := all
 
@@ -158,11 +169,11 @@ _release_inside_container: distclean arm64 armhf
 
 # ─── Docker release target without clean ───────────────────────────────────────
 quick:
-	sudo docker run -it --mount type=bind,source=./,target=/build $(DOCKER_IMAGE) make _release_inside_container
+	sudo docker run -it --mount type=bind,source=./,target=/build $(DOCKER_IMAGE) make _quick_inside_container
 	@echo "Release binaries built in $(REL_DIR)/"
 
 # Called inside the Docker container — do not invoke directly
-_release_inside_container: arm64 armhf
+_quick_inside_container: arm64 armhf
 
 
 # ─── Native build ─────────────────────────────────────────────────────────────
@@ -192,6 +203,23 @@ $(TARGET_DEBUG): $(OBJ_FILES_DEBUG)
 
 $(OBJ_DEBUG)/%.o: %.c
 	$(CC) $(DFLAGS) $(INCLUDES) -c -o $@ $<
+
+# ─── Dummy Sensors & Debug build ───────────────────────────────────────────────
+
+debug: $(TARGET_DEBUG)
+	@echo "Built: $(TARGET_DEBUG) (** DEBUG **)"
+
+# NEW: Dummy Debug build
+dummy-debug: DFLAGS += -D DUMMY_SENSORS
+dummy-debug: $(TARGET_DEBUG)
+	@echo "Built: $(TARGET_DEBUG) (** DUMMY SENSORS + DEBUG **)"
+
+$(TARGET_DEBUG): $(OBJ_FILES_DEBUG)
+	$(CC) $(DFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
+
+$(OBJ_DEBUG)/%.o: %.c
+	$(CC) $(DFLAGS) $(INCLUDES) -c -o $@ $<
+
 
 # ─── arm64 cross-compile ──────────────────────────────────────────────────────
 

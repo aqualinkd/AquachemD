@@ -6,43 +6,8 @@
 #include <errno.h>
 
 #include "1wire.h"
+#include "utils.h"
 
-// ─── Internal helpers ─────────────────────────────────────────────────────────
-
-// Build the path to the 'temperature' sysfs file from a sensor directory path.
-// Accepts either the directory ("/sys/.../28-xxxx") or the full file path.
-static void build_temperature_path(const char *base, char *out, int out_len)
-{
-  // If path already ends in "/temperature" use it directly
-  if (strstr(base, "/temperature") != NULL)
-  {
-    strncpy(out, base, out_len - 1);
-    out[out_len - 1] = '\0';
-    return;
-  }
-  // Strip trailing slash if present
-  int len = strlen(base);
-  if (len > 0 && base[len - 1] == '/')
-    snprintf(out, out_len, "%.*s/temperature", len - 1, base);
-  else
-    snprintf(out, out_len, "%s/temperature", base);
-}
-
-// Build the path to the 'w1_slave' sysfs file
-static void build_w1slave_path(const char *base, char *out, int out_len)
-{
-  if (strstr(base, "/w1_slave") != NULL)
-  {
-    strncpy(out, base, out_len - 1);
-    out[out_len - 1] = '\0';
-    return;
-  }
-  int len = strlen(base);
-  if (len > 0 && base[len - 1] == '/')
-    snprintf(out, out_len, "%.*s/w1_slave", len - 1, base);
-  else
-    snprintf(out, out_len, "%s/w1_slave", base);
-}
 
 // Normalise the stored path to always be the directory (strip filename if given)
 static void normalise_dir_path(char *path)
@@ -51,6 +16,19 @@ static void normalise_dir_path(char *path)
   if (p) { *p = '\0'; return; }
   p = strstr(path, "/w1_slave");
   if (p) { *p = '\0'; }
+}
+
+void populate_paths(w1_sensor_t *s)
+{
+  normalise_dir_path(s->path);
+
+  if (s->path[0] == '/') { // Assume full path if starts with '/'
+    snprintf(s->temp_path,  sizeof(s->temp_path),  "%s/temperature", s->path);
+    snprintf(s->slave_path, sizeof(s->slave_path), "%s/w1_slave",    s->path);
+  } else { // Prepend path
+    snprintf(s->temp_path,  sizeof(s->temp_path),  "%s/%s/temperature", W1_BASE_PATH, s->path);
+    snprintf(s->slave_path, sizeof(s->slave_path), "%s/%s/w1_slave",    W1_BASE_PATH, s->path);
+  }
 }
 
 // ─── Discovery ────────────────────────────────────────────────────────────────
@@ -97,14 +75,13 @@ void w1_detect()
         strncmp(entry->d_name, "10-", 3) == 0)
     {
       w1_sensor_t s;
-      char dev_path[512];
+      char dev_path[W1_DEVICE_PATH];
       snprintf(dev_path, sizeof(dev_path), "%s/%s", W1_BASE_PATH, entry->d_name);
-      w1_init_ds18b20(&s, dev_path, "");
+      w1_init_ds18b20(&s, dev_path);
 
       w1_reading_t r = w1_read(&s);
       if (r.status == W1_SUCCESS)
-        printf("    current reading: %.3f °C  (%.3f °F)\n",
-          r.value, w1_c_to_f(r.value));
+        printf("    current reading: %.3f °C  (%.3f °F)\n", r.value, temp_c_to_f(r.value));
       else
         printf("    current reading: error (%s)\n", w1_strerror(r.status));
     }
@@ -135,9 +112,9 @@ int w1_find_ds18b20(w1_sensor_t *sensors, int max)
     if (strncmp(entry->d_name, W1_DS18B20_PREFIX, strlen(W1_DS18B20_PREFIX)) != 0)
       continue;
 
-    char dev_path[512];
+    char dev_path[W1_DEVICE_PATH];
     snprintf(dev_path, sizeof(dev_path), "%s/%s", W1_BASE_PATH, entry->d_name);
-    w1_init_ds18b20(&sensors[count], dev_path, entry->d_name);
+    w1_init_ds18b20(&sensors[count], dev_path);
     count++;
   }
 
@@ -147,30 +124,32 @@ int w1_find_ds18b20(w1_sensor_t *sensors, int max)
 
 // ─── Sensor initialisation ────────────────────────────────────────────────────
 
-void w1_init_ds18b20(w1_sensor_t *s, const char *path, const char *label)
+void w1_init_ds18b20(w1_sensor_t *s, const char *path)
 {
-  memset(s, 0, sizeof(*s));
-  strncpy(s->path, path, sizeof(s->path) - 1);
-  normalise_dir_path(s->path);
-  s->type   = W1_TYPE_DS18B20;
-  s->scale  = W1_DS18B20_SCALE;   // 0.001 — millidegrees to degrees C
-  s->offset = 0.0f;
-  strncpy(s->label, label ? label : "ds18b20", sizeof(s->label) - 1);
+    if (path && path != s->path) {   // guard against self-copy
+      snprintf(s->path, sizeof(s->path), "%s", path);
+    }
+
+    populate_paths(s);
+
+    s->type   = W1_TYPE_DS18B20;
+    s->scale  = W1_DS18B20_SCALE;
+    s->offset = 0.0f;
+
 }
 
-void w1_init_generic(w1_sensor_t *s, const char *path,
-                     float scale, float offset, const char *label)
+void w1_init_generic(w1_sensor_t *s, const char *path, float scale, float offset)
 {
-  memset(s, 0, sizeof(*s));
-  strncpy(s->path, path, sizeof(s->path) - 1);
-  normalise_dir_path(s->path);
+  if (path && path != s->path) {   // guard against self-copy
+    snprintf(s->path, sizeof(s->path), "%s", path);
+  }
+
+  populate_paths(s);
+
   s->type   = W1_TYPE_GENERIC;
   s->scale  = scale;
   s->offset = offset;
-  strncpy(s->label, label ? label : "w1_generic", sizeof(s->label) - 1);
 }
-
-
 
 #ifndef DUMMY_SENSORS
 
@@ -183,13 +162,10 @@ w1_reading_t w1_read(const w1_sensor_t *s)
 {
   w1_reading_t result = {0.0f, 0, W1_ERROR};
 
-  char temp_path[512];
-  build_temperature_path(s->path, temp_path, sizeof(temp_path));
-
-  FILE *fp = fopen(temp_path, "r");
+  FILE *fp = fopen(s->temp_path, "r");
   if (!fp)
   {
-    fprintf(stderr, "w1_read: cannot open %s: %s\n", temp_path, strerror(errno));
+    LOG(LOG_ERR, "w1_read: cannot open %s: %s\n", s->temp_path, strerror(errno));
     result.status = W1_NOT_FOUND;
     return result;
   }
@@ -197,7 +173,7 @@ w1_reading_t w1_read(const w1_sensor_t *s)
   long raw = 0;
   if (fscanf(fp, "%ld", &raw) != 1)
   {
-    fprintf(stderr, "w1_read: failed to parse value from %s\n", temp_path);
+    LOG(LOG_ERR, "w1_read: failed to parse value from %s\n", s->temp_path);
     fclose(fp);
     return result;
   }
@@ -213,17 +189,12 @@ w1_reading_t w1_read(const w1_sensor_t *s)
 #ifdef DUMMY_SENSORS
 w1_reading_t w1_read(const w1_sensor_t *s)
 {
-  /*
-  w1_reading_t result = {0.0f, 0, W1_ERROR};
+  // Return between 28 and 29
+  //return (w1_reading_t){ 28.5f + dummy_drift(0.5f), 0, W1_SUCCESS };
 
-  result.status = W1_SUCCESS;
-  return result;
-  */
-  char temp_path[512];
-  build_temperature_path(s->path, temp_path, sizeof(temp_path));
+  // Return between -5 and 75
+  return (w1_reading_t){ 35.0f + dummy_drift(40.0f), 0, W1_SUCCESS };
 
-  float val = ((float)(rand() % 1000) / 1000.0f - 0.5f) * 2.0f * 40.0f;
-  return (w1_reading_t){ 35.0f + val, 0, W1_SUCCESS };
 }
 #endif // DUMMY_SENSORS
 
@@ -235,14 +206,10 @@ w1_reading_t w1_read_with_crc(const w1_sensor_t *s)
 {
   w1_reading_t result = {0.0f, 0, W1_ERROR};
 
-  char slave_path[512];
-  build_w1slave_path(s->path, slave_path, sizeof(slave_path));
-
-  FILE *fp = fopen(slave_path, "r");
+  FILE *fp = fopen(s->slave_path, "r");
   if (!fp)
   {
-    fprintf(stderr, "w1_read_with_crc: cannot open %s: %s\n",
-      slave_path, strerror(errno));
+    LOG(LOG_ERR, "w1_read_with_crc: cannot open %s: %s\n", s->slave_path, strerror(errno));
     result.status = W1_NOT_FOUND;
     return result;
   }
@@ -252,7 +219,7 @@ w1_reading_t w1_read_with_crc(const w1_sensor_t *s)
 
   if (!fgets(line1, sizeof(line1), fp) || !fgets(line2, sizeof(line2), fp))
   {
-    fprintf(stderr, "w1_read_with_crc: short read from %s\n", slave_path);
+    LOG(LOG_ERR, "w1_read_with_crc: short read from %s\n", s->slave_path);
     fclose(fp);
     return result;
   }
@@ -261,7 +228,7 @@ w1_reading_t w1_read_with_crc(const w1_sensor_t *s)
   // Line 1 must end in "YES" to confirm CRC passed
   if (strstr(line1, "YES") == NULL)
   {
-    fprintf(stderr, "w1_read_with_crc: CRC check failed for %s\n", s->label);
+    LOG(LOG_ERR, "w1_read_with_crc: CRC check failed for %s\n", s->slave_path);
     result.status = W1_CRC_ERROR;
     return result;
   }
@@ -270,7 +237,7 @@ w1_reading_t w1_read_with_crc(const w1_sensor_t *s)
   char *t_pos = strstr(line2, "t=");
   if (!t_pos)
   {
-    fprintf(stderr, "w1_read_with_crc: no t= field in %s\n", slave_path);
+    LOG(LOG_ERR, "w1_read_with_crc: no t= field in %s\n", s->slave_path);
     return result;
   }
 
@@ -282,7 +249,7 @@ w1_reading_t w1_read_with_crc(const w1_sensor_t *s)
 }
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
-
+/*
 float w1_c_to_f(float celsius)
 {
   return celsius * 9.0f / 5.0f + 32.0f;
@@ -292,7 +259,7 @@ float w1_c_to_k(float celsius)
 {
   return celsius + 273.15f;
 }
-
+*/
 const char *w1_strerror(int status)
 {
   switch (status)

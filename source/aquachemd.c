@@ -64,6 +64,13 @@ Usage:
 
 void intHandler(int sig_num)
 {
+  /*******************
+   * 
+   * safety guard so the stop task can't be skipped if the process is killed mid-dose. 
+   * signal handler calling pump_stop() / relay_off() on SIGTERM/SIGINT 
+   * 
+   */
+
   LOG(LOG_NOTICE, "Stopping!\n");
 
   for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
@@ -74,53 +81,26 @@ void intHandler(int sig_num)
       }
     }
   }
-  /*******************
-   * ADD
-   * safety guard so the stop task can't be skipped if the process is killed mid-dose. 
-   * signal handler calling pump_stop() / relay_off() on SIGTERM/SIGINT 
-   * 
-   */
 
-
-
-  /*
-  if (sig_num == SIGRUPGRADE) {
-    if (! run_aqualinkd_upgrade(_aqualink_data.upgrade_version)) {
-      LOG(AQUA_LOG,LOG_ERR, "AqualinkD upgrade failed!\n");
-    }
-    return; // Let the upgrade process terminate us.
-  }
-
-  LOG(AQUA_LOG,LOG_WARNING, "Stopping!\n");
-
-  _keepRunning = false;
-
-  if (sig_num == SIGRESTART) {
-    LOG(AQUA_LOG,LOG_WARNING, "Restarting AqualinkD!\n");
-    // If we are deamonized, we need to use the system
-    if (_aqconfig_.deamonize) {
-      if(fork() == 0) {
-        sleep(2);
-        char *newargv[] = {"/bin/systemctl", "restart", "aqualinkd", NULL};
-        char *newenviron[] = { NULL };
-        execve(newargv[0], newargv, newenviron);
-        exit (EXIT_SUCCESS);
-      }
-#ifdef SELF_RESTART
-    } else {
-      _restart = true;
-#endif
-    }
-  }
-  //LOG(AQUA_LOG,LOG_NOTICE, "Stopping!\n");
-  //if (dummy){}// stop compile warnings
-
-  stopPacketLogger();
-  close_serial_port(-1);
-  */
   
   exit(EXIT_SUCCESS);
 }
+
+void setup_signal_handlers(void) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = intHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    sigaction(SIGINT,  &sa, NULL);  // Ctrl+C
+    sigaction(SIGTERM, &sa, NULL);  // kill / systemd stop
+    sigaction(SIGHUP,  &sa, NULL);  // terminal closed / daemon reload
+    sigaction(SIGQUIT, &sa, NULL);  // Ctrl+backslash
+    sigaction(SIGPIPE, &sa, NULL);  // broken pipe
+}
+
+
 
 typedef enum {
   ACD_MSG_CLEAR = -1,
@@ -179,88 +159,28 @@ void update_display_message(struct aquachemdata *acddata, display_message_t type
     LOG(LOG_DEBUG, "Display Message Updated: %s", acddata->display_message);
 }
 
-/*
-void masterStateChange(struct aquachemdata *acdata) {
-
-  acd_state_t new_sensor_state = ACD_LED_ENABLED;
-
-  if (acdata->keys->state == ACD_LED_OFF) {
-    new_sensor_state = ACD_LED_DISABLED;
-  } else if (acdata->keys->state == ACD_LED_ON) {
-    new_sensor_state = ACD_LED_ENABLED;
-  } else if (acdata->keys->state == ACD_LED_ENABLED) {
-    new_sensor_state = ACD_LED_DISABLED;
-  }
-
-  LOG(LOG_DEBUG,"AquachemD is %s, turning sensors to %s\n",acd_state_to_str(acdata->keys->state), acd_state_to_str(new_sensor_state));
-  for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
-    setKeyLed(acdata, curr, new_sensor_state);
+void sensor_error(acd_key_t *key) {
+  if (key->err_cnt++ > 5) {
+    LOG(LOG_ERR, "Sensor %s too many read errors, removing from ", key->label);
+    LOG(LOG_WARNING, "Add code to remove key in sensor_error(), will need to also modify main function for loop since key->next will be null on return", key->label);
+    key->err_cnt = 0;
   }
 }
-  */
- /*
-// This is a request from MQTT/WebSocket/Web, NOT for a system change
-bool stateChangeRequest(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state)
-{
-  // Bunch of logic for different key states.
-  switch(key->type) {
-    case ACD_TYPE_MASTER:
-      if (key->state == ACD_LED_OFF && state == ACD_LED_ON) { //if we are off, use the on state as enabled.
-        SET_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty);
-      } else if (key->state == ACD_LED_DISABLED && state == ACD_LED_ON) { // if disabled, can't turn on
-        LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
-        return false;
-      } else {
-        SET_IF_CHANGED(key->state , state, acdata->is_dirty);
-      }
-      break;
-    case ACD_TYPE_GPIO_PMP:
-    case ACD_TYPE_EZO_PMP:
-      // If we are in an off state, don't disable or enable 
-      if (key->state == ACD_LED_OFF && (state == ACD_LED_DISABLED || state == ACD_LED_ENABLED)) {
-        LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
-        return false;
-      }
-      //if we are off, use the on state as enabled.
-      if (key->state == ACD_LED_OFF && state == ACD_LED_ON) {
-        SET_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty);
-      } else if (state == ACD_LED_ON) {
-        if (key->state == ACD_LED_ENABLED ) {
+double elapsed_ms(const struct timespec *start_time) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
 
-          SET_IF_CHANGED(key->state , state, acdata->is_dirty);
-          start_timer(acdata, key, 0, 10);
+    long delta_sec = now.tv_sec - start_time->tv_sec;
+    long delta_nsec = now.tv_nsec - start_time->tv_nsec;
 
-        } else {
-          LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
-          return false;
-        }
-      } else {
-        SET_IF_CHANGED(key->state , state, acdata->is_dirty);
-      }
-      break;
-    default:
-      //SET_IF_CHANGED(key->state , state, acdata->is_dirty);
-      LOG(LOG_WARNING, "%s is %s, setting to %s not supported", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
-      return false;
-      break;
-  }
+    if (delta_nsec < 0) {
+        delta_sec -= 1;
+        delta_nsec += 1000000000L;
+    }
 
-  LOG(LOG_DEBUG, "%s set to %s", key->label, acd_state_to_str(key->state));
-
-  return true;
+    return (delta_sec * 1000.0) + (delta_nsec / 1000000.0);
 }
-*/
 
-/*
-void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state)
-{
-  if (key->state == ACD_LED_OFF && (state == ACD_LED_DISABLED || state == ACD_LED_ENABLED))
-    return;
-
-  SET_IF_CHANGED(key->state , state, acdata->is_dirty);
-  //return;
-}
-*/
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 int main(int argc, char *argv[])
@@ -268,16 +188,16 @@ int main(int argc, char *argv[])
   struct aquachemdata acddata;
   struct timespec next_wake;
 
-  //_acdconfig_.log_level = LOG_NOTICE;
-  //_acdconfig_.config_file = "/etc/aquachemd.conf";
-
-#ifdef DUMMY_SENSORS
-//  _acdconfig_.log_level = LOG_DEBUG;
-#endif
-
   snprintf(acddata.display_message, DISPLAY_MSG_SIZE, "Starting: %s v%s", AQUACHEMD_SHORT_NAME, AQUACHEMD_VERSION);
   CLEAR_DIRTY(acddata.is_dirty);
 
+  char *bname = basename(argv[0]);
+  if (bname == NULL || strlen(bname) == 0) {
+    bname = "aquachemd"; // Hardcoded fallback
+  }
+  // Safely copy into the fixed buffer
+  strncpy(acddata.self, bname, sizeof(acddata.self) - 1);
+  acddata.self[sizeof(acddata.self) - 1] = '\0';
 
   if (!ezo_bus_available())
   {
@@ -302,24 +222,28 @@ int main(int argc, char *argv[])
   // ── Calibration mode ────────────────────────────────────────────────────────
   if (argc >= 2 && strcasecmp(argv[1], "calibrate") == 0)
   {
+    int idx=2;
     if (argc < 3)
     {
-      fprintf(stderr, "Usage: %s calibrate <low|mid|high>\n", argv[0]);
+      fprintf(stderr, "Usage: %s calibrate ph  <low|mid|high>\n", argv[0]);
       fprintf(stderr, "       %s calibrate orp <mv_value>\n", argv[0]);
+      fprintf(stderr, "       %s calibrate rtd <°C_value>\n", argv[0]);
       return 1;
     }
 
-    if (strcasecmp(argv[2], "mid") == 0)
+    if (strcasecmp(argv[idx], "ph") == 0) {idx=3;}
+
+    if (strcasecmp(argv[idx], "mid") == 0)
     {
       printf("Calibrating pH mid-point (7.00)...\n");
       return ph_calibrate_mid() == EZO_SUCCESS ? 0 : 1;
     }
-    else if (strcasecmp(argv[2], "low") == 0)
+    else if (strcasecmp(argv[idx], "low") == 0)
     {
       printf("Calibrating pH low-point (4.00)...\n");
       return ph_calibrate_low() == EZO_SUCCESS ? 0 : 1;
     }
-    else if (strcasecmp(argv[2], "high") == 0)
+    else if (strcasecmp(argv[idx], "high") == 0)
     {
       printf("Calibrating pH high-point (10.00)...\n");
       return ph_calibrate_high() == EZO_SUCCESS ? 0 : 1;
@@ -335,10 +259,22 @@ int main(int argc, char *argv[])
       printf("Calibrating ORP at %.2f mV...\n", mv);
       return orp_calibrate(mv) == EZO_SUCCESS ? 0 : 1;
     }
+    else if ( (strcasecmp(argv[2], "rtd") == 0) ||
+              (strcasecmp(argv[2], "temp") == 0))
+    {
+      if (argc < 4)
+      {
+        fprintf(stderr, "Usage: %s calibrate rtd <degC>\n", argv[0]);
+        return 1;
+      }
+      float temp = atof(argv[3]);
+      printf("Calibrating RTD / Temperature probe at %.2f°C...\n", temp);
+      return rtd_calibrate(temp) == EZO_SUCCESS ? 0 : 1;
+    }
     else
     {
       fprintf(stderr, "Unknown calibration point '%s'\n", argv[2]);
-      fprintf(stderr, "Valid options: low, mid, high, orp <mv>\n");
+      fprintf(stderr, "Valid options: low, mid, high, orp <mv>, rtd <degC>\n");
       return 1;
     }
   }
@@ -376,12 +312,16 @@ int main(int argc, char *argv[])
   }
 */
 
+  // Make sure we catch termination
+  setup_signal_handlers();
 
   // Test if to use systemd/journal or not.
   init_logging_backend();
 
-  FORCE_LOG(LOG_NOTICE, "Starting %s (%s) v%s\n", AQUACHEMD_NAME, AQUACHEMD_SHORT_NAME, AQUACHEMD_VERSION);
+  LOG_STARTUP_EVENT();
+  //FORCE_LOG(LOG_NOTICE, "Starting %s (%s) v%s\n", AQUACHEMD_NAME, AQUACHEMD_SHORT_NAME, AQUACHEMD_VERSION);
 
+  // Setup master key/button
   acddata.keys = malloc(sizeof(acd_key_t));
   acddata.keys->ID = "AquachemD";
   acddata.keys->type = ACD_TYPE_MASTER;
@@ -410,7 +350,7 @@ int main(int argc, char *argv[])
         //sync_pump_state(&acddata, curr);
       }
     } else if (curr->type == ACD_TYPE_D1W_TEMP) {
-      w1_init_generic(&curr->data.w1, curr->data.w1.path, curr->data.w1.scale, curr->data.w1.offset, curr->data.w1.label);
+      w1_init_generic(&curr->data.w1, curr->data.w1.path, curr->data.w1.scale, curr->data.w1.offset);
     }
 
     if (curr->type == ACD_TYPE_MASTER) {
@@ -425,6 +365,9 @@ int main(int argc, char *argv[])
     } else if (IS_CONDITION(curr->type)) {
       curr->state = ACD_LED_OFF;
     }
+
+    // reset error count
+    curr->err_cnt = 0;
   }
 
   start_gpio_monitor(&acddata);
@@ -441,9 +384,10 @@ int main(int argc, char *argv[])
   while (1)
   {
     float temp_reading_for_ph = UNKNOWN;
+    char *master_temp_label;
     bool all_conditions_met = true; // Should be able to get rid of this all together now, and just use acddata.keys->state 
 
-    LOG(LOG_NOTICE,"--- loop ---\n");
+    LOG(LOG_NOTICE,"---- taking reading(s) ----\n");
     update_display_message(&acddata, ACD_MSG_CLEAR, NULL);
 
     if (acddata.keys->state == ACD_LED_OFF) {
@@ -479,44 +423,46 @@ int main(int argc, char *argv[])
       
       switch (key->type) {
         case ACD_TYPE_MQTT_TEMP:          
-          if (key->index == MASTER_ID) { temp_reading_for_ph = key->value; }// If this is the master temp sensor, also update the temp reading for pH compensation
+          if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
+            temp_reading_for_ph = key->value;
+            master_temp_label = key->label;
+          }
           LOG(LOG_DEBUG, "MQTT Sensor '%s' current value: %.2f\n", key->label, key->value);
           break;
-        case ACD_TYPE_D1W_TEMP:{
+        case ACD_TYPE_D1W_TEMP: {
           w1_reading_t temp_reading = w1_read(&key->data.w1);
           if (temp_reading.status == W1_SUCCESS) {
             LOG(LOG_NOTICE,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
-            if (key->index == MASTER_ID) { temp_reading_for_ph = temp_reading.value; }// If this is the master temp sensor, also update the temp reading for pH compensation
+            if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
+              temp_reading_for_ph = temp_reading.value; 
+              master_temp_label = key->label;
+            }
             SET_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty);
             SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
+            key->err_cnt=0;
           } else {
             LOG(LOG_WARNING, "D1w Temp Sensor '%s' read failed (status %d)\n", key->label, temp_reading.status);
             SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+            sensor_error(key);
           }
-          /*
-            float new_value = d1w_get_temp(key->data.d1w.id);
-            LOG(LOG_DEBUG, "D1W Sensor '%s' read value: %.2f\n", key->label, new_value);
-            if (new_value != DEVICE_DISCONNECTED_C) {
-              if (key->index == MASTER_ID) {  temp_reading_for_ph = new_value; }// If this is the master temp sensor, also update the temp reading for pH compensation
-              SET_IF_CHANGED(key->value, new_value, acddata.is_dirty); 
-            } else {
-              LOG(LOG_WARNING, "D1W Sensor '%s' read failed (device disconnected)\n", key->label);
-              update_display_message(acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
-            }
-              */
         } break;
         case ACD_TYPE_EZO_TEMP: {
           rtd_reading_t temp_reading = rtd_get_reading();
           if (temp_reading.status == EZO_SUCCESS) {
             LOG(LOG_NOTICE,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
-            if (key->index == MASTER_ID) { temp_reading_for_ph = temp_reading.value; }// If this is the master temp sensor, also update the temp reading for pH compensation
+            if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
+              temp_reading_for_ph = temp_reading.value;
+              master_temp_label = key->label;
+            }
             SET_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty);
             SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
+            key->err_cnt=0;
           } else {
             LOG(LOG_WARNING, "EZO Temp Sensor '%s' read failed (status %d)\n", key->label, temp_reading.status);
             SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+            sensor_error(key);
           }
         } break;
         case ACD_TYPE_EZO_PH: {
@@ -532,6 +478,7 @@ int main(int argc, char *argv[])
               update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, buf);
               break;
             }
+            LOG(LOG_NOTICE, "Using %s, %.2f for pH compensated reading", master_temp_label, temp_reading_for_ph);
             ph_reading = ph_get_reading_compensated(temp_reading_for_ph);
           } else {
             LOG(LOG_WARNING, "EZO pH Sensor '%s' skipped compensation because temp is unknown\n", key->label);
@@ -543,10 +490,12 @@ int main(int argc, char *argv[])
             LOG(LOG_NOTICE,"pH %s : %.2f°C\n", key->label, ph_reading.value);
             SET_IF_CHANGED(key->value, ph_reading.value, acddata.is_dirty);
             SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
+            key->err_cnt=0;
           } else {
             LOG(LOG_WARNING, "EZO pH Sensor '%s' read failed (status %d)\n", key->label, ph_reading.status);
             SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+            sensor_error(key);
           }
         } break;
         case ACD_TYPE_EZO_ORP: {
@@ -555,10 +504,12 @@ int main(int argc, char *argv[])
             LOG(LOG_NOTICE,"ORP %s : %.2f mV\n", key->label, orp_reading.value);
             SET_IF_CHANGED(key->value, orp_reading.value, acddata.is_dirty);
             SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
+            key->err_cnt=0;
           } else {
             LOG(LOG_WARNING, "EZO ORP Sensor '%s' read failed (status %d)\n", key->label, orp_reading.status);
             SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+            sensor_error(key);
           }
          } break;
         case ACD_TYPE_GPIO_PMP:
@@ -573,7 +524,8 @@ int main(int argc, char *argv[])
 
 
 next_wake:
-    LOG(LOG_NOTICE,"------------\n");
+    
+    LOG(LOG_NOTICE,"- reading(s) took: %.2fs -\n", elapsed_ms(&next_wake) / 1000);
     // Advance the target wake time by one interval
     next_wake.tv_sec += _acdconfig_.sensor_poll_time;
     // Sleep until the next wake time

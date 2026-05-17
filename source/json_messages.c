@@ -6,6 +6,8 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
+#include <systemd/sd-journal.h>
+#include <sys/time.h>
 
 #include "json_messages.h"
 #include "cJSON.h"
@@ -22,6 +24,8 @@ static cJSON *devices_map = NULL;
 
 // This buffer holds the resulting JSON string, NOT thread safe, needs to be here as it's returned.
 //static char json_buffer[MAX_JSON_BUFFER_SIZE];
+
+#define JSON_ERROR_OVERFLOW "{\"error\":\"server - buffer overflow\"}"
 
 
 
@@ -148,8 +152,8 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
   cJSON_AddStringToObject(device, "type", "switch");
   cJSON_AddStringToObject(device, "type", "switch");
   cJSON *attributes = cJSON_CreateArray();
-  cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_str(ACD_LED_OFF)));
-  cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_str(ACD_LED_ON)));
+  cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_OFF)));
+  cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ON)));
   cJSON_AddItemToObject(device, "attributes", attributes);
   cJSON_AddItemToObject(devices, acddata->keys->ID, device);
 
@@ -170,14 +174,22 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
         cJSON_AddStringToObject(device, "type", "switch");
         cJSON *attributes = cJSON_CreateArray();
         cJSON_AddItemToArray(attributes, cJSON_CreateString("timer"));
-        cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_str(ACD_LED_ON)));
-        cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_str(ACD_LED_OFF)));
-        cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_str(ACD_LED_ENABLED)));
-        cJSON_AddItemToObject(device, "attributes", attributes);
-
+        cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ON)));
+        cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_OFF)));
+        cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ENABLED)));
+        
         uint32_t remaining_sec = get_timer_left_sec(curr);
         cJSON_AddStringToObject(device, "timer_active", acd_state_to_str(remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF));
         cJSON_AddNumberToObject(device, "timer_duration", remaining_sec);
+        if (isMASKSET(curr->flags, PH_PUMP)) {
+          cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.ph_default_dose_time);
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("ph_pump"));
+        } else if (isMASKSET(curr->flags, ORP_PUMP)) {
+          cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.orp_default_dose_time);
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("orp_pump"));
+        }
+        
+        cJSON_AddItemToObject(device, "attributes", attributes);
       } else {
         cJSON_AddStringToObject(device, "type", "sensor");
       }
@@ -258,7 +270,7 @@ const char* get_devices_json(struct aquachemdata *acddata) {
   int success = cJSON_PrintPreallocated(root, json_buffer, MAX_JSON_BUFFER_SIZE, 0);
   if (!success) {
     LOG(LOG_ERR, "JSON buffer overflow! MAX_JSON_BUFFER_SIZE (%d) is too small.", MAX_JSON_BUFFER_SIZE);
-    snprintf(json_buffer, MAX_JSON_BUFFER_SIZE, "{\"error\": \"buffer_overflow\"}");
+    snprintf(json_buffer, MAX_JSON_BUFFER_SIZE, "%s", JSON_ERROR_OVERFLOW);
   }
 
   cJSON_Delete(root);
@@ -266,3 +278,295 @@ const char* get_devices_json(struct aquachemdata *acddata) {
 
   //cJSON_PrintUnformatted(devices);
 }
+
+
+
+
+cJSON* get_loglevel_item(int level) {
+    cJSON *item = cJSON_CreateObject();
+    if (item == NULL) return NULL;
+
+    cJSON_AddStringToObject(item, "name", log_priority_to_str(level));
+    cJSON_AddNumberToObject(item, "id", level);
+    cJSON_AddBoolToObject(item, "set", (get_loglevel() == level));
+
+    return item;
+}
+
+
+bool build_acdmanager_json(struct aquachemdata *acddata, char *buffer, size_t buf_size)
+{
+  bool success = false;
+
+  cJSON *root = cJSON_CreateObject();
+  if (!root) return false;
+
+  cJSON_AddStringToObject(root, "type", "acdmanager");
+  cJSON_AddStringToObject(root, "name", AQUACHEMD_SHORT_NAME);
+  cJSON_AddStringToObject(root, "fullname", AQUACHEMD_NAME);
+  cJSON_AddStringToObject(root, "version", AQUACHEMD_VERSION);
+  cJSON_AddBoolToObject(root, "daemonized", is_running_under_systemd());
+ 
+  
+  cJSON *levels_array = cJSON_AddArrayToObject(root, "loglevels");
+  cJSON_AddItemToArray(levels_array, get_loglevel_item(LOG_DEBUG));
+  cJSON_AddItemToArray(levels_array, get_loglevel_item(LOG_INFO));
+  cJSON_AddItemToArray(levels_array, get_loglevel_item(LOG_NOTICE));
+  cJSON_AddItemToArray(levels_array, get_loglevel_item(LOG_WARNING));
+  cJSON_AddItemToArray(levels_array, get_loglevel_item(LOG_ERR));
+
+
+  if (cJSON_PrintPreallocated(root, buffer, (int)buf_size, 0)) {
+    success = true;
+  } else {
+    snprintf(buffer, buf_size, "%s", JSON_ERROR_OVERFLOW);
+    success = false;
+  }
+
+  cJSON_Delete(root);
+  return success;
+}
+
+/**
+ * Built for speed over using cJSON, 
+ * simply replace any non-printable char with a space
+ */
+int json_chars(char *dest, const char *src, size_t dest_len, size_t src_len) {
+    if (dest_len == 0) return 0;
+    
+    size_t i;
+    // We must leave at least 1 byte for the null terminator
+    size_t limit = (src_len < dest_len - 1) ? src_len : (dest_len - 1);
+
+    for (i = 0; i < limit; i++) {
+        unsigned char c = (unsigned char)src[i];
+
+        // Replace JSON-breaking characters and non-printables
+        if (c == '"' || c == '\\' || c < 32 || c > 126) {
+            dest[i] = ' ';
+        } else {
+            dest[i] = src[i];
+        }
+    }
+
+    dest[i] = '\0'; // Guaranteed safe termination
+    return (int)i;
+}
+/**
+ * Wraps a raw log string into a JSON object for WebSocket transmission.
+ * Pattern: [Buffer Pointer], [Buffer Size], [Data Inputs...]
+ */
+int build_logmsg_json(char *buffer, size_t buf_size, int loglevel, const char *src_msg, size_t src_len) {
+    // 1. Write the JSON header
+    // Use snprintf to prevent overflow; it returns the number of chars that WOULD be written
+    int written = snprintf(buffer, buf_size, "{\"logmsg\":\"%-7s", log_priority_to_str(loglevel));
+    
+    if (written < 0 || (size_t)written >= buf_size) {
+        return -1; // Buffer is too small even for the header
+    }
+
+    size_t current_len = (size_t)written;
+
+    // 2. Escape and add the source message body
+    // Reserve 3 bytes for: " } \0
+    if (current_len + 3 < buf_size) {
+        current_len += json_chars(buffer + current_len, src_msg, (buf_size - current_len - 3), src_len);
+    }
+    
+    // 3. Close the JSON object
+    int tail = snprintf(buffer + current_len, buf_size - current_len, "\"}");
+    
+    if (tail > 0) {
+        current_len += (size_t)tail;
+    }
+
+    return (int)current_len;
+}
+
+#define MAX_PUMPS 5
+
+struct pump_stats
+{
+  char pump_id[32];
+  char pump_name[32];
+  uint32_t total_seconds;
+  float total_ml;
+};
+
+// Helper to find or create a slot in our stats array
+struct pump_stats *_find_pump_stats(struct pump_stats stats[], int *count, const char *id, const char *name)
+{
+  for (int i = 0; i < *count; i++)
+  {
+    if (strcmp(stats[i].pump_id, id) == 0)
+    {
+      // If the existing entry is "unknown", but we just found a valid name, update it!
+      if (strcmp(stats[i].pump_name, "unknown") == 0 && strcmp(name, "unknown") != 0)
+      {
+        strncpy(stats[i].pump_name, name, sizeof(stats[i].pump_name) - 1);
+        stats[i].pump_name[sizeof(stats[i].pump_name) - 1] = '\0'; // Ensure null-termination
+      }
+      return &stats[i];
+    }
+  }
+  
+  // If the pump wasn't tracked yet, create a new slot
+  if (*count < MAX_PUMPS)
+  {
+    strncpy(stats[*count].pump_id, id, sizeof(stats[*count].pump_id) - 1);
+    stats[*count].pump_id[sizeof(stats[*count].pump_id) - 1] = '\0';
+
+    strncpy(stats[*count].pump_name, name, sizeof(stats[*count].pump_name) - 1);
+    stats[*count].pump_name[sizeof(stats[*count].pump_name) - 1] = '\0';
+
+    return &stats[(*count)++];
+  }
+  return NULL;
+}
+
+/**
+ * Retrieves pump dosing summaries and optionally a detailed history from the systemd journal.
+ * @param days      Number of days to look back.
+ * @param detailed  If true, includes the "history" array of individual events.
+ * @param buffer    Pointer to the char array where the JSON string will be stored.
+ * @param buf_size  Size of the provided buffer.
+ * @return          true if successful and fit in buffer, false otherwise.
+ */
+bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_size)
+{
+  sd_journal *j;
+  struct pump_stats stats[MAX_PUMPS] = {0};
+  int pump_count = 0;
+  bool success = false;
+
+  // 1. Initialize cJSON root
+  cJSON *root = cJSON_CreateObject();
+  if (!root)
+    return false;
+
+  cJSON_AddStringToObject(root, "type", "dose_history");
+  cJSON *history = detailed ? cJSON_AddArrayToObject(root, "history") : NULL;
+
+  // 2. Calculate start time in microseconds
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  uint64_t since_usec = ((uint64_t)tv.tv_sec * 1000000) - ((uint64_t)days * 24 * 3600 * 1000000);
+
+  // 3. Open Journal and Filter
+  if (sd_journal_open(&j, SD_JOURNAL_LOCAL_ONLY) < 0)
+  {
+    cJSON_Delete(root);
+    return false;
+  }
+
+  // Filter by our specific 128-bit Pump Event Message ID
+  sd_journal_add_match(j, "MESSAGE_ID=" SD_PUMP_EVENT_ID, 0);
+  sd_journal_seek_realtime_usec(j, since_usec);
+
+  // 4. Iterate through log entries
+  SD_JOURNAL_FOREACH(j)
+  {
+    const char *data;
+    size_t len;
+    char p_id[32] = "unknown";
+    char p_name[32] = "unknown";
+    uint32_t sec = 0;
+    float ml = 0.0;
+
+    // Parse PUMP_ID
+    if (sd_journal_get_data(j, "PUMP_ID", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        snprintf(p_id, sizeof(p_id), "%s", val + 1);
+    }
+
+    // Parse PUMP_NAME
+    if (sd_journal_get_data(j, "PUMP_NAME", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        snprintf(p_name, sizeof(p_name), "%s", val + 1);
+    }
+
+    // Parse RUNTIME_SEC
+    if (sd_journal_get_data(j, "RUNTIME_SEC", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        sec = (uint32_t)strtoul(val + 1, NULL, 10);
+    }
+
+    // Parse DOSE_ML
+    if (sd_journal_get_data(j, "DOSE_ML", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        ml = strtof(val + 1, NULL);
+    }
+
+    // Update Totals and History within allocation limits
+    struct pump_stats *p = _find_pump_stats(stats, &pump_count, p_id, p_name);
+    if (p)
+    {
+      p->total_seconds += sec;
+      p->total_ml += ml;
+
+      // FIX: Record individual event ONLY if the pump fits into tracked allocations
+      if (detailed && history)
+      {
+        uint64_t timestamp;
+        sd_journal_get_realtime_usec(j, &timestamp);
+        time_t epoch = timestamp / 1000000;
+        char time_buf[26];
+        ctime_r(&epoch, time_buf);
+        time_buf[24] = '\0'; // Remove trailing newline
+
+        cJSON *event = cJSON_CreateObject();
+        if (event)
+        {
+          cJSON_AddStringToObject(event, "timestamp", time_buf);
+          cJSON_AddStringToObject(event, "pump_id", p_id);
+          cJSON_AddStringToObject(event, "pump_name", p_name);
+          cJSON_AddNumberToObject(event, "seconds", sec);
+          cJSON_AddNumberToObject(event, "ml", ml);
+          cJSON_AddItemToArray(history, event);
+        }
+      }
+    }
+  }
+  sd_journal_close(j);
+
+  // 5. Add Totals to the JSON
+  cJSON *totals_arr = cJSON_AddArrayToObject(root, "totals");
+  for (int i = 0; i < pump_count; i++)
+  {
+    cJSON *item = cJSON_CreateObject();
+    if (item)
+    {
+      cJSON_AddStringToObject(item, "pump_id", stats[i].pump_id);
+      cJSON_AddStringToObject(item, "pump_name", stats[i].pump_name);
+      cJSON_AddNumberToObject(item, "sum_runtime_s", stats[i].total_seconds);
+      cJSON_AddNumberToObject(item, "sum_dose_ml", stats[i].total_ml);
+      cJSON_AddItemToArray(totals_arr, item);
+    }
+  }
+
+  // 6. Print to the pre-allocated buffer
+  if (cJSON_PrintPreallocated(root, buffer, (int)buf_size, 0))
+  {
+    success = true;
+  }
+  else
+  {
+    snprintf(buffer, buf_size, "%s", JSON_ERROR_OVERFLOW);
+    success = false;
+  }
+
+  cJSON_Delete(root);
+  return success;
+}
+
+
+
+

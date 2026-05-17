@@ -3,30 +3,22 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-
-
 #include "acd_types.h"
-//#include "gpio.h" //typdef struct gpio_handle_t;
 
-// Forward Declaration: Prevents circular dependency
 struct aquachemdata; 
-
-// Forward Declaration: If needed for other prototypes
 struct acd_condition;
-
-
 
 void parse_config_file(struct aquachemdata *acdata);
 bool write_config_file (struct aquachemdata *acdata);
 void check_print_config (struct aquachemdata *acdata);
+bool build_aquachem_config_json(char *buffer, size_t buf_size);
 
 #define MAXCFGLINE 256
-
 
 struct acdconfig
 {
 #if MG_TLS > 0
-  char *cert_dir;  // for future
+  char *cert_dir;
   char *mqtt_cert_dir;
 #endif
   char *main_label;
@@ -35,8 +27,6 @@ struct acdconfig
   unsigned int log_level;
   unsigned int mg_log_level;
   char *web_directory;
-
-  //bool deamonize;
 
   char *mqtt_aquachemd_topic;
   char *mqtt_aqualinkd_topic;
@@ -47,39 +37,41 @@ struct acdconfig
   bool mqtt_discovery_use_mac;
   
   char *gpio_chip;
-  //char mqtt_ID[MQTT_ID_LEN+1];
 
   bool convert_mqtt_temp;
   bool mqtt_timed_update;
+  bool mqtt_repost_sensors;
+  bool mqtt_strict_avail;
   
   int ph_reading_temp_max;
   int ph_reading_temp_min;
 
   int sensor_poll_time;
 
-  bool post_condition; // Whether to post & display conditions that are met/unmet
+  bool post_condition;
   bool temp_compensated_ph;
+  bool log_zerorun_pump_events;
 
-  unsigned int default_dose_time;
-  /*
-  unsigned char test_hex;
-  float test_float;
-  uint16_t test_bitmask;
-  */
+  uint32_t ph_default_dose_time;
+  uint32_t orp_default_dose_time;
+
+  runtime_range_t ph_steps[MAX_DOSING_RANGES];
+  uint8_t ph_step_count;
+
+  runtime_range_t orp_steps[MAX_DOSING_RANGES];
+  uint8_t orp_step_count;
 
   acd_key_t *keys;
 };
 
-
-
-typedef enum cfg_value_type{
+typedef enum cfg_value_type {
   CFG_STRING,
   CFG_INT,
   CFG_FLOAT,
   CFG_HEX,
   CFG_BOOL,
   CFG_BITMASK,
-  CFG_TXT_INT,  // Int that should be displayed as text (ie log_level)
+  CFG_TXT_INT,
   CFG_CUSTOM
 } cfg_value_type;
 
@@ -88,27 +80,22 @@ typedef struct cfgParam {
   cfg_value_type value_type;
   uint16_t config_mask;
   char *name;
-  char *metadata; // For dropdowns, etc. JSON string that the UI can parse to get options, etc. (ie for log_level: ["DEBUG_SERIAL", "DEBUG", "INFO", "NOTICE", "WARNING", "ERROR"])
-  uint16_t bit_flag; // For bitmask types, the specific bit to toggle for this param
+  char *metadata;
+  uint16_t bit_flag;
 } cfgParam;
 
-#define CFG_PERSISTANT        (1 << 0) // Don't free memory, things referance the pointer
-#define CFG_GRP_ADVANCED      (1 << 1) // Show in group advanced
-#define CFG_READONLY          (1 << 2) // Don't show in UI, but do write to CFG file. (Maybe display in UI but no edit)
-#define CFG_HIDE              (1 << 3) // Don't show in any UI listing, don't write to CFG file.
-#define CFG_PASSWD_MASK       (1 << 4) // Mask password with *****
-#define CFG_FORCE_RESTART     (1 << 5) // Force aqualinkd to restart
-#define CFG_ALLOW_BLANK       (1 << 6) // Allow blank entry
-#define CFG_GREYED_OUT        (1 << 7) // Greyout in UI, show but not editable
-#define CFG_MULTIPLE          (1 << 8) // This entry can have multiple string values, use linked list of strings
+#define CFG_PERSISTANT (1 << 0)
+#define CFG_GRP_ADVANCED (1 << 1)
+#define CFG_READONLY (1 << 2)
+#define CFG_HIDE (1 << 3)
+#define CFG_FORCE_RESTART (1 << 4)
+#define CFG_PASSWD_MASK (1 << 5)
+#define CFG_MULTIPLE (1 << 6)
+#define CFG_IS_ALLOCATED (1 << 7)
 
-#define CFG_IS_ALLOCATED      (1 << 15)  // Largest bitmask, used internally to track if memory has been allocated for string types and needs to be freed when updated or on exit
-
-//#define CFG_      (1 << 3)
-
-// Text to show when CFG_PASSWD_MASK is set
 #define PASSWD_MASK_TEXT "********"
-
+//#define UNKNOWN -1
+//#define STR_FULL_LENGTH 0
 
 #ifndef CONFIG_C
 extern struct acdconfig _acdconfig_;
@@ -118,14 +105,14 @@ extern struct acdconfig _acdconfig_;
 struct acdconfig _acdconfig_ = {
     .log_level      = LOG_INFO,  // Start with INFO so we see boot messages
     .listen_address = "0.0.0.0:8080",
-    .config_file    = "/etc/aquachemd.conf"
+    .config_file    = "/etc/aquachemd.conf",
+    .ph_step_count  = 0,
+    .orp_step_count = 0
 };
 #endif
 
-
 // Count entries in the config table at compile time
 #define CFG_ENTRY(...) +1
-// Need to use enum to create a scope for the CFG_PARAM_COUNT constant and avoid potential naming conflicts, and also to allow it to be used in array declarations
 enum { 
     CFG_PARAM_COUNT = (0
 #include "config_table.h"
@@ -134,34 +121,9 @@ enum {
 #undef CFG_ENTRY
 
 #ifndef CONFIG_C
-//extern cfgParam _cfgParams[CFG_PARAM_COUNT];
+extern cfgParam _cfgParams[CFG_PARAM_COUNT];
 #else
-cfgParam  _cfgParams[CFG_PARAM_COUNT];
+cfgParam _cfgParams[CFG_PARAM_COUNT];
 #endif
 
-
-/*
-
-#define CFG_N_listen_address "listen_address"
-#define CFG_N_cert_dir "cert_dir"
-#define CFG_N_serial_port "serial_port"
-#define CFG_N_log_level "log_level"
-#define CFG_N_MG_log_level "mg_log_level"
-#define CFG_N_web_directory "web_directory"
-#define CFG_N_mqtt_aquachemd_topic "mqtt_aquachemd_topic"
-#define CFG_N_mqtt_aqualinkd_topic "mqtt_aqualinkd_topic" 
-#define CFG_N_mqtt_discovery_topic "mqtt_discovery_topic"
-#define CFG_N_mqtt_discovery_use_mac "mqtt_discovery_use_mac"
-#define CFG_N_convert_mqtt_temp "mqtt_convert_to_degF"
-#define CFG_N_mqtt_timed_update "mqtt_timed_update"
-#define CFG_N_sensor_poll_time "sensor_poll_time"
-#define CFG_N_mqtt_server "mqtt_server"
-#define CFG_N_mqtt_user "mqtt_user"
-#define CFG_N_mqtt_passwd "mqtt_passwd"
-
-#define CFG_V_log_level                         "[\"DEBUG_SERIAL\", \"DEBUG\", \"INFO\", \"NOTICE\", \"WARNING\", \"ERROR\"]"
-#define CFG_V_BOOL                              "[\"Yes\", \"No\"]"
-
-*/
-
-#endif // CONFIG_H_
+#endif //CONFIG_H_

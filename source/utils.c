@@ -19,38 +19,62 @@
 #include "config.h"
 #include "acd_types.h"
 #include "gpio.h"
+#include "version.h"
+
+#define LOG_BUFFER_SIZE 1024
 
 
-static bool _use_journal = false;
+static bool _enable_journal = false;
+static bool _enable_stdout  = true; // Default to true for safety
+
+bool is_running_under_systemd() {
+    // INVOCATION_ID is the modern standard for systemd services
+    if (getenv("INVOCATION_ID") != NULL) {
+        return true;
+    }
+    return false;
+}
 
 void init_logging_backend() {
-  _use_journal = false; // Default to false
 #ifdef USE_SYSTEMD
-  if (getenv("JOURNAL_STREAM")) {
-    _use_journal = true;
-  }
+    // Do we have a journal stream from systemd?
+    if (getenv("JOURNAL_STREAM")) {
+        _enable_journal = true;
+        _enable_stdout  = false; // Systemd handles stdout usually
+    }
+
+    // Going to enable Journal even if runing from command line.
+    _enable_journal = true;
+#endif
+   
+#ifdef DUMMY_SENSORS
+    _enable_journal = true; 
+    _enable_stdout  = true; // We want both for testing
 #endif
 }
 
-/* Internal helper that does the actual work */
+
+
+
 static void _do_log(const int msg_level, const char *format, va_list args) {
     va_list args_copy;
-    
+
 #ifdef USE_SYSTEMD
-    if (_use_journal) {
+    if (_enable_journal) {
         va_copy(args_copy, args);
         sd_journal_printv(msg_level, format, args_copy);
         va_end(args_copy);
-        return; 
     }
 #endif
 
-    char message[1024];
+    if (!_enable_stdout) return;
+
+    char message[LOG_BUFFER_SIZE];
     va_copy(args_copy, args);
     int len = vsnprintf(message, sizeof(message), format, args_copy);
     va_end(args_copy);
 
-    while (len > 0 && isspace(message[len - 1])) {
+    while (len > 0 && (message[len - 1] == '\n' || message[len - 1] == '\r' || message[len - 1] == ' ')) {
         message[--len] = '\0';
     }
 
@@ -58,27 +82,102 @@ static void _do_log(const int msg_level, const char *format, va_list args) {
     fflush(stdout);
 }
 
-/* Always prints */
+//  "V" Wrapper (The workhorse)
+void VLOG(const int msg_level, const char *format, va_list args) {
+    if (msg_level <= _acdconfig_.log_level) {
+        _do_log(msg_level, format, args);
+    }
+}
+
+// Updated LOG (Standard wrapper)
+void LOG(const int msg_level, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    VLOG(msg_level, format, args);
+    va_end(args);
+}
+
+/* Always prints, bypassing _acdconfig_.log_level */
 void FORCE_LOG(const int msg_level, const char *format, ...) {
     va_list args;
     va_start(args, format);
+    
+    // We skip VLOG (which checks levels) and go straight to the implementation
     _do_log(msg_level, format, args);
+    
     va_end(args);
 }
 
-/* Only prints if msg_level <= config limit */
-void LOG(const int msg_level, const char *format, ...) {
-    // Standard Unix/Syslog: 0 (Emerg) is most important, 7 (Debug) is least.
-    if (msg_level > _acdconfig_.log_level) {
-        return;
-    }
-
+/**
+ * LOG_SYSTEM_ERR
+ * Combines a custom user message with the system's string for a specific error number.
+ * Usage: LOG_SYSTEM_ERR(errno, "Failed to bind to port %d", port);
+ */
+void LOG_SYSTEM_ERR(int errnum, const char *format, ...) {
+    char user_msg[256];
+    char combined_msg[512];
+    
+    // 1. Format the user's context
     va_list args;
     va_start(args, format);
-    _do_log(msg_level, format, args);
+    vsnprintf(user_msg, sizeof(user_msg), format, args);
     va_end(args);
+
+    // 2. Append the system error string (strerror)
+    // Using %s for the whole thing inside LOG() prevents double-formatting bugs
+    snprintf(combined_msg, sizeof(combined_msg), "%s: %s (%d)", 
+             user_msg, strerror(errnum), errnum);
+
+    // 3. Send to the core logger as a simple string
+    LOG(LOG_ERR, "%s", combined_msg);
 }
 
+
+
+void LOG_STARTUP_EVENT()
+{
+  FORCE_LOG(LOG_NOTICE, "Starting %s (%s) v%s\n", AQUACHEMD_NAME, AQUACHEMD_SHORT_NAME, AQUACHEMD_VERSION);
+
+  sd_journal_send("MESSAGE=Starting %s (%s) v%s", AQUACHEMD_NAME, AQUACHEMD_SHORT_NAME, AQUACHEMD_VERSION,
+                "PRIORITY=%i", LOG_NOTICE,
+                "MESSAGE_ID=%s", SD_MESSAGE_STARTUP_ID,
+                NULL);
+}
+
+void LOG_PUMP_EVENT(acd_key_t *key, uint32_t seconds, float reading, float ml) 
+{
+  // key->value = value of sensor when pump started (ie ph or orp)
+  // Always do a standard human-readable log
+  LOG(LOG_NOTICE, "PUMP_EVENT: %s ran for %us (Value: %.2f) estimated %.2fml", key->ID, seconds, key->value, ml);
+
+#ifdef USE_SYSTEMD
+  if (_enable_journal) {
+    const char *chem_type = (key->flags & PH_PUMP)  ? "ACID" : 
+                            (key->flags & ORP_PUMP) ? "CHLORINE" : "UNKNOWN";
+
+    sd_journal_send("MESSAGE=Pump Dosing Event",
+                    "MESSAGE_ID=%s", SD_PUMP_EVENT_ID,
+                    "APP_EVENT=ACD-PMP-Event",
+                    "PUMP_ID=%s", key->ID,
+                    "PUMP_NAME=%s", key->label,
+                    "PUMP_TYPE=%s", chem_type,
+                    "RUNTIME_SEC=%u", seconds,
+                    "DOSE_ML=%.2f", ml,
+                    "SENSOR_VAL=%.2f", reading,
+                    "PRIORITY=%i", LOG_INFO,
+                    NULL);
+  }
+#endif
+}
+
+void set_loglevel( int level)
+{
+  _acdconfig_.log_level = level;
+}
+int get_loglevel()
+{
+  return _acdconfig_.log_level;
+}
 
 
 //Move existing pointer
@@ -242,51 +341,77 @@ char *strcsub(char *dst, int dst_len, const char *src, char find, char replace)
 }
 
 
-bool text2bool(char *str)
+bool parse_bool(const char *str)
 {
-  str = cleanwhitespace(str);
-  if (strcasecmp (str, "YES") == 0 || strcasecmp (str, "ON") == 0)
-    return true;
-  else
+    if (!str) return false;
+    
+    // If your cleanwhitespace() function modifies the string inline, 
+    // you can cast or pass a mutable copy, otherwise standard const char* works.
+    char *clean = cleanwhitespace((char *)str);
+    
+    if (strcasecmp(clean, "YES") == 0 || 
+        strcasecmp(clean, "ON") == 0 || 
+        strcasecmp(clean, "TRUE") == 0 || 
+        strcasecmp(clean, "1") == 0 ||
+        strcasecmp(clean, "ENABLE") == 0) 
+    {
+        return true;
+    }
+    
     return false;
 }
 
-char *bool2text(bool val)
+const char *bool_to_str(bool val)
 {
-  if(val == true)
-    return "YES";
-  else
-    return "NO";
+    return val ? "YES" : "NO";
 }
 
-gpio_active_t text2gpioactive(char *str)
+gpio_active_t parse_gpio_active(char *str)
 {
-  str = cleanwhitespace(str);
-  if (strcasecmp (str, "ACTIVE_LOW") == 0 || strcasecmp (str, "ACTIVE LOW") == 0)
-    return GPIO_ACTIVE_LOW;
-  else
-    return GPIO_ACTIVE_HIGH;
+    str = cleanwhitespace(str);
+    if (strcasecmp(str, "ACTIVE_LOW") == 0 || strcasecmp(str, "ACTIVE LOW") == 0) {
+        return GPIO_ACTIVE_LOW;
+    }
+    // Explicitly check for High so typos don't accidentally invert your hardware logic
+    return GPIO_ACTIVE_HIGH; 
 }
 
-char *gpioactive2text(gpio_active_t val)
+const char *gpio_active_to_str(gpio_active_t val)
 {
-  if(val == GPIO_ACTIVE_HIGH)
-    return "Active High";
-  else
-    return "Active Low";
+    return (val == GPIO_ACTIVE_HIGH) ? "Active High" : "Active Low";
 }
 
-// (50°F - 32) x .5556 = 10°C
-float degFtoC(float degF)
+gpio_req_t parse_gpio_req(char *str)
 {
-  return ((degF-32) / 1.8);
-}
-// 30°C x 1.8 + 32 = 86°F 
-float degCtoF(float degC)
-{
-  return (degC * 1.8 + 32);
+    str = cleanwhitespace(str);
+    if (strcasecmp(str, "ON") == 0 || strcasecmp(str, "YES") == 0 || strcasecmp(str, "HIGH") == 0) {
+        return GPIO_REQ_ON;
+    }
+    return GPIO_REQ_OFF;
 }
 
+const char *gpio_req_to_str(gpio_req_t val)
+{
+    return (val == GPIO_REQ_OFF) ? "off" : "on";
+}
+
+// Convert Celsius to Fahrenheit
+float temp_c_to_f(float celsius)
+{
+  return (celsius * 1.8 + 32);
+}
+
+// Convert Fahrenheit to Celsius
+float temp_f_to_c(float fahrenheit)
+{
+  return ((fahrenheit-32) / 1.8);
+}
+
+// Convert Celsius to Kelvin
+float temp_c_to_k(float celsius)
+{
+  return celsius + 273.15;
+}
 
 
 
@@ -313,3 +438,27 @@ const char* acd_state_to_str(acd_state_t state) {
         default:               return "UNKNOWN";
     }
 }
+
+/**
+ * Converts internal status integers to "Set" command strings for the UI.
+ * This tells the UI which command to send back to the controller.
+ */
+const char* acd_state_to_set_attrib(acd_state_t status) {
+  switch (status) {
+    case ACD_LED_OFF:       return "set_off";
+    case ACD_LED_ON:        return "set_on";
+    case ACD_LED_ENABLED:   return "set_enabled";
+    case ACD_LED_DISABLED:  return "set_disabled";
+    default:                return "";
+  }
+}
+
+
+
+#ifdef DUMMY_SENSORS
+// Small random float drift in range [-range, +range]
+float dummy_drift(float range)
+{
+  return ((float)(rand() % 1000) / 1000.0f - 0.5f) * 2.0f * range;
+}
+#endif
