@@ -1,17 +1,18 @@
 name: Compile Release Assets
 
 on:
+#  push:
+#    branches: [ main ]
   push:
     tags:
       - 'v*.*.*'
-  workflow_dispatch: # Allows manual run fallback
+  workflow_dispatch:
     inputs:
       tag_name:
         description: 'The existing tag/release name (e.g., v0.1.0) to compile for and upload assets to.'
         type: string
         required: true
         
-  # Automatically chain when the Publish Production Release workflow creation finishes
   workflow_run:
     workflows: ["Publish Production Release"]
     types:
@@ -21,54 +22,51 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Compile Binaries
+  init:
+    name: Resolve Target Reference
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest 
-    container:
-      image: debian:trixie 
-    
+    runs-on: ubuntu-latest
     outputs:
       release_tag: ${{ steps.determine_tag.outputs.tag }}
-      
     steps:
+      # If chained from a release run, pull the version directly from the shared artifact token
+      - name: Download Upstream Tag Token
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: upstream-release-tag
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: .
+
       - name: Determine Target Tag
         id: determine_tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TARGET_TAG="${{ github.event.inputs.tag_name }}"
-            echo "Context: Manual execution."
           elif [ "${{ github.event_name }}" = "push" ]; then
             TARGET_TAG="${{ github.ref_name }}"
-            echo "Context: Direct Git push/tag event."
           else
-            echo "Context: Chained from completed workflow."
-            # Read the target branch/tag metadata out of the upstream context payload
-            RAW_REF="${{ github.event.workflow_run.head_branch }}"
-            
-            # If it's a full reference path like refs/tags/v0.1.1, strip it to v0.1.1
-            # If it's already just the tag v0.1.1, it remains untouched
-            CLEAN_TAG=$(echo "$RAW_REF" | sed -E 's|^refs/tags/||')
-            
-            # Fallback check: If head_branch somehow drops back to 'main' or empty,
-            # we will fetch the single latest production git tag name from the API via a basic curl
-            if [ -z "$CLEAN_TAG" ] || [ "$CLEAN_TAG" = "main" ]; then
-              echo "Upstream head_branch context evaluated to main/empty. Querying latest tag..."
-              CLEAN_TAG=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | grep -oP '"tag_name":\s*"\K[^"]+')
-            fi
-            
-            TARGET_TAG="$CLEAN_TAG"
+            TARGET_TAG=$(cat release_tag.txt)
           fi
           
           echo "---------------------------------"
           echo "Workflow Event: ${{ github.event_name }}"
-          echo "Determined Release Target Tag: $TARGET_TAG"
+          echo "Target Release Tag: $TARGET_TAG"
           echo "---------------------------------"
           echo "tag=$TARGET_TAG" >> $GITHUB_OUTPUT
-          
-      - uses: actions/checkout@v4
+
+  build:
+    name: Compile Binaries
+    needs: init
+    runs-on: ubuntu-latest 
+    container:
+      image: debian:trixie 
+    steps:
+      - name: Checkout Target Code
+        uses: actions/checkout@v4
         with:
-          ref: ${{ steps.determine_tag.outputs.tag }}
+          ref: ${{ needs.init.outputs.release_tag }}
       
       - name: Setup build environment for ARM64 and ARMHF
         run: |
@@ -102,8 +100,8 @@ jobs:
           retention-days: 1
 
   deploy:
-    name: Publish Assets to GitHub Release
-    needs: build
+    name: Publish assets to GitHub Release
+    needs: [init, build]
     runs-on: ubuntu-latest
     steps:
       - name: Download Compiled Binaries
@@ -114,13 +112,14 @@ jobs:
       - name: Update GitHub Release and Upload Artifact
         uses: softprops/action-gh-release@v2 
         with:
-          tag_name: ${{ needs.build.outputs.release_tag }} 
-          name: Release ${{ needs.build.outputs.release_tag }}
+          tag_name: ${{ needs.init.outputs.release_tag }} 
+          name: Release ${{ needs.init.outputs.release_tag }}
           draft: false
           overwrite: true
           files: AquachemD-release.tar.gz
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
 
   
