@@ -1,90 +1,88 @@
 name: AquachemD build Workflow
+
 on:
-#  push:
-#    branches: [ main ]
-#    tags:
-#      - 'v*.*.*'
   workflow_dispatch: # Allow manual run
 
-jobs:
-  build_and_deploy:
-    # Use the standard runner, the container handles the x86-64 to cross-compile setup
-    runs-on: ubuntu-latest 
+# Grant explicit permissions to create tags/releases and write assets
+permissions:
+  contents: write
 
-    # --- JOB-LEVEL CONTAINER DEFINITION ---
-    # This runs the entire job inside the Debian environment, making all 'run' steps clean.
+jobs:
+  build:
+    name: Compile Binaries
+    runs-on: ubuntu-latest 
     container:
       image: debian:trixie 
       
     steps:
-    # Checkout the source code (this runs INSIDE the container and populates /github/workspace)
-    - uses: actions/checkout@v4
-    
-    # Display what we are going to compile
-    - name: Display Checked-Out Version
-      run: |
-        echo "--- Workflow Context ---"
-        # github.ref_name is the branch name or tag name (e.g., 'main' or 'v2.11')
-        echo "Checked out Reference Name (Branch/Tag): ${{ github.ref_name }}"
-        # github.ref is the full Git reference (e.g., 'refs/heads/main' or 'refs/tags/v2.11')
-        echo "Full GitHub Reference: ${{ github.ref }}"
-        echo "--- Starting Build ---"
+      - uses: actions/checkout@v4
+      
+      - name: Setup build environment for ARM64 and ARMHF
+        run: |
+          dpkg --add-architecture armhf 
+          dpkg --add-architecture arm64
+          apt-get update -y
+          apt-get install -y \
+            build-essential \
+            crossbuild-essential-armhf \
+            crossbuild-essential-arm64 \
+            libsystemd-dev \
+            libsystemd-dev:arm64 \
+            libsystemd-dev:armhf \
+            libgpiod-dev \
+            libgpiod-dev:arm64 \
+            libgpiod-dev:armhf
+          
+      - name: Compile AquachemD Architectures
+        # Changed to compile native, arm64, and armhf so all targets generate
+        run: |
+          make clean
+          make all arm64 armhf
 
-    # 2. Optimized Cross-Compile step
-    - name: Setup build environment for ARM64 and ARMHF
-      # Using a standard 'run' block as we are already inside the container
-      run: |
-        # Enable cross-architectures
-        dpkg --add-architecture armhf 
-        dpkg --add-architecture arm64
-        
-        # Update and Install ALL dependencies (APT requires update after add-architecture)
-        apt-get update -y
-        apt-get install -y \
-          build-essential \
-          crossbuild-essential-armhf \
-          crossbuild-essential-arm64 \
-          libsystemd-dev \
-          libsystemd-dev:arm64 \
-          libsystemd-dev:armhf \
-          libgpiod-dev \
-          libgpiod-dev:arm64 \
-          libgpiod-dev:armhf \
-          libgpiod-dev
-        
-    - name: Compile AquachemD
-      # Using a standard 'run' block as we are already inside the container
-      run: |
-        make clean && \
-        make buildrelease
+      - name: Create release archive
+        run: tar -czvf AquachemD-release.tar.gz web/ release/
 
-    # The remaining steps automatically run inside the container as well
+      - name: Save Archive for Deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: aquachemd-binaries
+          path: AquachemD-release.tar.gz
+          retention-days: 1
 
-    - name: Create release archive
-      # This step correctly archives both resulting binaries from the workspace
-      run: tar -czvf AquachemD-release.tar.gz release/
+  deploy:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Compiled Binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: aquachemd-binaries
 
-    # --- Create/Update the Draft Development Release ---
-    - name: Create or Update GitHub Draft Release
-      if: ${{ (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) || github.event_name == 'workflow_dispatch' }}
-      uses: softprops/action-gh-release@v2 
-      with:
-        files: AquachemD-release.tar.gz
-        overwrite: true
-        tag_name: development-latest 
-        name: Development Build (Latest Main/Manual)
-        draft: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    # --- Create the Formal Versioned Release ---
-    - name: Create Final GitHub Release
-      if: ${{ startsWith(github.ref, 'refs/tags/') }}
-      uses: softprops/action-gh-release@v2 
-      with:
-        files: AquachemD-release.tar.gz
-        overwrite: true
-        tag_name: ${{ github.ref_name }}
-        name: AquachemD Release ${{ github.ref_name }}
-        draft: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # --- Create/Update the Development Release ---
+      - name: Create or Update GitHub Draft Release
+        if: ${{ (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) || github.event_name == 'workflow_dispatch' }}
+        uses: softprops/action-gh-release@v2 
+        with:
+          files: AquachemD-release.tar.gz
+          overwrite: true
+          tag_name: development-latest 
+          name: Development Build (Latest Main/Manual)
+          draft: true
+          fail_on_unmatched_files: true # Force failures if the asset goes missing
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- Create the Formal Versioned Release ---
+      - name: Create Final GitHub Release
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v2 
+        with:
+          files: AquachemD-release.tar.gz
+          overwrite: true
+          tag_name: ${{ github.ref_name }}
+          name: AquachemD Release ${{ github.ref_name }}
+          draft: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
