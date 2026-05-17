@@ -1,16 +1,22 @@
-name: AquachemD build Workflow
+name: Compile Release Assets
 
 on:
   push:
     branches: [ main ]
     tags:
       - 'v*.*.*'
-  workflow_dispatch: # Allow manual run
+  workflow_dispatch: # Allows manual run fallback
     inputs:
       tag_name:
         description: 'The existing tag/release name (e.g., v0.1.0) to compile for and upload assets to.'
         type: string
         required: true
+        
+  # Automatically chain when the Publish Production Release workflow (publish-release.yml) creation finishes
+  workflow_run:
+    workflows: ["Publish Production Release"]
+    types:
+      - completed
 
 permissions:
   contents: write
@@ -18,18 +24,35 @@ permissions:
 jobs:
   build:
     name: Compile Binaries
+    # Only run if the triggering workflow succeeded, or if it was a push/manual event
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest 
     container:
       image: debian:trixie 
+    
+    outputs:
+      release_tag: ${{ steps.determine_tag.outputs.tag }}
       
     steps:
-      # 1. Checkout the precise Git reference target
-      - name: Checkout Target Code
-        uses: actions/checkout@v4
+      # Determine the tag dynamically based on the event context
+      - name: Determine Target Tag
+        id: determine_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            # Extracts tag from the workflow_run context
+            RAW_REF="${{ github.event.workflow_run.head_branch }}"
+            CLEAN_TAG=$(echo "$RAW_REF" | sed 's|refs/tags/||')
+            echo "tag=$CLEAN_TAG" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'push' && github.sha || github.event.inputs.tag_name }}
+          ref: ${{ steps.determine_tag.outputs.tag }}
       
-      # 2. Set up cross-compilers inside the container
       - name: Setup build environment for ARM64 and ARMHF
         run: |
           dpkg --add-architecture armhf 
@@ -46,17 +69,15 @@ jobs:
             libgpiod-dev:arm64 \
             libgpiod-dev:armhf
           
-      # 3. Compile all native and cross architectures
       - name: Compile AquachemD Architectures
         run: |
           make clean
           make all arm64 armhf
 
-      # 4. Pack the fresh binaries into the release tarball
       - name: Create release archive
+        # Preserved 'web/' alongside your compiled release binaries
         run: tar -czvf AquachemD-release.tar.gz web/ release/
 
-      # 5. Hand the file off to the workspace host
       - name: Save Archive for Deployment
         uses: actions/upload-artifact@v4
         with:
@@ -74,12 +95,11 @@ jobs:
         with:
           name: aquachemd-binaries
 
-      # 6. Post directly back to the active release matching your input target
       - name: Update GitHub Release and Upload Artifact
         uses: softprops/action-gh-release@v2 
         with:
-          tag_name: ${{ github.event_name == 'push' && github.ref_name || github.event.inputs.tag_name }} 
-          name: Release ${{ github.event_name == 'push' && github.ref_name || github.event.inputs.tag_name }}
+          tag_name: ${{ needs.build.outputs.release_tag }} 
+          name: Release ${{ needs.build.outputs.release_tag }}
           draft: false
           overwrite: true
           files: AquachemD-release.tar.gz
