@@ -43,33 +43,22 @@ jobs:
             TARGET_TAG="${{ github.ref_name }}"
             echo "Context: Direct Git push/tag event."
           else
-            # Context: Triggered by workflow_run
-            # We look at the trigger event's commit metadata or the tags array if available.
-            # To be 100% foolproof, we parse the tag name using the GitHub context log tracking:
             echo "Context: Chained from completed workflow."
+            # Read the target branch/tag metadata out of the upstream context payload
+            RAW_REF="${{ github.event.workflow_run.head_branch }}"
             
-            # If the upstream workflow was tracking a tag, grab it; otherwise, read the commit SHA
-            # to fetch the exact tag associated with it.
-            # But since we know publish-release creates a tag formatted like 'v*.*.*' based on the header file,
-            # we can look up the tag associated with the commit SHA that just ran:
-            TARGET_TAG=$(git env | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "")
+            # If it's a full reference path like refs/tags/v0.1.1, strip it to v0.1.1
+            # If it's already just the tag v0.1.1, it remains untouched
+            CLEAN_TAG=$(echo "$RAW_REF" | sed -E 's|^refs/tags/||')
             
-            # Bulletproof fallback: Fetch the latest tag on the repository commit context
-            if [ -z "$TARGET_TAG" ]; then
-               # Quick clone check to read the reference tag name of the triggering commit
-               apt-get update && apt-get install -y curl jq
-               URL="https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}"
-               # Request the API details of the run that triggered us to see its release/tag details
-               TARGET_TAG=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" $URL | jq -r '.target_commitish // empty')
-               
-               # If API target_commitish isn't the tag, fall back to extracting it from the header file directly 
-               # just like publish-release did, ensuring they match perfectly!
-               if [ -z "$TARGET_TAG" ] || [ "$TARGET_TAG" = "main" ]; then
-                 VERSION_LINE=$(grep '#define AQUACHEMD_VERSION' source/version.h || echo "0.0.0")
-                 CLEAN_VER=$(echo "$VERSION_LINE" | sed -E 's/.*"([^"]+)".*/\1/')
-                 TARGET_TAG="v$CLEAN_VER"
-               fi
+            # Fallback check: If head_branch somehow drops back to 'main' or empty,
+            # we will fetch the single latest production git tag name from the API via a basic curl
+            if [ -z "$CLEAN_TAG" ] || [ "$CLEAN_TAG" = "main" ]; then
+              echo "Upstream head_branch context evaluated to main/empty. Querying latest tag..."
+              CLEAN_TAG=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | grep -oP '"tag_name":\s*"\K[^"]+')
             fi
+            
+            TARGET_TAG="$CLEAN_TAG"
           fi
           
           echo "---------------------------------"
@@ -77,7 +66,7 @@ jobs:
           echo "Determined Release Target Tag: $TARGET_TAG"
           echo "---------------------------------"
           echo "tag=$TARGET_TAG" >> $GITHUB_OUTPUT
-
+          
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.determine_tag.outputs.tag }}
