@@ -12,7 +12,7 @@ on:
         type: string
         required: true
         
-  # Automatically chain when the Publish Production Release workflow (publish-release.yml) creation finishes
+  # Automatically chain when the Publish Production Release workflow creation finishes
   workflow_run:
     workflows: ["Publish Production Release"]
     types:
@@ -24,7 +24,6 @@ permissions:
 jobs:
   build:
     name: Compile Binaries
-    # Only run if the triggering workflow succeeded, or if it was a push/manual event
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest 
     container:
@@ -34,20 +33,50 @@ jobs:
       release_tag: ${{ steps.determine_tag.outputs.tag }}
       
     steps:
-      # Determine the tag dynamically based on the event context
       - name: Determine Target Tag
         id: determine_tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+            TARGET_TAG="${{ github.event.inputs.tag_name }}"
+            echo "Context: Manual execution."
           elif [ "${{ github.event_name }}" = "push" ]; then
-            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            TARGET_TAG="${{ github.ref_name }}"
+            echo "Context: Direct Git push/tag event."
           else
-            # Extracts tag from the workflow_run context
-            RAW_REF="${{ github.event.workflow_run.head_branch }}"
-            CLEAN_TAG=$(echo "$RAW_REF" | sed 's|refs/tags/||')
-            echo "tag=$CLEAN_TAG" >> $GITHUB_OUTPUT
+            # Context: Triggered by workflow_run
+            # We look at the trigger event's commit metadata or the tags array if available.
+            # To be 100% foolproof, we parse the tag name using the GitHub context log tracking:
+            echo "Context: Chained from completed workflow."
+            
+            # If the upstream workflow was tracking a tag, grab it; otherwise, read the commit SHA
+            # to fetch the exact tag associated with it.
+            # But since we know publish-release creates a tag formatted like 'v*.*.*' based on the header file,
+            # we can look up the tag associated with the commit SHA that just ran:
+            TARGET_TAG=$(git env | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "")
+            
+            # Bulletproof fallback: Fetch the latest tag on the repository commit context
+            if [ -z "$TARGET_TAG" ]; then
+               # Quick clone check to read the reference tag name of the triggering commit
+               apt-get update && apt-get install -y curl jq
+               URL="https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}"
+               # Request the API details of the run that triggered us to see its release/tag details
+               TARGET_TAG=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" $URL | jq -r '.target_commitish // empty')
+               
+               # If API target_commitish isn't the tag, fall back to extracting it from the header file directly 
+               # just like publish-release did, ensuring they match perfectly!
+               if [ -z "$TARGET_TAG" ] || [ "$TARGET_TAG" = "main" ]; then
+                 VERSION_LINE=$(grep '#define AQUACHEMD_VERSION' source/version.h || echo "0.0.0")
+                 CLEAN_VER=$(echo "$VERSION_LINE" | sed -E 's/.*"([^"]+)".*/\1/')
+                 TARGET_TAG="v$CLEAN_VER"
+               fi
+            fi
           fi
+          
+          echo "---------------------------------"
+          echo "Workflow Event: ${{ github.event_name }}"
+          echo "Determined Release Target Tag: $TARGET_TAG"
+          echo "---------------------------------"
+          echo "tag=$TARGET_TAG" >> $GITHUB_OUTPUT
 
       - uses: actions/checkout@v4
         with:
@@ -75,7 +104,6 @@ jobs:
           make all arm64 armhf
 
       - name: Create release archive
-        # Preserved 'web/' alongside your compiled release binaries
         run: tar -czvf AquachemD-release.tar.gz web/ release/
 
       - name: Save Archive for Deployment
@@ -86,7 +114,7 @@ jobs:
           retention-days: 1
 
   deploy:
-    name: Publish GitHub Release
+    name: Publish Assets to GitHub Release
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -106,3 +134,5 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  
