@@ -23,6 +23,7 @@ typedef enum {
     ACD_TYPE_EZO_PH,
     ACD_TYPE_EZO_ORP,
     ACD_TYPE_EZO_TEMP,
+    ACD_TYPE_EZO_PRS,
     ACD_TYPE_MQTT_TEMP,
     ACD_TYPE_D1W_TEMP,
     #define ACD_IN_FIRST ACD_TYPE_EZO_PH
@@ -66,13 +67,26 @@ typedef enum {
 } acd_state_t;
 
 
+typedef enum {
+    ACD_SCOPE_ALLOW  = 0, // Default / No restriction (ONLY FOR MASTER)
+    ACD_SCOPE_LOCAL  = 1, // Acts as a Soft Limit for specific outputs
+    ACD_SCOPE_GLOBAL = 2  // Acts as a Hard Interlock for the whole system
+} acd_scope_t;
+
+// Inverse the names for conditions to make code easier to read.
+#define ACD_ACTION_ALLOW  ACD_SCOPE_ALLOW
+#define ACD_ACTION_LIMIT  ACD_SCOPE_LOCAL
+#define ACD_ACTION_BLOCK  ACD_SCOPE_GLOBAL
+
 typedef struct acd_key_t {
     acd_type_t type;
     acd_state_t state;
+    acd_scope_t scope;
+    
     char *label;
     char *ID;
     uint8_t index; //values from 0 to 255
-    uint8_t flags; // Any bitmasks (like timer active, or pump type)
+    uint8_t flags; // Any bitmasks (like timer active, pump type, global interlock)
     uint8_t err_cnt;
     
     float value; // sensor uses for current value, pump uses for value of ph/orp when turned on.
@@ -102,10 +116,17 @@ typedef struct runtime_range_t{
 
 #define MAX_DOSING_RANGES 5
 
+// For special_mask in acd_key
+#define TIMER_ACTIVE           (1 << 0) 
+#define PH_PUMP                (1 << 1) 
+#define ORP_PUMP               (1 << 2)
 
-#define TIMER_ACTIVE   (1 << 0) // For special_mask's
-#define PH_PUMP        (1 << 1) // For special_mask's
-#define ORP_PUMP       (1 << 2) // For special_mask's
+#define ACD_FLAG_FAULTED       (1 << 3)   
+#define ACD_FLAG_ACTIVE   (1 << 4)   // not used at present
+
+//#define CONDITION_SCOPE_GLOBAL (1 << 3) // For conditions Set if global interlock, clear if local restriction
+//#define CONDITION_SCOPE_LOCAL  (1 << 4) // ONLY for master key, if on and this is set, then re can read sensors but not dose.
+
 /*
 #define XXX            (1 << 3) // For special_mask's
 #define XXX            (1 << 4) // For special_mask's

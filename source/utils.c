@@ -78,7 +78,7 @@ static void _do_log(const int msg_level, const char *format, va_list args) {
         message[--len] = '\0';
     }
 
-    printf("%-7.7s: %s\n", log_priority_to_str(msg_level), message);
+    printf("%-8.8s: %s\n", log_priority_to_str(msg_level), message);
     fflush(stdout);
 }
 
@@ -437,6 +437,22 @@ const char* acd_state_to_str(acd_state_t state) {
         case ACD_LED_UNKNOWN: 
         default:               return "UNKNOWN";
     }
+}
+
+const char* acd_scope_to_str( acd_scope_t scope) {
+  switch (scope) {
+    case ACD_SCOPE_ALLOW:      return "Allow";
+    case ACD_SCOPE_LOCAL:      return "Local";
+    case ACD_SCOPE_GLOBAL:     return "Global";
+    default:                   return "UNKNOWN";
+  }
+}
+
+const char* acd_condition_met_to_str(bool met) {
+  if (met)
+    return "SAFE";
+  
+  return "UNSAFE";
 }
 
 /**

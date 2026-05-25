@@ -229,7 +229,8 @@ const char* get_devices_json(struct aquachemdata *acddata) {
       item = cJSON_GetObjectItemCaseSensitive(devices_map, curr->ID);
 
       if (IS_CONDITION(curr->type)) {
-        cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
+        //cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
+        cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_condition_met_to_str(curr->met));
         cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), curr->met);
       } else {
         cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), curr->value);
@@ -359,7 +360,7 @@ int json_chars(char *dest, const char *src, size_t dest_len, size_t src_len) {
 int build_logmsg_json(char *buffer, size_t buf_size, int loglevel, const char *src_msg, size_t src_len) {
     // 1. Write the JSON header
     // Use snprintf to prevent overflow; it returns the number of chars that WOULD be written
-    int written = snprintf(buffer, buf_size, "{\"logmsg\":\"%-7s", log_priority_to_str(loglevel));
+    int written = snprintf(buffer, buf_size, "{\"logmsg\":\"%-8.8s", log_priority_to_str(loglevel));
     
     if (written < 0 || (size_t)written >= buf_size) {
         return -1; // Buffer is too small even for the header

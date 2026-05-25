@@ -50,6 +50,8 @@ void precise_delay(long nanoseconds);
 
 const char* acd_state_to_str(acd_state_t state);
 const char* acd_state_to_set_attrib(acd_state_t status);
+const char* acd_condition_met_to_str(bool met);
+const char* acd_scope_to_str( acd_scope_t scope);
 
 
 #define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))  
@@ -63,9 +65,9 @@ float dummy_drift(float range);
 
 #define STR_MATCH(s1, s2) (strtrimcasecmp(s1, s2) == 0)
 
-#define isMASKSET(bitmask, mask) ((bitmask & mask) == mask)
-#define setMASK(bitmask, mask)    (bitmask |= mask)
-#define removeMASK(bitmask, mask) (bitmask &= ~mask)
+#define isMASKSET(bitmask, mask) (((bitmask) & (mask)) == (mask))
+#define setMASK(bitmask, mask)    ((bitmask) |= (mask))
+#define removeMASK(bitmask, mask) ((bitmask) &= ~(mask))
 
 #define ACD_MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define ACD_MIN(x, y) (((x) < (y)) ? (x) : (y))

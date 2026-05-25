@@ -36,7 +36,7 @@ static struct mg_http_serve_opts _http_server_opts_nocache;
 void reset_last_mqtt_status();
 void broadcast_aquachemdstate(struct mg_connection *nc);
 void start_mqtt(struct mg_mgr *mgr);
-static void ws_send(struct mg_connection *nc, char *msg);
+static void ws_send(struct mg_connection *nc, const char *msg);
 bool broadcast_systemd_logmessages(bool acdMgrActive);
 
 
@@ -81,7 +81,7 @@ void reset_dose_event()
   _dose_event.dose_ml = 0;
 }
 
-bool post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml)
+void post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml)
 {
    // Store info and set flag for next run.
    
@@ -157,6 +157,77 @@ void log_mg_str(int level, char *name, struct mg_str str) {
   buf[len] = '\0';
   LOG(level, "%s: %s", name, buf);
 }
+
+
+bool process_sensor_request(char *buffer, size_t buf_size, char *ws_request, float calibrationValue, bool is_calibration)
+{
+  int rtn=EZO_SUCCESS;
+  float value = 0.0f;
+  if (_aquachemd_data == NULL) {
+    goto f_end;
+  }
+
+  //LOG(LOG_ERR,"process_sensor_request() %s '%s'\n",is_calibration?"calibration":"reading", ws_request);
+
+  if (strcasecmp(ws_request, "cal_ph") == 0) {
+    if (is_calibration) {
+      LOG(LOG_NOTICE, "Calibrating pH - %.2f",calibrationValue);
+      rtn = ph_calibrate_by_value(calibrationValue);
+    }
+    if (rtn == EZO_SUCCESS) {
+      LOG(LOG_NOTICE, "Reading pH");
+      ph_reading_t reading = ph_get_reading();
+      if (reading.status == EZO_SUCCESS){value=reading.value; rtn=reading.status; LOG(LOG_NOTICE, "pH reading %.2f",value);}
+    }
+
+  } else if (strcasecmp(ws_request, "cal_orp") == 0) {
+    if (is_calibration) {
+      LOG(LOG_NOTICE, "Calibrating ORP - %.2f",calibrationValue);
+      rtn = orp_calibrate(calibrationValue);
+    }
+    if (rtn == EZO_SUCCESS) {
+      LOG(LOG_NOTICE, "Reading ORP");
+      orp_reading_t reading = orp_get_reading();
+      if (reading.status == EZO_SUCCESS){value=reading.value; rtn=reading.status; LOG(LOG_NOTICE, "ORP reading %.2f",value);}
+    }
+
+  } else if (strcasecmp(ws_request, "cal_rtd") == 0) {
+    if (is_calibration) {
+      LOG(LOG_NOTICE, "Calibrating Temperature - %.2f",calibrationValue);
+      rtn = rtd_calibrate(calibrationValue);
+    }
+    if (rtn == EZO_SUCCESS) {
+      LOG(LOG_NOTICE, "Reading Temperature");
+      rtd_reading_t reading = rtd_get_reading();
+      if (reading.status == EZO_SUCCESS){value=reading.value; rtn=reading.status; LOG(LOG_NOTICE, "Temperature reading %.2f",value);}
+    }
+
+  } else if (strcasecmp(ws_request, "cal_prs") == 0) {
+    if (is_calibration) {
+      LOG(LOG_NOTICE, "Calibrating Pressure - %.2f",calibrationValue);
+      rtn = prs_calibrate(calibrationValue);
+    }
+    if (rtn == EZO_SUCCESS) {
+      LOG(LOG_NOTICE, "Reading Pressure");
+      prs_reading_t reading = prs_get_reading();
+      if (reading.status == EZO_SUCCESS){value=reading.value; rtn=reading.status; LOG(LOG_NOTICE, "Pressure reading %.2f",value);}
+    }
+  }
+
+  f_end:
+
+  if (rtn != EZO_SUCCESS) {
+    snprintf(buffer,buf_size, "{\"type\":\"instant_sensor_message\",\"status\":\"error\",\"error\":\"%d\"}",rtn);
+    return false;
+  } else {
+    snprintf(buffer,buf_size, "{\"type\":\"instant_sensor_message\",\"status\":\"ok\",\"request_type\":\"%s\",\"action_type\":\"%s\",\"value\":\"%.2f\"}",
+             ws_request,
+             is_calibration?"calibration":"reading",
+             value);
+    return true;
+  }
+}
+
 
 
 void send_mqtt(struct mg_connection *nc, const char *toppic, const char *message)
@@ -253,7 +324,7 @@ void serve_file(struct mg_connection *nc, struct mg_http_message *http_msg)
   }
 }
 
-typedef enum {uActioned, uBad, uDevices, uConfig, uSaveConfig, uSaveWebConfig, uSaveSchedules,  uSchedules, uACDmanager, uDoseStats} uriAtype;
+typedef enum {uActioned, uBad, uDevices, uConfig, uSaveConfig, uSaveWebConfig, uSaveSchedules,  uSchedules, uACDmanager, uDoseStats, uCalibrate, uInstantReading} uriAtype;
 
 #define NO_DEVICE         "No matching Device found"
 #define INVALID_VALUE     "Invalid value"
@@ -263,8 +334,8 @@ typedef enum {uActioned, uBad, uDevices, uConfig, uSaveConfig, uSaveWebConfig, u
 
 uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTemp, char **rtnmsg) 
 {
-  uriAtype rtn = uBad;
-  bool found = false;
+  //uriAtype rtn = uBad;
+  //bool found = false;
   int i;
   char *ri1 = (char *)URI;
   char *ri2 = NULL;
@@ -307,6 +378,10 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
     return uACDmanager; // Want to resent updated status
   } else if (strncmp(ri1, "dosestats", 9) == 0) {
     return uDoseStats;
+  } else if (strncmp(ri1, "calibrate", 9) == 0) {
+    return uCalibrate;
+  } else if (strncmp(ri1, "instantreading", 9) == 0) {
+    return uInstantReading;
   } else if (ri2 != NULL && (strncasecmp(ri2, "set", 3) == 0)) {
     for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
       if (uri_strcmp(ri1, curr->ID) && (value == ACD_LED_OFF || value == ACD_LED_ON || value == ACD_LED_ENABLED)) {
@@ -378,6 +453,11 @@ void action_web_request(struct mg_connection *nc, struct mg_http_message *http_m
         const char* devices_json = get_devices_json(_aquachemd_data);
         mg_http_reply(nc, 200, CONTENT_JSON, devices_json);
         break;
+      case uACDmanager: // Ony for debugging, no need to support web request of this, only websocket.
+        char message[1028];
+        build_acdmanager_json(_aquachemd_data, message, sizeof(message));
+        mg_http_reply(nc, 200, CONTENT_JSON, message);
+        break;
       default:
         mg_http_reply(nc, 400, CONTENT_TEXT, GET_RTN_UNKNOWN);
         break;
@@ -392,7 +472,7 @@ void action_websocket_request(struct mg_connection *nc, struct mg_ws_message *wm
   float val;
   char *msg = NULL;
   //char message[2048];
-  char message[6114];
+  char message[7680];
 
   log_mg_str(LOG_DEBUG, "WS: Websocket message", wm->data);
 
@@ -404,7 +484,8 @@ void action_websocket_request(struct mg_connection *nc, struct mg_ws_message *wm
 
   LOG(LOG_DEBUG, "WS: URI %s, Value: %.1f\n", uri, val);
 
-  switch (action_URI(uri, strlen(uri), val, false, &msg)){
+  uriAtype type = action_URI(uri, strlen(uri), val, false, &msg);
+  switch (type){
     case uActioned:
       send_ws_reply(nc, true, NULL);
       break;
@@ -437,6 +518,14 @@ void action_websocket_request(struct mg_connection *nc, struct mg_ws_message *wm
       get_pump_summaries_json(val, true, message, sizeof(message));
       ws_send(nc, message);
       break;
+    case uCalibrate:
+    case uInstantReading:
+      char *last_slash = strrchr(uri, '/') + 1;
+      LOG(LOG_DEBUG, "EZO %s %s with %.2f\n", type==uCalibrate?"Calibrate":"Take instant reading", last_slash, val);
+      process_sensor_request(message, sizeof(message), last_slash, val, type==uCalibrate?true:false);
+      ws_send(nc, message);
+      break;
+
     default:
       send_ws_reply(nc, false, msg);
       break;
@@ -496,13 +585,15 @@ bool action_mqtt_condition_message(acd_key_t *condition, struct mg_mqtt_message 
   LOG(LOG_INFO, "MQTT: Received message for condition '%s': %.*s\n", condition->label, mqtt_msg->data.len, mqtt_msg->data.buf);
   
   if (strncmp(mqtt_msg->data.buf, condition->data.mqtt.target_value, mqtt_msg->data.len) == 0) {
-    LOG(LOG_INFO, "MQTT: Condition '%s' met - value %.*s\n", condition->label, mqtt_msg->data.len, mqtt_msg->data.buf);
-    SET_IF_CHANGED(condition->met, true, _aquachemd_data->is_dirty); // Mark data as dirty so it gets sent to clients right away instead of waiting for next sensor read. 
+    if (SET_IF_CHANGED(condition->met, true, _aquachemd_data->is_dirty)) {
+      LOG(LOG_INFO, "MQTT Condition Change: %s is now SATISFIED\n", condition->label); 
+    } 
     set_key_state(_aquachemd_data, condition, ACD_LED_ON);
     return true;
   } else {
-    LOG(LOG_INFO, "MQTT: Condition '%s' NOT met - value %.*s\n", condition->label, mqtt_msg->data.len, mqtt_msg->data.buf);
-    SET_IF_CHANGED(condition->met, false, _aquachemd_data->is_dirty);
+    if (SET_IF_CHANGED(condition->met, false, _aquachemd_data->is_dirty)) {
+      LOG(LOG_INFO, "MQTT Condition Change: %s is now NOT MET\n", condition->label); 
+    }
     set_key_state(_aquachemd_data, condition, ACD_LED_OFF);
     return true;
   }
@@ -735,7 +826,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
 #define MQTT_PUB_TOPIC_SIZE 250
 
-static void ws_send(struct mg_connection *nc, char *msg)
+static void ws_send(struct mg_connection *nc, const char *msg)
 {
   int size = strlen(msg);
   
@@ -920,7 +1011,7 @@ void broadcast_aquachemdstate(struct mg_connection *nc)
   }
 
   for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c)) {
-    if (is_websocket(c) && !is_websocket_acdmanager(c)) {
+    if (is_websocket(c) /*&& !is_websocket_acdmanager(c)*/) {
       ws_send(c, get_devices_json(_aquachemd_data));
     } else if (is_mqtt(c)) {
       mqtt_broadcast_aquachemdstate(c);

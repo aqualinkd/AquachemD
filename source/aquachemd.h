@@ -13,7 +13,7 @@
 #define SET_DIRTY(flag)    ((flag) = true)
 #define CLEAR_DIRTY(flag)  ((flag) = false)
 
-
+#define SENSOR_FAULT_THRESHOLD 4
 
 //void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
 //bool stateChangeRequest(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
@@ -31,6 +31,34 @@ void intHandler(int sig_num);
  * This macro uses GCC extensions for type safety and to prevent
  * double-evaluation of the `val` argument.
  */
+#include <stdbool.h>
+#include <string.h>
+
+#define SET_IF_CHANGED(src, val, flag) \
+    ({                                                           \
+        __typeof__(src) __new_val = (val);                       \
+        bool __changed = false;                                  \
+        if ((src) != __new_val) {                                \
+            (src) = __new_val;                                   \
+            (flag) = true;   /* Set ONLY on change, never cleared */ \
+            __changed = true;                                    \
+        }                                                        \
+        __changed;           /* Evaluates/returns bool to caller */ \
+    })
+
+#define SET_IF_CHANGED_STRCPY(src, val, flag)                  \
+    ({                                                         \
+        const char *__new_val = (val);                         \
+        bool __changed = false;                                \
+        if (strncmp((src), __new_val, sizeof(src)) != 0) {     \
+            strncpy((src), __new_val, sizeof(src));            \
+            (src)[sizeof(src) - 1] = '\0';                     \
+            (flag) = true;   /* Set ONLY on change, never cleared */ \
+            __changed = true;                                    \
+        }                                                      \
+        __changed;           /* Evaluates/returns bool to caller */ \
+    })
+ /*
 #define SET_IF_CHANGED(src, val, flag) \
     ({                                                           \
         __typeof__(src) __new_val = (val);                       \
@@ -49,7 +77,7 @@ void intHandler(int sig_num);
             (flag) = true;                                     \
         }                                                      \
     })
-
+*/
 
 #define DISPLAY_MSG_SIZE 64
 

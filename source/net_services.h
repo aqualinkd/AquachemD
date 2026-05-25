@@ -7,7 +7,7 @@ bool start_net_services(struct aquachemdata *acddata);
 
 void send_mqtt(struct mg_connection *nc, const char *toppic, const char *message);
 
-bool post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml);
+void post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml);
 
 #define URI_LEN 32
 

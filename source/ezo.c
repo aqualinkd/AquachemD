@@ -90,9 +90,9 @@ static const ezo_addr_map_t ezo_known_devices[] = {
   { 0x62, "ORP"   },
   { 0x63, "pH"    },
   { 0x64, "EC"    },
-  { 0x66, "FLOW"  },
+  { 0x66, "RTD"  },
   { 0x67, "PUMP"  },
-  { 0x68, "RTD"   },
+  { 0x68, "FLOW"   },
   { 0x69, "CO2"   },
   { 0x6A, "O2"    },
   { 0x6B, "PRS"   },
@@ -299,15 +299,34 @@ int ph_calibrate(ph_cal_point_t point, float ph_value)
   return ezo_command(EZO_PH_ADDR, cmd, response, sizeof(response));
 }
 
-int ph_calibrate_mid()  { return ph_calibrate(PH_CAL_MID,  7.00f); }
-int ph_calibrate_low()  { return ph_calibrate(PH_CAL_LOW,  4.00f); }
-int ph_calibrate_high() { return ph_calibrate(PH_CAL_HIGH, 10.00f); }
+int ph_calibrate_mid()  { return ph_calibrate(PH_CAL_MID,  PH_REF_MID); }
+int ph_calibrate_low()  { return ph_calibrate(PH_CAL_LOW,  PH_REF_LOW); }
+int ph_calibrate_high() { return ph_calibrate(PH_CAL_HIGH, PH_REF_HIGH); }
 
 int ph_get_cal_status(ezo_cal_status_t *cal) { return ezo_get_cal_status(EZO_PH_ADDR, cal); }
 int ph_clear_calibration()                    { return ezo_clear_calibration(EZO_PH_ADDR); }
 int ph_get_info(char *info, int len)          { return ezo_get_info(EZO_PH_ADDR, info, len); }
 int ph_get_status(char *status, int len)      { return ezo_get_status(EZO_PH_ADDR, status, len); }
 int ph_sleep()                                { return ezo_sleep(EZO_PH_ADDR); }
+
+int ph_calibrate_by_value(float calibrationValue) {
+    // Dynamically calculate the midpoints
+    float low_mid_boundary  = (PH_REF_LOW + PH_REF_MID) / 2.0f;   // (4.00 + 7.00) / 2 = 5.50f
+    float mid_high_boundary = (PH_REF_MID + PH_REF_HIGH) / 2.0f; // (7.00 + 10.00) / 2 = 8.50f
+
+    //Anything below the low/mid midpoint
+    if (calibrationValue < low_mid_boundary) {
+        return ph_calibrate_low();
+    }
+    // Anything between the low/mid midpoint and mid/high midpoint
+    else if (calibrationValue >= low_mid_boundary && calibrationValue <= mid_high_boundary) {
+        return ph_calibrate_mid();
+    }
+    // Anything above the mid/high midpoint
+    else {
+        return ph_calibrate_high();
+    }
+}
 
 // ─── ORP sensor ───────────────────────────────────────────────────────────────
 
@@ -385,6 +404,38 @@ int rtd_clear_calibration()                    { return ezo_clear_calibration(EZ
 int rtd_get_info(char *info, int len)          { return ezo_get_info(EZO_RTD_ADDR, info, len); }
 int rtd_get_status(char *status, int len)      { return ezo_get_status(EZO_RTD_ADDR, status, len); }
 int rtd_sleep()                                { return ezo_sleep(EZO_RTD_ADDR); }
+
+// ─── Pressure sensor (EZO-PRS) ────────────────────────────────────────────────
+
+prs_reading_t prs_get_reading()
+{
+  prs_reading_t result = {0.0f, -1};
+  char response[32];
+  result.status = ezo_command(EZO_PRS_ADDR, "R", response, sizeof(response));
+  if (result.status == EZO_SUCCESS)
+    result.value = atof(response);
+  return result;
+}
+
+int prs_calibrate(float psi_value)
+{
+  char cmd[32];
+  char response[32];
+  snprintf(cmd, sizeof(cmd), "Cal,%.2f", psi_value);
+  return ezo_command(EZO_PRS_ADDR, cmd, response, sizeof(response));
+}
+
+int prs_calibrate_zero()
+{
+  char response[32];
+  return ezo_command(EZO_PRS_ADDR, "Cal,0", response, sizeof(response));
+}
+
+int prs_get_cal_status(ezo_cal_status_t *cal) { return ezo_get_cal_status(EZO_PRS_ADDR, cal); }
+int prs_clear_calibration()                   { return ezo_clear_calibration(EZO_PRS_ADDR); }
+int prs_get_info(char *info, int len)         { return ezo_get_info(EZO_PRS_ADDR, info, len); }
+int prs_get_status(char *status, int len)     { return ezo_get_status(EZO_PRS_ADDR, status, len); }
+int prs_sleep()                               { return ezo_sleep(EZO_PRS_ADDR); }
 
 // ─── Dosing pump (EZO-PMP) ────────────────────────────────────────────────────
 
@@ -510,16 +561,24 @@ void ezo_i2cdetect()
   printf("\n");
 }
 
+void simulate_read_time()
+{
+  // Sleep for 1 second
+  sleep(1);
+}
+
 // ─── Shared EZO helpers (dummy) ───────────────────────────────────────────────
 
 int ezo_get_info(int address, char *info, int len)
 {
+  simulate_read_time();
   snprintf(info, len, "?I,DUMMY,1.00");
   return EZO_SUCCESS;
 }
 
 int ezo_get_status(int address, char *status, int len)
 {
+  simulate_read_time();
   snprintf(status, len, "?STATUS,P,5.00");
   return EZO_SUCCESS;
 }
@@ -529,6 +588,7 @@ int ezo_sleep(int address)              { return EZO_SUCCESS; }
 
 int ezo_get_cal_status(int address, ezo_cal_status_t *cal)
 {
+  simulate_read_time();
   cal->points = 3;
   return EZO_SUCCESS;
 }
@@ -537,17 +597,20 @@ int ezo_get_cal_status(int address, ezo_cal_status_t *cal)
 
 ph_reading_t ph_get_reading()
 {
+  simulate_read_time();
   return (ph_reading_t){ 7.20f + dummy_drift(0.15f), EZO_SUCCESS };
 }
 
 ph_reading_t ph_get_reading_compensated(float temp_c)
 {
+  simulate_read_time();
   (void)temp_c;
   return (ph_reading_t){ 7.20f + dummy_drift(0.10f), EZO_SUCCESS };
 }
 
 ph_reading_t ph_get_reading_filtered()
 {
+  simulate_read_time();
   // Call dummy ph_get_reading 3x and return median — same logic as real version
   float r[3];
   for (int i = 0; i < 3; i++) r[i] = ph_get_reading().value;
@@ -559,14 +622,15 @@ ph_reading_t ph_get_reading_filtered()
 
 int ph_calibrate(ph_cal_point_t point, float ph_value)
 {
+  simulate_read_time();
   const char *point_str[] = {"low", "mid", "high"};
   printf("[DUMMY] pH calibrate %s at %.2f — OK\n", point_str[point], ph_value);
   return EZO_SUCCESS;
 }
 
-int ph_calibrate_mid()  { return ph_calibrate(PH_CAL_MID,  7.00f); }
-int ph_calibrate_low()  { return ph_calibrate(PH_CAL_LOW,  4.00f); }
-int ph_calibrate_high() { return ph_calibrate(PH_CAL_HIGH, 10.00f); }
+int ph_calibrate_mid()  { return ph_calibrate(PH_CAL_MID,  PH_REF_MID); }
+int ph_calibrate_low()  { return ph_calibrate(PH_CAL_LOW,  PH_REF_LOW); }
+int ph_calibrate_high() { return ph_calibrate(PH_CAL_HIGH,  PH_REF_HIGH); }
 
 int ph_get_cal_status(ezo_cal_status_t *cal) { return ezo_get_cal_status(EZO_PH_ADDR, cal); }
 int ph_clear_calibration()                    { return ezo_clear_calibration(EZO_PH_ADDR); }
@@ -574,15 +638,36 @@ int ph_get_info(char *info, int len)          { return ezo_get_info(EZO_PH_ADDR,
 int ph_get_status(char *status, int len)      { return ezo_get_status(EZO_PH_ADDR, status, len); }
 int ph_sleep()                                { return ezo_sleep(EZO_PH_ADDR); }
 
+int ph_calibrate_by_value(float calibrationValue) {
+    // Dynamically calculate the midpoints
+    float low_mid_boundary  = (PH_REF_LOW + PH_REF_MID) / 2.0f;   // (4.00 + 7.00) / 2 = 5.50f
+    float mid_high_boundary = (PH_REF_MID + PH_REF_HIGH) / 2.0f; // (7.00 + 10.00) / 2 = 8.50f
+
+    //Anything below the low/mid midpoint
+    if (calibrationValue < low_mid_boundary) {
+        return ph_calibrate_low();
+    }
+    // Anything between the low/mid midpoint and mid/high midpoint
+    else if (calibrationValue >= low_mid_boundary && calibrationValue <= mid_high_boundary) {
+        return ph_calibrate_mid();
+    }
+    // Anything above the mid/high midpoint
+    else {
+        return ph_calibrate_high();
+    }
+}
+
 // ─── ORP sensor (dummy) ───────────────────────────────────────────────────────
 
 orp_reading_t orp_get_reading()
 {
+  simulate_read_time();
   return (orp_reading_t){ 650.0f + dummy_drift(20.0f), EZO_SUCCESS };
 }
 
 int orp_calibrate(float mv_value)
 {
+  simulate_read_time();
   printf("[DUMMY] ORP calibrate at %.2f mV — OK\n", mv_value);
   return EZO_SUCCESS;
 }
@@ -597,11 +682,15 @@ int orp_sleep()                                { return ezo_sleep(EZO_ORP_ADDR);
 
 rtd_reading_t rtd_get_reading()
 {
+  simulate_read_time();
   // Return between 28 and 29
   //return (rtd_reading_t){ 28.5f + dummy_drift(0.5f), RTD_SCALE_CELSIUS, EZO_SUCCESS };
 
   // Return between -5 and 75
-  return (rtd_reading_t){ 35.0f + dummy_drift(40.0f), RTD_SCALE_CELSIUS, EZO_SUCCESS };
+  //return (rtd_reading_t){ 35.0f + dummy_drift(40.0f), RTD_SCALE_CELSIUS, EZO_SUCCESS };
+
+  return (rtd_reading_t){ 30.0f + dummy_drift(1.0f), RTD_SCALE_CELSIUS, EZO_SUCCESS };
+  
 }
 
 int rtd_set_scale(rtd_scale_t scale)
@@ -613,6 +702,7 @@ int rtd_set_scale(rtd_scale_t scale)
 
 int rtd_calibrate(float known_temp)
 {
+  simulate_read_time();
   printf("[DUMMY] RTD calibrate at %.2f — OK\n", known_temp);
   return EZO_SUCCESS;
 }
@@ -622,6 +712,35 @@ int rtd_clear_calibration()                    { return ezo_clear_calibration(EZ
 int rtd_get_info(char *info, int len)          { return ezo_get_info(EZO_RTD_ADDR, info, len); }
 int rtd_get_status(char *status, int len)      { return ezo_get_status(EZO_RTD_ADDR, status, len); }
 int rtd_sleep()                                { return ezo_sleep(EZO_RTD_ADDR); }
+
+// ─── Pressure sensor (dummy) ──────────────────────────────────────────────────
+
+prs_reading_t prs_get_reading()
+{
+  simulate_read_time();
+  // Return a plausible clean pool filter pressure around 15.0 psi
+  return (prs_reading_t){ 15.0f + dummy_drift(1.0f), EZO_SUCCESS };
+}
+
+int prs_calibrate(float psi_value)
+{
+  simulate_read_time();
+  printf("[DUMMY] PRS calibrate at %.2f psi — OK\n", psi_value);
+  return EZO_SUCCESS;
+}
+
+int prs_calibrate_zero()
+{
+  simulate_read_time();
+  printf("[DUMMY] PRS calibrate zero (atmospheric) — OK\n");
+  return EZO_SUCCESS;
+}
+
+int prs_get_cal_status(ezo_cal_status_t *cal) { return ezo_get_cal_status(EZO_PRS_ADDR, cal); }
+int prs_clear_calibration()                   { return ezo_clear_calibration(EZO_PRS_ADDR); }
+int prs_get_info(char *info, int len)         { return ezo_get_info(EZO_PRS_ADDR, info, len); }
+int prs_get_status(char *status, int len)     { return ezo_get_status(EZO_PRS_ADDR, status, len); }
+int prs_sleep()                               { return ezo_sleep(EZO_PRS_ADDR); }
 
 // ─── Dosing pump (dummy) ──────────────────────────────────────────────────────
 
@@ -655,6 +774,7 @@ int pump_set_direction(pump_dir_t dir)
 
 pump_status_t pump_get_status()
 {
+  simulate_read_time();
   return (pump_status_t){ 0.0f, 0, EZO_SUCCESS };
 }
 

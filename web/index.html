@@ -1596,6 +1596,14 @@
         setTileThresholds(id, value, status);
       }
 
+      if (_config?.tile_settings?.disply_temp_in_f) {
+        LOG("UOM for "+id+" is "+ext);
+        if (ext.toLowerCase() == "°c" || ext.toLowerCase() == "&deg;c" ) {
+          value = (value * 9/5) + 32;
+          ext = "°f"; 
+        }
+      }
+
       var tile;
       if ((tile = document.getElementById(id + '_tile_icon_value')) != null) {
         if (_config.devices[id]?.precision !== undefined && isActuallyNumeric(value)) {
@@ -1789,6 +1797,14 @@
     }
 
 
+    function isDeviceOff(id) {
+      // 1 = on, 2 = enabled
+      if (_devices.devices[id].int_status != 1 && _devices.devices[id].int_status != 2) {
+        return true;
+      }
+
+      return false;
+    }
 
     function getTileExtraStatusText(id) {
 
@@ -1824,11 +1840,13 @@
         return;
       }
 
-      const isOff = status?.toLowerCase() === 'off' || status?.toLowerCase() === 'disabled';
+      //const isOff = status?.toLowerCase() === 'off' || status?.toLowerCase() === 'disabled' || status?.toLowerCase() === 'unsafe';
+      const isOff = isDeviceOff(id);
+      LOG("Device "+id+" isOff="+isOff);
 
       // Display is a special status to "brighten up" sensor values. 
       if (status != "on" && status != "off" && status != "enabled" && status != "disabled" && status != "flash"
-        && status != "rangecritical" && status != "rangewarning" && status != "rangeoptimal") {
+        && status != "rangecritical" && status != "rangewarning" && status != "rangeoptimal" && status != "safe" && status != "unsafe") {
         if (status == "unknown") {
           status = "Off"; // Just set it off for the moment
         } else {
@@ -1877,7 +1895,7 @@
         if (status != null) {
           if (status == 'enabled' || status == 'flash') {
             setTileIconClassList(id, "enabled");
-          } else if (status == 'off' || status == 'disabled') {
+          } else if (status == 'off' || status == 'disabled' || status == 'unsafe') {
             setTileIconClassList(id, "disabled");
           } else if (status == 'on' && _devices.devices[id]?.attributes?.includes(_DeviceAttributes.HEATER)) {
             setTileIconClassList(id, "heat");
@@ -1888,7 +1906,7 @@
             } else {
               setTileIconClassList(id, "cool");
             }
-          } else if (status == 'on') {
+          } else if (status == 'on' || status == 'safe') {
             if (type == _DeviceTypes.VALUE || type == _DeviceTypes.SENSOR) {
               setTileIconClassList(id, "rangeoptimal");
             } else {

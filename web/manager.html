@@ -2,7 +2,7 @@
 <html lang='en'>
 
 <head>
-  <title>AqualinkD Management Console</title>
+  <title>Management Console</title>
   <meta http-equiv='Content-Type' content='text/html; charset=windows-1252'>
   <meta name='viewport' content='width=device-width'>
   <meta name='apple-mobile-web-app-capable' content='yes'>
@@ -521,6 +521,28 @@
   }
   */
 
+  .restrictable-area {
+    position: relative !important; 
+  }
+
+  /* The glass overlay that sits on top */
+  .restrictable-area .area-restricted {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgb(211, 211, 211, 0.4); /* grey with 40% opacity */
+  /*color: #333;*/
+    color: black;
+    display: flex;
+    align-items: center;     /* Centers text vertically */
+    justify-content: center;   /* Centers text horizontally */
+    font-weight: bold;
+    font-size: 16px;
+    z-index: 10;            /* Forces it above the table buttons */
+  }
+
   </style>
   <script type='text/javascript'>
   //'use strict';
@@ -555,10 +577,8 @@
         config: "https://raw.githubusercontent.com/aqualinkd/AqualinkD/refs/heads/master/web/config.json"
     },
     aquachemd: {
-        //version: "https://api.github.com/repos/aqualinkd/AquachemD/releases",
-        version: "https://api.github.com/repos/aqualinkd/AqualinkD/releases",
-        config: "https://raw.githubusercontent.com/aqualinkd/AqualinkD/refs/heads/master/web/config.json"
-        //config: "https://raw.githubusercontent.com/aquachemd/AqualinkD/refs/heads/master/web/config.json"
+        version: "https://api.github.com/repos/aqualinkd/aquachemd/releases",
+        config: "https://raw.githubusercontent.com/aqualinkd/aquachemd/refs/heads/master/web/config.json"
     }
 };
 
@@ -681,6 +701,7 @@
   }
 
   function update_log_message(message) {
+    LOG("message='"+message+"'");
     if(_log_div_pressed == -1) {
       document.getElementById("logs").addEventListener("mousedown", function(e) {
         _log_div_pressed = true;
@@ -693,10 +714,10 @@
     //console.log(message);
     var element = document.createElement("div");
     element.classList.add("logline");
-    if(message.startsWith("Error:")) {
+    if(message.startsWith("Error")) {
       element.classList.add("logmsgerror");
     }
-    if(message.startsWith("Warning:")) {
+    if(message.startsWith("Warning")) {
       element.classList.add("logmsgwarning");
     }
     var logcontainer = document.getElementById("logs");
@@ -726,7 +747,7 @@
     };
     send_command(msg);
   }
-
+/*
   function setlogmask(caller) {
     //console.log(caller.id);
     var id = parseInt(caller.id.split('_')[1]);
@@ -751,7 +772,7 @@
     }
     send_command(msg);
   }
-
+*/
   function requestFileDownload(caller) {
     var msg = {};
     if(caller.id == "downloadlog") {
@@ -853,22 +874,12 @@
     closeconfig();
   }
 
-  function clearconfigtable() {
-    const configtable = document.getElementById("config_table");
-    while(configtable.rows.length > 0) {
-      configtable.deleteRow(0);
-    }
-  }
+
 
   function closeconfig() {
     clearconfigtable();
     document.getElementById("config_options").classList.add("hide");
     document.getElementById("config_options_pane").classList.add("hide");
-  }
-
-  function resetConfig(caller) {
-    clearconfigtable();
-    populateconfigtable();
   }
 
   function showConfig(data) {
@@ -883,721 +894,35 @@
     renderConfigTable();
   }
 
-  function addConfigRow(hideLineSeperator, data, obj, row = -1, deletable = false) {
-    
-    //console.log("addConfigRow "+ JSON.stringify(data, null, 2));
-
-    const configtable = document.getElementById("config_table");
-    const newRow = configtable.insertRow(row);
-    /*
-    if (row==null) {
-      const newRow = configtable.insertRow();
-    } else {
-      newRow = row;
-    }*/
-    if(!hideLineSeperator) {
-      //newRow.style.borderBottom = "1px solid black";
-      newRow.style.borderTop = "1px solid black";
-    }
-    //console.log(data[obj]["valid values"]+" == "+ obj["valid values"]);
-    //console.log(data[obj].value+" == "+ obj.value);
-    const cell1 = newRow.insertCell();
-    const cell2 = newRow.insertCell();
-    const cell3 = newRow.insertCell();
-    cell1.textContent = obj.toString();
-    cell1.style.paddingLeft = "20px";
-    cell3.textContent = " ";
-    // Add DELETE button deletable
-    if(deletable) {
-      cell3.innerHTML = '<input type="button" class="config_option_deletebutton" id="delete" key="' + obj.toString() + '" value="X" onclick="deleteCfgOption(this);">';
-    }
-    var input;
-    if(data[obj]["valid values"] !== undefined) {
-      //console.log(data[obj]["valid values"]);
-      input = document.createElement("select");
-      const array = data[obj]["valid values"];
-      for(var i = 0; i < array.length; i++) {
-        var option = document.createElement("option");
-        option.value = array[i];
-        option.text = array[i];
-        if(array[i].toUpperCase() == data[obj].value.toUpperCase()) {
-          option.selected = true;
-        }
-        input.setAttribute('key', obj.toString());
-        input.addEventListener('change', cfgValueChanged);
-        input.appendChild(option);
-      }
-      input.addEventListener('change', cfgValueChanged);
-      //if (data[obj].force_restart == "yes") {
-      //    input.addEventListener('click', cfgAlertForceRestart);
-      // }
-      cell2.appendChild(input);
-    } else if(data[obj].type == "string") {
-      //const 
-      input = document.createElement("input");
-      input.type = "text";
-      if(data[obj].value != "(null)") {
-        input.value = data[obj].value;
-      }
-      input.setAttribute('key', obj.toString());
-      input.addEventListener('change', cfgValueChanged);
-      //if (data[obj].force_restart == "yes") {
-      //    input.addEventListener('click', cfgAlertForceRestart);
-      //}
-      cell2.appendChild(input);
-    } else if(data[obj].type == "int") {
-      //const 
-      input = document.createElement("input");
-      input.type = "number";
-      if(data[obj].value != -999) {
-        input.value = data[obj].value;
-      }
-      input.size = 4;
-      input.step = 1;
-      input.setAttribute('key', obj.toString());
-      input.addEventListener('change', cfgValueChanged);
-      //if (data[obj].force_restart == "yes") {
-      //    input.addEventListener('click', cfgAlertForceRestart);
-      //}
-      cell2.appendChild(input);
-    } else if(data[obj].type == "float") {
-      //const 
-      input = document.createElement("input");
-      input.type = "number";
-      input.value = data[obj].value;
-      input.size = 4;
-      input.step = 0.01;
-      input.setAttribute('key', obj.toString());
-      input.addEventListener('change', cfgValueChanged);
-      //if (data[obj].force_restart == "yes") {
-      //    input.addEventListener('click', cfgAlertForceRestart);
-      //}
-      cell2.appendChild(input);
-    } else if(data[obj].type == "hex") {
-      //const 
-      input = document.createElement("input");
-      input.type = "text";
-      input.value = data[obj].value;
-      input.size = 4;
-      input.setAttribute('key', obj.toString());
-      input.addEventListener('change', cfgValueChanged);
-      //if (data[obj].force_restart == "yes") {
-      //    input.addEventListener('click', cfgAlertForceRestart);
-      //}
-      cell2.appendChild(input);
-    } else {
-      cell2.textContent = data[obj].value;
-    }
-    // Set any generic stuff.
-    if(typeof input !== "undefined") {
-      if(data[obj].force_restart == "yes") {
-        input.addEventListener('click', cfgAlertForceRestart);
-      }
-      if(data[obj].greyed_out == "yes") {
-        console.log("GREYED OUT");
-        console.log(newRow);
-        newRow.style.opacity = '0.4'; // Sets 40% opacity
-        input.enabled = false;
-        input.disabled = true;
-      }
-    }
-  }
-
-  function addButtonOptionRow(key = 0, isVirtual) {
-    //if ( isVirtual == true && key == 0 ) {
-    //  if (_addedBlankVirtualButton == true) {
-    //    return;
-    //  }
-    //  key = 1
-    //}
-    const buttonTypelist = ["pumpIndex", "pumpID", "pumpType", "pumpName", "pumpMaxSpeed", "pumpMinSpeed", "lightMode", "runtime"];
-    const virtButtonTypelist = ["pumpIndex", "pumpID", "pumpType", "pumpName", "pumpMaxSpeed", "pumpMinSpeed", "lightMode", "runtime", "onetouchID", "altLabel"];
-    const configtable = document.getElementById("config_table");
-    const newRow = configtable.insertRow();
-    var cell1 = newRow.insertCell();
-    var cell2 = newRow.insertCell();
-    var cell3 = newRow.insertCell();
-    cell1.style.paddingLeft = "20px";
-    cell1.style.fontSize = "small";
-    cell2.style.fontSize = "small";
-    cell3.style.fontSize = "small";
-    var blist = isVirtual ? virtButtonTypelist : buttonTypelist;
-    var options = "";
-    for(const index in blist) {
-      if(!_config[key][key + "_" + blist[index]]) {
-        options = options + '<option value="' + blist[index] + '">' + blist[index] + '</option>';
-      }
-    }
-    cell1.innerHTML = 'Add <select id="add_button_type"><option value="" selected="true"></option>' + options + '</select>';
-    cell1.setAttribute('button_key', key);
-    cell1.addEventListener('change', cfgAddButtonOption);
-    //if ( isVirtual == true ){
-    //  _addedBlankVirtualButton = true; 
-    //}
-  }
-
-  function addLightProgramRow(num = 0, row = -1) {
-    //console.log("addLightProgramRow( "+num+" )");
-    if(num == 0) {
-      if(_addedBlankLightProgram == true) {
-        return;
-      }
-      //num = 1
-    }
-    if(num >= _config.max_light_programs) {
-      console.log("MAX LIGHTS REACHED");
-      _addedBlankLightProgram = true;
-      return;
-    }
-    const configtable = document.getElementById("config_table");
-    if(num == 0) {
-      var newRow = configtable.insertRow();
-      var cell1 = newRow.insertCell();
-      cell1.colSpan = 3;
-      cell1.style.fontSize = "small";
-      cell1.style.paddingLeft = "5px";
-      cell1.innerHTML = "Custom Light Programs";
-      cell1.style.borderTop = "1px solid black";
-    }
-    var newRow = configtable.insertRow(row);
-    var cell1 = newRow.insertCell();
-    var cell2 = newRow.insertCell();
-    var cell3 = newRow.insertCell();
-    cell1.style.paddingLeft = "20px";
-    const key = 'light_program_' + String(num + 1).padStart(2, '0')
-    cell1.innerHTML = 'Add ' + key;
-    cell1.setAttribute('label', key);
-    const input = document.createElement("input");
-    input.type = "text";
-    //input.setAttribute('light_program_key', key);
-    input.setAttribute('key', key);
-    input.addEventListener('change', cfgAddLightProgram);
-    //input.addEventListener('change', cfgValueUnhide);
-    cell2.appendChild(input);
-    //cell1.setAttribute('button_key', key);
-    //cell1.addEventListener('change', cfgAddButtonOption);
-    _addedBlankLightProgram = true;
-  }
-
-  function addVirtualButtonRow(num = 0, row = -1) {
-    if(num == 0) {
-      if(_addedBlankVirtualButton == true) {
-        return;
-      }
-    }
-    num++;
-    if(num >= _config.max_vbuttons) {
-      console.log("MAX VIRTUAL BUTTONS REACHED");
-      _addedBlankVirtualButton = true;
-      return;
-    }
-    const virtButtonTypelist = ["pumpIndex", "pumpID", "pumpType", "pumpName", "pumpMaxSpeed", "pumpMinSpeed", "lightMode", "runtime", "onetouchID", "altLabel"];
-    const configtable = document.getElementById("config_table");
-    const vbname = "virtual_button_" + String(num).padStart(2, '0');
-    const vblabel = vbname + "_label";
-    
-    var newRow = configtable.insertRow();
-    var cell1 = newRow.insertCell();
-    cell1.colSpan = 3;
-    cell1.style.fontSize = "small";
-    cell1.style.paddingLeft = "5px";
-    cell1.innerHTML = vbname + " ( <b>Aux_V" + num + "</b> )";
-    cell1.style.borderTop = "1px solid black";
-
-    newRow = configtable.insertRow();
-    //newRow.style.borderTop = "1px solid black";
-    var cell1 = newRow.insertCell();
-    var cell2 = newRow.insertCell();
-    var cell3 = newRow.insertCell();
-    cell1.style.paddingLeft = "20px";
-    cell1.textContent = vblabel;
-    const input = document.createElement("input");
-    input.type = "text";
-    input.setAttribute('key', vblabel);
-    //input.addEventListener('change', cfgValueChanged);
-    input.addEventListener('change', cfgValueUnhide);
-    cell2.appendChild(input);
-    ///////////
-    
-    newRow = configtable.insertRow();
-    //newRow.style.hide = true;
-    newRow.style.display = 'none';
-    cell1 = newRow.insertCell();
-    cell2 = newRow.insertCell();
-    cell3 = newRow.insertCell();
-    
-    cell1.style.paddingLeft = "20px";
-    
-    cell1.style.fontSize = "small";
-    cell2.style.fontSize = "small";
-    cell3.style.fontSize = "small";
-    
-    var options = "";
-    for(const index in virtButtonTypelist) {
-      options = options + '<option value="' + virtButtonTypelist[index] + '">' + virtButtonTypelist[index] + '</option>';
-    }
-    cell1.innerHTML = 'Add <select id="add_button_type"><option value="" selected="true"></option>' + options + '</select>';
-    cell1.setAttribute('button_key', vbname);
-    cell1.addEventListener('change', cfgAddButtonOption);
-    _addedBlankVirtualButton = true;
-  }
-
-  function cfgValueUnhide(event) {
-    var key = event.srcElement.getAttribute('key');
-    var value = event.srcElement.value;
-    if(key.startsWith("virtual_button_")) {
-      var js = {};
-      var jso = {};
-      js.value = value;
-      js.type = "string";
-      js.advanced = "no";
-      jso[key] = js;
-      _config[key.slice(0, 17)] = jso;
-      console.log(_config);
-    }
-    //console.log("cfgValueUnhide key="+key+" value="+value);
-    event.target.removeEventListener('change', cfgValueUnhide);
-    event.target.addEventListener('change', cfgValueChanged);
-    // Show the next table row.
-    event.target.parentNode.parentNode.nextSibling.style.display = '';
-    // If sensor show next 2 rows.
-    if(key.startsWith("sensor_")) {
-      event.srcElement.parentNode.parentNode.childNodes[0].innerHTML = key;
-      event.target.parentNode.parentNode.nextSibling.nextSibling.style.display = '';
-      event.target.parentNode.parentNode.nextSibling.nextSibling.nextSibling.style.display = '';
-    }
-    //console.log(event);
-  }
-
-  function deleteCfgOption(event) {
-    // Rebuild whole config table, or just delete single row.
-    // Rebuild table is better.
-    let rebuild = true;
-    //var id = event.srcElement.getAttribute('id');
-    var key = event.getAttribute('key');
-    let deleted = false;
-    //var value = event.srcElement.value;
-    //console.log(event.parentNode.parentNode);
-    //console.log("deleteCfgOption - "+key);
-    //console.log(_config[key]);
-    //console.log(_config);
-    if(!rebuild) {
-      const configtable = document.getElementById("config_table");
-      for(let i = 0; i < configtable.rows.length; i++) {
-        //console.log(configtable.rows[i].cells[2]);
-        try {
-          if(configtable.rows[i].cells[2].childNodes[0].getAttribute('key') == key) {
-            //configtable.deleteRow(i);
-            deleted = true;
-          }
-        } catch (e) {}
-      }
-    } else {
-      deleted = true;
-    }
-    //event.parentNode.parentNode.style.display = 'none'; 
-    if(deleted && key.startsWith("virtual_button") && key.endsWith("_label")) {
-      //console.log(key.slice(0, 17));
-      delete _config[key.slice(0, 17)];
-      // Delete the whole entity
-    } else if(deleted && key.startsWith("virtual_button")) {
-      delete _config[key.slice(0, 17)][key];
-    } else if(deleted && key.startsWith("button")) {
-      delete _config[key.slice(0, 9)][key];
-      //console.log(key.slice(0, 9));
-    } else if(deleted && key.startsWith("sensor")) {
-      //console.log(key.slice(0, 9));
-      delete _config[key.slice(0, 9)][key];
-    } else if(deleted && key.startsWith("light_program_")) {
-      //console.log(key.slice(0, 9));
-      delete _config[key];
-    } else {
-      //console.log("delete - Unknown delete option " + key);
-    }
-    if(rebuild) {
-      resetConfig(null);
-    }
-    console.log(_config);
-  }
-
-  function addSensorRow(num = 0, row = -1) {
-    if(num == 0) {
-      if(_addedBlankSensor == true) {
-        return;
-      }
-      //num = 1
-    }
-    if(num >= _config.max_sensors) {
-      console.log("MAX SENSORS REACHED");
-      _addedBlankSensor = true;
-      return;
-    }
-    const configtable = document.getElementById("config_table");
-    if(num == 0) {
-      var newRow = configtable.insertRow();
-      var cell1 = newRow.insertCell();
-      cell1.colSpan = 3;
-      cell1.style.fontSize = "small";
-      cell1.style.paddingLeft = "5px";
-      cell1.innerHTML = "Sensors";
-      cell1.style.borderTop = "1px solid black";
-    }
-    var newRow = configtable.insertRow(row);
-    if(num != 0) {
-      newRow.style.borderTop = "1px solid black";
-    }
-    const key = 'sensor_' + String(num + 1).padStart(2, '0');
-    // Add sensor_xx_path row
-    var cell1 = newRow.insertCell();
-    var cell2 = newRow.insertCell();
-    //var cell3 = newRow.insertCell();
-    //console.log("num="+num+" String="+String(num+1)+" Key="+key);
-    cell1.style.paddingLeft = "20px";
-    cell1.innerHTML = "<small>Add</small> " + key + "_path";
-    var input = document.createElement("input");
-    input.type = "text";
-    input.setAttribute('key', key + "_path");
-    input.setAttribute('root_key', key);
-    input.id = key + "_path";
-    input.addEventListener('change', cfgAddSensor);
-    input.addEventListener('change', cfgValueUnhide);
-    cell2.appendChild(input);
-    // Add sensor_xx_label row
-    if(row != -1) {
-      row++
-    };
-    newRow = configtable.insertRow(row);
-    newRow.style.display = 'none';
-    cell1 = newRow.insertCell();
-    cell2 = newRow.insertCell();
-    //cell3 = newRow.insertCell();
-    cell1.style.paddingLeft = "20px";
-    cell1.innerHTML = key + "_label";
-    input = document.createElement("input");
-    input.type = "text";
-    input.setAttribute('key', key + "_label");
-    input.setAttribute('root_key', key);
-    input.id = key + "_label";
-    input.addEventListener('change', cfgAddSensor);
-    cell2.appendChild(input);
-    // Add sensor_xx_factor row
-    if(row != -1) {
-      row++
-    };
-    newRow = configtable.insertRow(row);
-    newRow.style.display = 'none';
-    cell1 = newRow.insertCell();
-    cell2 = newRow.insertCell();
-    //cell3 = newRow.insertCell();
-    cell1.style.paddingLeft = "20px";
-    cell1.innerHTML = key + "_factor";
-    input = document.createElement("input");
-    input.type = "number";
-    input.size = 4;
-    input.step = 0.01;
-    input.setAttribute('key', key + "_factor");
-    input.setAttribute('root_key', key);
-    input.id = key + "_factor";
-    input.addEventListener('change', cfgAddSensor);
-    cell2.appendChild(input);
-    // Add sensor_xx_uom row
-    if(row != -1) {
-      row++
-    };
-    newRow = configtable.insertRow(row);
-    newRow.style.display = 'none';
-    cell1 = newRow.insertCell();
-    cell2 = newRow.insertCell();
-    cell1.style.paddingLeft = "20px";
-    cell1.innerHTML = key + "_uom";
-    input = document.createElement("input");
-    input.type = "text";
-    input.setAttribute('key', key + "_uom");
-    input.setAttribute('root_key', key);
-    input.id = key + "_uom";
-    input.addEventListener('change', cfgAddSensor);
-    cell2.appendChild(input);
-    _addedBlankSensor = true;
-  }
-
-  function cfgAddButtonOption(event) {
-    var type = event.srcElement.value;
-    var key = event.srcElement.parentNode.getAttribute('button_key');
-    for(var obj in _config) {
-      if(obj.toString() == key) {
-        var js = {};
-        js.advanced = "no";
-        switch (type) {
-          case "pumpIndex":
-          case "lightMode":
-          case "onetouchID":
-          case "pumpMaxSpeed":
-          case "pumpMinSpeed":
-            js.type = "int";
-            break;
-          case "pumpID":
-            js.type = "hex";
-            break;
-          case "pumpType":
-            js.type = "string";
-            let validvalues = ["", "JANDY ePUMP", "Pentair VS", "Pentair VF"];
-            js['valid values'] = validvalues;
-            break;
-          case "pumpName":
-          case "altLabel":
-          case "runtime":
-            js.type = "string";
-            break;
-        }
-        js.value = "";
-        _config[obj][key + "_" + type] = js;
-        break;
-      }
-    }
- 
-    const configtable = document.getElementById("config_table");
-    for(let i = 0; i < configtable.rows.length; i++) {
-      if(configtable.rows[i].cells[0].getAttribute('button_key') !== null) {
-        if(configtable.rows[i].cells[0].getAttribute('button_key') == key) {
-          addConfigRow(true, _config[obj], key + "_" + type, i, true);
-          break;
-        }
-      }
-    }
-  }
-
-  function cfgAddLightProgram(event) {
-    var value = event.srcElement.value;
-    var key = event.srcElement.getAttribute('key');
-    //console.log(key + " = "+ value);
-    event.srcElement.parentNode.parentNode.childNodes[0].innerHTML = key;
-    //event.target.innerHTML = key;
-    //event.srcElement.parentNode.parentNode.childNodes[1].childNodes[0].removeEventListener('change', cfgAddLightProgram);
-    //event.srcElement.parentNode.parentNode.childNodes[1].childNodes[0].addEventListener('change', cfgValueChanged);
-    event.target.removeEventListener('change', cfgAddLightProgram);
-    event.target.addEventListener('change', cfgValueChanged);
-    var js = {};
-    js.advanced = "yes";
-    js.type = "string";
-    js.value = value;
-    _config[key] = js;
-    //console.log(_config);
-    const configtable = document.getElementById("config_table");
-    for(let i = 0; i < configtable.rows.length; i++) {
-      if(configtable.rows[i].cells[0].getAttribute('label') !== null) {
-        //console.log(configtable.rows[i].cells[0].innerHTML+" test= "+key);
-        if(configtable.rows[i].cells[0].getAttribute('label') == key) {
-          addLightProgramRow(parseInt(key.match(/[0-9]+/)), i + 1);
-          break;
-        }
-      }
-    }
-  }
-
-  function cfgAddSensor(event) {
-    var value = event.srcElement.value;
-    var key = event.srcElement.getAttribute('key');
-    var root_key = event.srcElement.getAttribute('root_key');
-    //console.log(key + " = "+ value);
-    //event.srcElement.parentNode.parentNode.childNodes[1].childNodes[0].removeEventListener('change', cfgAddLightProgram);
-    //event.srcElement.parentNode.parentNode.childNodes[1].childNodes[0].addEventListener('change', cfgValueChanged);
-    event.target.removeEventListener('change', cfgAddSensor);
-    event.target.addEventListener('change', cfgValueChanged);
-    var js = {};
-    js.advanced = "yes";
-    if(key.endsWith("_factor")) {
-      js.type = "float";
-    } else {
-      js.type = "string";
-    }
-    js.value = value;
-    //_config[key] = js;
-    if(_config[root_key]) {
-      //console.log("Json exists");
-      _config[root_key][key] = js;
-    } else {
-      //console.log("Json not exists");
-      jsobj = {};
-      jsobj.advanced = "yes";
-      jsobj[key] = js;
-      _config[root_key] = jsobj
-    }
-    //console.log(_config);
-    // If all 3 have an entry, add another sensor
-    if((document.getElementById(root_key + "_path").value) && (document.getElementById(root_key + "_label").value) && (document.getElementById(root_key + "_factor").value) && (document.getElementById(root_key + "_uom").value)) {
-      const configtable = document.getElementById("config_table");
-      //console.log("Searching for key "+key+" | root key "+root_key);
-      var found = false;
-      for(let i = 0; i < configtable.rows.length; i++) {
-        try {
-          if(root_key === configtable.rows[i].cells[0].innerHTML.substring(0, root_key.length)) {
-            //console.log("Found "+configtable.rows[i].cells[0].innerHTML);
-            found = true;
-          } else if(found == true) {
-            //console.log("Should Add add element here index="+i+" name="+configtable.rows[i].cells[0].innerHTML);
-            addSensorRow(parseInt(key.match(/[0-9]+/)), i);
-            break;
-          }
-        } catch (e) {}
-      }
-    }
-  }
-
   function isNumber(n) {
     return !isNaN(parseFloat(n)) && !isNaN(n - 0)
   }
 
-  function populateconfigtable(data = null) {
-    _addedBlankLightProgram = false;
-    _addedBlankSensor = false;
-    _addedBlankVirtualButton = false;
-    const configtable = document.getElementById("config_table");
-    var showAdvanced = document.getElementById("show_advanced").checked;
-    //console.log (data);
-    if(data != null) _config = data;
-    var lastKey = "";
-    //var lastBtnNum = 0;
-    //var lastSenNum = 0;
-    //var vBtnCnt = 0;
-    var maxSensor = 0;
-    var maxLightProgramName = 0;
-    for(var obj in _config) {
-      var hideLineSeperator = false;
-      if(!showAdvanced && _config[obj].advanced == "yes") {
-        continue;
-      }
-      // Basic groupings by first letter change
-      if(lastKey.charAt(0) == obj.toString().charAt(0)) {
-        hideLineSeperator = true;
-      }
-      // More advanced groupings
-      if(obj.toString().includes("device_id") && lastKey.includes("device_id")) {
-        hideLineSeperator = true;
-      } else if(obj.toString().includes("light_program_")) {
-        hideLineSeperator = true;
-        if(obj.toString().includes("light_program_01")) {
-          hideLineSeperator = false;
-        }
-        const num = parseInt(obj.toString().match(/[0-9]+/));
-        if(num > maxLightProgramName) maxLightProgramName = num;
-      }
-      if(_confighelp[obj.toString()] !== undefined) {
-        //console.log("FOUND HELP");
-        //console.log(_confighelp[obj.toString()]);
-        const newRow = configtable.insertRow();
-        const cell1 = newRow.insertCell();
-        cell1.colSpan = 3;
-        cell1.style.fontSize = "x-small";
-        cell1.textContent = _confighelp[obj.toString()];
-        if(!hideLineSeperator) {
-          //newRow.style.borderBottom = "1px solid black";
-          newRow.style.borderTop = "1px solid black";
-          hideLineSeperator = true;
-        }
-      }
-      if(lastKey.startsWith("light_program_") && !obj.toString().startsWith("light_program_")) {
-        addLightProgramRow(parseInt(lastKey.match(/[0-9]+/)));
-      } else if(lastKey.startsWith("sensor_") && !obj.toString().startsWith("sensor_")) {
-        if(isNumber(lastKey.match(/[0-9]+/))) {
-          addSensorRow(parseInt(lastKey.match(/[0-9]+/)));
-        }
-      } else if(lastKey.startsWith("virtual_button_") && !obj.toString().startsWith("virtual_button_")) {
-        addVirtualButtonRow(parseInt(lastKey.match(/[0-9]+/)));
-      }
-      if(_config[obj].value !== undefined) {
-        if(obj.toString().startsWith("light_program_")) {
-          //console.log(obj.toString());
-          let num = parseInt(lastKey.match(/[0-9]+/));
-          num++;
-          //console.log("check for light_program_"+String(num+1).padStart(2, '0'));
-          //console.log("check for light_program_"+num);
-          if(!('light_program_' + String(num + 1).padStart(2, '0') in _config)) {
-            addConfigRow(hideLineSeperator, _config, obj, -1, true);
-          } else {
-            addConfigRow(hideLineSeperator, _config, obj);
-          }
-        } else {
-          addConfigRow(hideLineSeperator, _config, obj);
-        }
-      } else if(obj.toString().startsWith("button_") || obj.toString().startsWith("virtual_button_")) {
-        var hide = false;
-        for(var obj1 in _config[obj]) {
-          if(obj1.toString() == "default") {
-            const newRow = configtable.insertRow();
-            const cell1 = newRow.insertCell();
-            cell1.colSpan = 3;
-            cell1.style.fontSize = "small";
-            cell1.style.paddingLeft = "5px";
-            cell1.innerHTML = obj.toString() + " ( <b>" + _config[obj]["default"] + "</b> )";
-            cell1.style.borderTop = "1px solid black";
-            hide = true;
-          } else if(obj1.toString() != "advanced") {
-            if(obj1.toString().endsWith("_label") && !obj1.toString().startsWith("virtual_button")) {
-              addConfigRow(hide, _config[obj], obj1);
-            } else {
-              addConfigRow(hide, _config[obj], obj1, -1, true);
-            }
-            hide = true;
-          }
-        }
-        addButtonOptionRow(obj.toString(), !obj.toString().startsWith("button_"));
-      } else if(obj.toString().startsWith("sensor_")) {
-        var hide = false;
-        for(var obj1 in _config[obj]) {
-          if(obj1.toString() != "advanced") {
-            addConfigRow(hide, _config[obj], obj1, -1, true);
-            hide = true;
-          }
-        }
-      } else {
-        //console.log("UNDIFINED " + obj.toString() + " = " + _config[obj].value);
-      }
-      lastKey = obj.toString();
-    }
-    if(showAdvanced) {
-      addLightProgramRow();
-      addSensorRow();
-    }
-    addVirtualButtonRow();
-  }
 
-  function cfgAlertForceRestart(event) {
-    var value = event.srcElement.value;
-    var key = event.srcElement.getAttribute('key');
-    if(key === undefined || key === null) {
-      key = event.srcElement.parentNode.getAttribute('key');
-    }
-    if(_AlertsShown[key] == undefined || _AlertsShown[key] == false) {
-      _AlertsShown[key] = true;
-      if("force_restart_msg" in _config[key]) {
-        //alert(_config[key].force_restart_msg);
-        timedAlert(_config[key].force_restart_msg, 0);
-      } else {
-        //alert("If you change "+key+" You will need to restart AqualinkD after saving config!");
-        timedAlert("If you change " + key + " You will need to restart AqualinkD after saving config!", 5);
-      }
-    }
-  }
+  function update_devices(data) {
 
-  function cfgValueChanged(event) {
-    var key = event.srcElement.getAttribute('key');
-    var value = event.srcElement.value;
-    //console.log("Config set '"+key+"'' to '"+value+"'");
-    try {
-      _config[key].value = value;
-    } catch (exception) {
-      //console.log("Error setting cfg '"+key+"' to '"+value+"'");
-      if(key.startsWith("button_")) {
-        _config[key.slice(0, 9)][key].value = value
-      } else if(key.startsWith("virtual_button_")) {
-        _config[key.slice(0, 17)][key].value = value
-      } else if(key.startsWith("sensor_")) {
-        _config[key.slice(0, 9)][key].value = value
-      } else {
-        console.log("Error setting cfg '" + key + "' to '" + value + "'");
-      }
+    if (data?.devices?.AquachemD?.int_status == 0) { // Must be off
+        document.getElementById("calibration_overlay").classList.add("hide");
+        enablebutton("cal_ph");
+        enablebutton("cal_ph_val");
+        enablebutton("cal_orp");
+        enablebutton("cal_orp_val");
+        enablebutton("cal_rtd");
+        enablebutton("cal_rtd_val");
+        enablebutton("cal_prs");
+        enablebutton("cal_prs_val");
+        
+    } else {
+        document.getElementById("calibration_overlay").classList.remove("hide");
+        disablebutton("cal_ph");
+        disablebutton("cal_ph_val");
+        disablebutton("cal_orp");
+        disablebutton("cal_orp_val");
+        disablebutton("cal_rtd");
+        disablebutton("cal_rtd_val");
+        disablebutton("cal_prs");
+        disablebutton("cal_prs_val"); 
     }
-    //console.log(_config);
   }
 
   function update_status(data) {
@@ -1650,15 +975,151 @@
     */
   }
 
+  /* // works but looks odd 
+  function formatTime(totalSeconds) {
+  // Ensure we are working with a positive integer
+  const secInt = Math.floor(Math.abs(totalSeconds));
+
+  const hours = Math.floor(secInt / 3600);
+  const minutes = Math.floor((secInt % 3600) / 60);
+  const seconds = secInt % 60;
+
+  // Helper to add a leading zero for single digits
+  const pad = (num) => num.toString().padStart(2, '0');
+
+  if (hours > 0) {
+    // If there are hours, pad both minutes and seconds
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  } else if (minutes > 0) {
+    // If there are only minutes, just pad the seconds
+    return `${minutes}:${pad(seconds)}`;
+  } else {
+    // If it's just seconds, return the raw number
+    return `${seconds}`;
+  }
+}*/
+
+  //function sensor_action(context, data) {
+  function calibration(context, data) {
+    var text;
+    var val;
+    let dlg_msg;
+    let uom = "";
+
+    // 3rd last request or an error
+    if ( (context == null && data?.action_type != "reading") || data?.status == "error") {
+      dlg_msg = document.getElementById("alertDialogMessage");
+      if (data?.status == "error") {
+        dlg_msg.innerHTML = "Error "+data?.error+"<br>"+data?.error_msg;
+      } else {
+        dlg_msg.innerHTML = "Sucess";
+        dlg_msg.innerHTML += "<br>Current reading = "+data?.value;
+      }
+      return;
+
+    } else if (context == null && data != null) {
+      // This is 2nd call we dor data from instant reading, so can calibrate.
+      dlg_msg = document.getElementById("alertDialogMessage");
+      /*
+        {"type":"instant_sensor_message","status":"ok","request_type":"cal_ph_low","action_type":"reading","value":"7.24"}
+      */
+      switch(data.request_type) {
+        case "cal_ph":
+          val = document.getElementById("cal_ph_val")?.value;
+          text = "pH to "+ val;
+          uom = "";
+          break;
+        case "cal_orp":
+          val = document.getElementById("cal_orp_val")?.value;
+          text = "ORP to "+ val +"mV";
+          uom = "mV";
+          break;
+        case "cal_rtd":
+          val = document.getElementById("cal_rtd_val")?.value;
+          text = "Temperature to "+ val +"&deg;C";
+          uom = "&deg;C";
+          break;
+        case "cal_prs":
+          val = document.getElementById("cal_prs_val")?.value;
+          text = "Pressure to "+ val +"psi";
+          uom = "psi";
+          break;
+        default :
+          text = "Unknown";
+          break;
+      }
+      dlg_msg.innerHTML = "Current Reading "+data.value+uom;
+      dlg_msg.innerHTML += '<hr>';
+      dlg_msg.innerHTML += '<br><input type="button" id="calibrate_probe" data-type='+data.request_type+' data-value='+val+' onclick="send(this);this.remove();" value="Calibrate '+text+'"/>';
+      dlg_msg.innerHTML += '<br><br>This will re-calibrate your probe resettings all previous calibrations' 
+      
+      return;
+    }
+
+    // This is 1st call, so request an instant reading.
+    aqdAlert("Calibrate "+context.id);
+
+    let mockSource = {
+      id: "instantreading",
+      dataset: {
+        type: context.id
+      }
+    };
+    send(mockSource);
+
+    dlg_msg = document.getElementById("alertDialogMessage");
+
+    dlg_msg.innerHTML = "Taking Instant reading";
+
+/*
+    switch(context.id) {
+      case "cal_ph_low":
+        text = "pH Low (4.0)";
+        break;
+      case "cal_ph_med":
+        text = "pH Medium (7.0)";
+        break;
+      case "cal_ph_high":
+        text = "pH High (10.0)";
+        break;
+      case "cal_orp":
+        text = "ORP";
+        break;
+      case "cal_rtd":
+        val = document.getElementById("cal_rtd_val")?.value;
+        text = "Temperature ( "+ val +"&deg;C )";
+      case "cal_prs":
+        val = document.getElementById("cal_prs_val")?.value;
+        text = "Pressure ( "+ val +"psi )";
+        break;
+
+    }
+
+   
+
+    let dlg_msg = document.getElementById("alertDialogMessage");
+
+// instantreading
+
+    const button=
+    dlg_msg.innerHTML = text
+    dlg_msg.innerHTML += '<br><br><input type="button" id="calibrate_probe" data-type='+context.id+' data-value='+val+' onclick="send(this);aqdAlertClose();" value="Calibrate"/>';
+
+    //dlg_msg.innerHTML += '<br><br><input type="button" id="calibrate_probe" data-type='+context.id+' data-value='+val+' onclick="send(this);aqdAlertClose();" value="Calibrate"/>';
+
+    dlg_msg.innerHTML += '<br><br>This will re-calibrate your probe resettings all previous calibrations' 
+    */
+  }
+
   function showDoseHistory(data) {
 
     // Loop through each unique pump using the totals array
     update_log_message(" ");
-    update_log_message(`==============================`);
+    //update_log_message(`============================================================`);
     for (const total of data.totals) {
       const currentPump = total.pump_id;
     
-      update_log_message(`======== ${currentPump} Details ========`);
+      update_log_message(`======================= ${currentPump} Details =======================`);
     
     // 1. Filter and loop through matching history rows for this pump
       const pumpHistory = data.history.filter(item => item.pump_id === currentPump);
@@ -1666,11 +1127,11 @@
         update_log_message(` [${entry.timestamp}] Run time: ${entry.seconds}s | Dosed: ${entry.ml.toFixed(2)} ml`);
       }
     
-      update_log_message(`------------------------------`);
+      update_log_message(`---------------------------------------------`);
     // 2. Output the total directly underneath the details
-      update_log_message(`${currentPump} TOTAL: ${total.sum_dose_ml.toFixed(2)} ml over ${total.sum_runtime_s}s\n`);
+      update_log_message(`${currentPump} ${total.pump_name} TOTAL: ${total.sum_dose_ml.toFixed(2)} ml over ${total.sum_runtime_s}s\n`);
 
-      update_log_message(`==============================`);
+      update_log_message(`============================================================`);
       update_log_message(" ");
     }
   }
@@ -1719,6 +1180,13 @@
       resultArea.textContent = 'Error: Could not load ' + _webConfigFile + ' from server.';
     }
     //populateconfigtable(data);
+  }
+
+  function clearconfigtable() {
+    const configtable = document.getElementById("config_table");
+    while(configtable.rows.length > 0) {
+      configtable.deleteRow(0);
+    }
   }
 
   function closeWebConfig() {
@@ -1905,8 +1373,44 @@
       _name = data['name'];
       _fullname = data['fullname'];
 
+      // Update the document title specifically
+      document.title = _name+" Managment Console";
+      // Update all the inline spans matching the class
+      const elements = document.querySelectorAll('.app-name-text');
+        elements.forEach(el => {
+          el.textContent = _name;
+      });
+      // Update buttons.
       setbuttontext("restart", "Restart "+_name);
       setbuttontext("upgrade", "Update "+_name);
+
+      /*
+      NSF Other areas to change the name.
+      <title>AqualinkD Management Console</title>
+      <td colspan="2" style="title" align="center"><label id="title">&nbsp;&nbsp;AqualinkD Managment Console&nbsp;&nbsp;</label></th>
+      <th colspan="3"><span>AqualinkD Configuration</span></th>
+      <th colspan="3" style="padding: 10px;"><span>AqualinkD Web Configuration</span></th>
+      <div style="text-align: left; font-size: small; color:#8e8e8e;">AqualinkD</div>     
+      
+      Strategy to change. add <span class>.....</span>
+      <title id="doc-title">AqualinkD Management Console</title>
+      <th><span class="app-name-text">AqualinkD</span> Configuration</th>
+      <div class="footer"><span class="app-name-text">AqualinkD</span></div>
+      <span class="app-name-text"></span>
+      function updateAppName(newName) {
+          // 1. Update the document title specifically
+          document.title = document.title.replace("AqualinkD", newName);
+
+          // 2. Update all the inline spans matching the class
+          const elements = document.querySelectorAll('.app-name-text');
+          elements.forEach(el => {
+              el.textContent = newName;
+          });
+      }
+
+      // Usage:
+      updateAppName("AquachemD");
+      */
     }
     if(data['fullname']) {
     }
@@ -1921,7 +1425,8 @@
     try {
       document.getElementById("aqualinkdversion").innerHTML = data['version'];
     } catch (e) {}
-    if(data['deamonized'] == 'off') {
+    // Check correct bool, and incorrectly spelt string
+    if (!data['daemonized'] || data['deamonized'] == 'off' ) {
       //console.log("deamonized=" + data['deamonized'] + " Need to rename Restart to Reload");
       disablebutton("restart");
       disablebutton("upgrade");
@@ -1990,59 +1495,7 @@
   /* dumb increment protocol */
   var _socket_di;
 
-  /*
-  function startWebsockets() {
-    _socket_di = new WebSocket(get_appropriate_ws_url());
-    try {
-      _socket_di.onopen = function() {
-        // success!
-        start_manager();
-        //get_devices();
-      }
-      _socket_di.onmessage = function got_packet(msg) {
-        //document.getElementById("status").classList.remove("error");
-        //console.log(msg.data);
-        var data
-        try {
-          data = JSON.parse(msg.data);
-        } catch (error) {
-          console.error(error);
-          console.log(msg.data);
-        }
-        if(data.logmsg) {
-          update_log_message(data.logmsg);
-        } else if(data.na_message) {
-          set_unavailable(data.na_message);
-        } else if(data.message) {
-          update_status_message(data.message);
-        } else if(data.type == 'aqmanager') {
-          setAqManagerOptions(data);
-          update_status(data);
-        } else if(data.type == 'devices') {
-          //update_device(data);
-        } else if(data.type == 'status') {
-          update_status(data);
-        } else if(data.type == 'aux_labels') {
-          //set_labels(data);
-        } else if(data.type == 'config') {
-          showConfig(data);
-        }
-      }
-      _socket_di.onclose = function() {
-        // something went wrong
-        //document.getElementById("status").innerHTML = '  !!! Connection error !!!  '
-        //document.getElementById("status").classList.add("error");
-        // Try to reconnect every 5 seconds.
-        update_status_message('  !!! Connection error !!!  ', true);
-        setTimeout(function() {
-          startWebsockets();
-        }, 5000);
-      }
-    } catch (exception) {
-      //alert('<p>Error' + exception);
-    }
-  }
-    */
+
 
   function isJsonErrorMessage(msg) {
     return (
@@ -2118,6 +1571,8 @@ function startWebsockets() {
       else if(data.type == 'status') update_status(data);
       else if(data.type == 'config_schema') showConfig(data);
       else if(data.type == 'dose_history') showDoseHistory(data);
+      else if(data.type == 'devices') update_devices(data);
+      else if(data.type == 'instant_sensor_message') calibration(null, data);
       else if (isJsonErrorMessage(data)) {
         show_error_in_log_console("Received message '" + data.error + "' from server");
       }
@@ -2143,116 +1598,6 @@ function startWebsockets() {
   }
 }
 
-  
-  function OLD_startWebsockets_OLD() {
-    // Cleanup: Always close existing socket and clear intervals before starting a new one
-    if (_socket_di) {
-      _socket_di.onopen = _socket_di.onmessage = _socket_di.onclose = null;
-      _socket_di.close();
-    }
-    if (window.devicesInterval) {
-      clearInterval(window.devicesInterval);
-      window.devicesInterval = null;
-    }
-
-    _socket_di = new WebSocket(get_appropriate_ws_url());
-
-    // Connection Timeout: If it doesn't open in 5s, kill it and retry
-    const connTimeout = setTimeout(() => {
-      if (_socket_di.readyState !== WebSocket.OPEN) {
-        LOG("Connection handshake timed out. Retrying...");
-        _socket_di.close(); // This will trigger onclose logic
-      }
-    }, 5000);
-
-    _socket_di.onopen = function () {
-      clearTimeout(connTimeout); // Handshake succeeded
-      LOG("WebSocket Connected");
-      start_manager();
-
-      /*
-      if (!window.devicesInterval) {
-        window.devicesInterval = setInterval(() => { start_manager(); }, 60000);
-      }
-      */
-    };
-
-    _socket_di.onmessage = function got_packet(msg) {
-        //document.getElementById("status").classList.remove("error");
-        //console.log(msg.data);
-        var data
-        try {
-          data = JSON.parse(msg.data);
-        } catch (error) {
-          console.error(error);
-          console.log(msg.data);
-        }
-        if(data.logmsg) {
-          update_log_message(data.logmsg);
-        } else if(data.na_message) {
-          set_unavailable(data.na_message);
-        } else if(data.message) {
-          update_status_message(data.message);
-        } else if(data.type == 'acdmanager') {
-          setAqManagerOptions(data);
-          update_status(data);
-        } else if(data.type == 'devices') {
-          //update_device(data);
-        } else if(data.type == 'status') {
-          update_status(data);
-        } else if(data.type == 'aux_labels') {
-          //set_labels(data);
-        } else if(data.type == 'config_schema') {
-          showConfig(data);
-        } else if(data.type == 'dose_history') {
-          showDoseHistory(data);
-        } else if (isJsonErrorMessage(data)) {
-          show_error_in_log_console("Received message '"+data.error+"' from server");
-        }
-      }
-
-    _socket_di.onclose = function (event) { // Pass 'event' here!
-      clearTimeout(connTimeout);
-
-      // Cleanup interval so we don't stack them
-      if (window.devicesInterval) {
-        clearInterval(window.devicesInterval);
-        window.devicesInterval = null;
-      }
-
-      LOG(`WebSocket Closed. Code: ${event.code}, Reason: ${event.reason}`);
-
-      setElementHTML("message", ' Connection error! ');
-      document.getElementById("header").classList.add("error");
-
-      
-      // Prevent Rapid Reconnection: 
-      // If browser is throttling, a 5s delay is good, but 
-      // make sure we don't have multiple timers running.
-      //if (window.reconnectTimer) clearTimeout(window.reconnectTimer);
-      //window.reconnectTimer = setTimeout(() => {
-      //  startWebsockets();
-      //}, 5000);
-     
-     // Clear local reference to avoid reuse cycles
-      if (_socket_di) {
-        _socket_di.onopen = _socket_di.onmessage = _socket_di.onclose = _socket_di.onerror = null;
-        _socket_di = null;
-      }
-
-      // Schedule Reconnection Safely
-      if (window.reconnectTimer) clearTimeout(window.reconnectTimer);
-      window.reconnectTimer = setTimeout(() => {
-        window.reconnectTimer = null; // Clear tracking token right before execution
-        startWebsockets();
-      }, 5000);
-    };
-
-    _socket_di.onerror = function (err) {
-      LOG("WebSocket Error observed");
-      // Don't call startWebsockets here, onclose will handle it.
-    };
-  }
   
 
   function send_command(cmd) {
@@ -2354,7 +1699,7 @@ function startWebsockets() {
 
   function set_unavailable(message) {
     console.log("!!! NOT Available !!!");
-    update_log_message("!!! AqualinkD Manager " + message + " !!!");
+    update_log_message("!!! "+_name+" Manager " + message + " !!!");
     const demoClasses = document.querySelectorAll('.inner');
     demoClasses.forEach(element => {
       element.style.opacity = 0.2;
@@ -2389,37 +1734,24 @@ function startWebsockets() {
         let version = document.getElementById("selectedrelease").value;
         cmd.uri = "installrelease/" + version
         cmd.text_value = version;
-        update_log_message("***** AqualinkD upgrade in progress *****");
+        update_log_message("***** "+_name+" upgrade in progress *****");
         break;
       case "restart":
         cmd.uri = "restart"
         // NEED TO REGET aqmanager after restart.
         break;
-      case "debugstart":
-        cmd.uri = "debug/start"
+      case "instantreading":
+        // dataset below is a result of using data-type= in the HTML button.  Daft I know, but that's JS!
+        cmd.uri = "instantreading/"+source.dataset.type;
+        cmd.text_value = source.dataset.type;
         break;
-      case "debugstop":
-        cmd.uri = "debug/stop"
+      case "calibrate_probe":
+        // dataset below is a result of using data-type= in the HTML button.  Daft I know, but that's JS!
+        cmd.uri = "calibrate/"+source.dataset.type;
+        cmd.text_value = source.dataset.type;
+        cmd.value = source.dataset.value;
         break;
-      case "seriallog":
-        cmd.uri = "seriallogger"
-        break;
-      case "seriallogWoptions":
-        var ids = document.getElementById("slog_ids").value;
-        if(ids.length == 0) ids = '--';
-        cmd.uri = "seriallogger/" + ids + "/" + document.getElementById("slog_debug").checked;
-        if(document.getElementById("slog_poll_cycle").checked) {
-          cmd.value = -1;
-        } else {
-          cmd.value = document.getElementById("slog_packets").value;
-        }
-        //console.log("Command = "+cmd);
-        //console.log("Packets=" + document.getElementById("slog_packets").value );
-        //console.log("IDs=" + document.getElementById("slog_ids").value );
-        //console.log("ListQueriedID=" + document.getElementById("slog_ids_queried").checked );
-        //console.log("debug=" + document.getElementById("slog_debug").checked );
-        //return; // REMOVE
-        break;
+      
       default:
         alert("Unknown button");
         return;
@@ -2550,37 +1882,7 @@ function startWebsockets() {
       }
   }
 
-/*
 
-  async function getLatestVersion(tries = 0) {
-
-    while (_name === undefined) {
-      LOG("getLatestVersion() name is blank, trying again...");
-      await sleep(2000); // Pauses execution for 2 seconds without blocking the main thread
-    }
-    LOG("getLatestVersion() name is "+_name);
-
-    var xmlhttp = new XMLHttpRequest();
-    xmlhttp.onreadystatechange = function() {
-      if(this.readyState == 4 && this.status == 200) {
-        var JS = JSON.parse(this.responseText);
-        _latestVersionAvailable = JS.tag_name.replace(/[^\d.-]/g, '');
-        document.getElementById("latestaquachemdversion").innerHTML = _latestVersionAvailable;
-      } else if(this.readyState == 4 && this.status == 404) {
-        console.log("URL ERROR "+this.readyState+" "+this.status);
-        if (tries >= 6) {
-          LOG("URL failed - giving up!");
-          return;
-        }
-        LOG("URL failed on try "+tries+", trying again");
-        setTimeout(function() {getLatestVersion(++tries);}, 10000); // 10 seconds
-        return;
-      }
-    };
-    xmlhttp.open("GET", URLS[_name.toLowerCase()]["version"]+"/latest");
-    xmlhttp.send();
-  }
-*/
   function aqdAlert(message) {
     document.getElementById("alertDialogHeader").innerText = '';
     document.getElementById('alertDialogMessage').innerText = message;
@@ -2683,7 +1985,7 @@ function renderConfigTable() {
     }
 
     // ==========================================
-    // 1. RENDER GLOBAL FIELDS
+    // RENDER GLOBAL FIELDS
     // ==========================================
     _config.fields.forEach((field) => {
         if (field.type === 'array_text') {
@@ -2723,8 +2025,8 @@ function renderConfigTable() {
         }
     });
 
-    // ==========================================
-    // 2. RENDER CUSTOM BLOCKS
+   // ==========================================
+    // RENDER CUSTOM BLOCKS
     // ==========================================
     // Visual Separator
     const sepRow = document.createElement('tr');
@@ -2732,29 +2034,61 @@ function renderConfigTable() {
     table.appendChild(sepRow);
 
     _config.custom_blocks.forEach((block, index) => {
-        // Block Header (Label & Delete Button)
+        
+        // Delete Button (Right Column)
         const delBtn = document.createElement('button');
-        delBtn.textContent = "Delete Block";
+        //delBtn.textContent = "Delete Block";
+        delBtn.textContent = "Delete";
         delBtn.onclick = () => {
             _config.custom_blocks.splice(index, 1);
             renderConfigTable();
         };
         
-        const typeLabel = document.createElement('span');
-        typeLabel.textContent = `(Type: ${block.driver_type})`;
-        typeLabel.style.color = "#666";
+        // Editable Label Input (Middle Column)
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.value = block.label;
+        labelInput.style.fontWeight = "bold"; 
+        
+        labelInput.addEventListener('input', (e) => {
+            block.label = e.target.value; 
+        });
 
-        table.appendChild(createRow(0, block.label, typeLabel, delBtn));
+        // Assemble the First Column (Driver: type (label))
+        // We pass an empty string to createRow, and then manually overwrite 
+        // the left cell's HTML so we can style parts of it as non-bold and right-justified.
+        const headerRow = createRow(0, '', labelInput, delBtn);
+        const firstCell = headerRow.cells[0]; // Grab the first <td> in this row
+        
+        // Flexbox magic: pushes content to opposite edges of the single cell
+        firstCell.style.display = "flex";
+        firstCell.style.justifyContent = "space-between";
+        firstCell.style.alignItems = "center";
+        firstCell.style.paddingLeft = "0px";
+        firstCell.style.fontWeight = "bold"; // Keeps "Driver: type" bold
+
+        // Inject the bold driver text on the left, and the unbolded context hint on the right
+        firstCell.innerHTML = `
+            <span>Driver: ${block.driver_type}</span>
+            <span style="font-weight: normal; color: #666; margin-left: 10px;">(label)</span>
+        `;
+
+        table.appendChild(headerRow);
 
         // Block Nested Fields
         block.fields.forEach(field => {
             const control = buildControl(field);
             table.appendChild(createRow(1, field.key, control, null));
         });
+
+       const sepRow = document.createElement('tr');
+       sepRow.innerHTML = `<td colspan="3" style="font-size: small; padding: 0; line-height: 0.75;">&nbsp;</td>`;
+       table.appendChild(sepRow);
     });
 
+
     // ==========================================
-    // 3. RENDER 'ADD NEW BLOCK' FOOTER
+    // RENDER 'ADD NEW BLOCK' FOOTER
     // ==========================================
     const addRow = document.createElement('tr');
     const tdAdd = document.createElement('td');
@@ -2808,7 +2142,7 @@ function renderConfigTable() {
       <div class="commands">
         <table border='0' id="deviceList" style="width: 100%;">
           <tr style="title">
-            <td colspan="2" style="title" align="center"><label id="title">&nbsp;&nbsp;AqualinkD Managment Console&nbsp;&nbsp;</label></th>
+            <td colspan="2" style="title" align="center"><label id="title">&nbsp;<span class="app-name-text"></span> Managment Console&nbsp;</label></th>
           </tr>
           <tr>
             <td colspan="2" align="center"><label id="statusmsg" class="statusmsg">status</label></td>
@@ -2832,7 +2166,7 @@ function renderConfigTable() {
         <div class="content" id="system">
           <table border='0'>
             <tr>
-              <td>AquachemD version:</td>
+              <td><span class="app-name-text"></span> version:</td>
               <td id="aquachemdversion"></td>
             </tr>
             <tr id="latesversionavailable">
@@ -2890,7 +2224,50 @@ function renderConfigTable() {
             </tr>
           </table>
         </div>
-        
+
+        <button class="collapsible">Calibration</button>
+         <div class="content restrictable-area" id="calibration">
+          <div id="calibration_table" style="width: 100%;">
+           <table border='0' style="width: 100%; table-layout: fixed;">
+            <tr>
+              <td align="center">
+                <input id="cal_ph" type="button" onclick="calibration(this);" value="pH"></input>
+              </td>
+              <td align="center">
+                 <input id="cal_ph_val" type="text" value="0" size="5"> pH</input>
+              </td>
+              
+              <tr>
+              <td align="center">
+                <input id="cal_orp" type="button" onclick="calibration(this);" value="ORP"></input>
+              </td>
+              <td align="center">
+                 <input id="cal_orp_val" type="text" value="0" size="5"> mV</input>
+              
+              <tr>
+              <td align="center">
+                <input id="cal_rtd" type="button" onclick="calibration(this);" value="Temperature"></input>
+              </td>
+              <td align="center">
+                <input id="cal_rtd_val" type="text" value="0" size="5"> &deg;C</input>
+              </td>
+             
+              <tr>
+              <td align="center">
+                <input id="cal_prs" type="button" onclick="calibration(this);" value="Pressure"></input>
+              </td>
+              <td align="center">
+                <input id="cal_prs_val" type="text" value="0" size="5"> psi</input>
+              </td>
+              
+            </tr>
+           </table>
+          </div>
+          <div id="calibration_overlay" class="area-restricted">
+            Calibration Disabled<br>Turn off AquachemD to enable
+          </div>
+        </div>
+
         <button class="collapsible">Config</button>
         <div class="content" id="config">
           <table border='0'>
@@ -2924,7 +2301,7 @@ function renderConfigTable() {
         <table id="config_table_outer" border="0" cellpadding="1px" width="100%" class="configTable">
           <tbody>
             <tr class="options_title">
-              <th colspan="3"><span>AqualinkD Configuration</span></th>
+              <th colspan="3"><span><span class="app-name-text"></span> Configuration</span></th>
               <!--<td><input class="config_option_deletebutton" type="button" onclick="closeconfig(this);" value="x"></input></td>-->
             </tr>
             <tr>
@@ -2972,7 +2349,7 @@ function renderConfigTable() {
         <table id="config_table" border="0" cellpadding="1px" width="100%" class="configTable">
           <tbody>
             <tr class="options_title">
-              <th colspan="3" style="padding: 10px;"><span>AqualinkD Web Configuration</span></th>
+              <th colspan="3" style="padding: 10px;"><span><span class="app-name-text"></span> Web Configuration</span></th>
             </tr>
             <tr>
               <td align="center" colspan="3">
@@ -3013,7 +2390,7 @@ function renderConfigTable() {
   </div>
   <div id="alertOverlay" style="display: none;"></div>
   <div id="alertCustomDialog" style="display: none;">
-    <div style="text-align: left; font-size: small; color:#8e8e8e;">AqualinkD</div>
+    <div style="text-align: left; font-size: small; color:#8e8e8e;"><span class="app-name-text"></span></div>
     <div id="alertDialogHeader"></div>
     <p id="alertDialogMessage"></p>
     <hr>

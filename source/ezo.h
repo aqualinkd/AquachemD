@@ -10,9 +10,15 @@
 #define EZO_ORP_ADDR    0x62  // Oxidation-Reduction Potential (ORP)
 #define EZO_PH_ADDR     0x63  // pH Circuit
 #define EZO_EC_ADDR     0x64  // Conductivity (EC)
+/*
 #define EZO_FLO_ADDR    0x66  // Flow Meter (EZO-FLOW)
 #define EZO_PMP_ADDR    0x67  // Dosing Pump (EZO-PMP)
 #define EZO_RTD_ADDR    0x68  // Temperature (RTD)
+*/
+#define EZO_RTD_ADDR    0x66  // Temperature (RTD)
+#define EZO_PMP_ADDR    0x67  // Dosing Pump (EZO-PMP)
+#define EZO_FLO_ADDR    0x68  // Flow Meter (EZO-FLOW)
+
 #define EZO_CO2_ADDR    0x69  // Carbon Dioxide (CO2)
 #define EZO_O2_ADDR     0x6A  // Oxygen (O2)
 #define EZO_PRS_ADDR    0x6B  // Pressure (EZO-PRS)
@@ -30,6 +36,13 @@
 #define EZO_WAIT_GENERAL    300
 #define EZO_WAIT_RTD        600   // RTD only needs 600ms for a reading
 #define EZO_WAIT_PUMP       100   // pump command acknowledgement
+
+
+// ─── Calibration points ──────────────────────────────────────────────────────
+
+#define PH_REF_LOW  4.00f
+#define PH_REF_MID  7.00f
+#define PH_REF_HIGH 10.00f
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
@@ -79,6 +92,13 @@ typedef struct {
   int        status;  // EZO status code
 } rtd_reading_t;
 
+// PRS Pressure reading result
+typedef struct {
+  float value;       // Pressure in psi e.g. 15.2
+  int   status;      // EZO status code
+} prs_reading_t;
+
+
 // Dosing pump status
 typedef struct {
   float volume_ml;    // volume dispensed in the last dose (ml)
@@ -102,6 +122,7 @@ ph_reading_t ph_get_reading();
 ph_reading_t ph_get_reading_compensated(float temp_c);
 ph_reading_t ph_get_reading_filtered();
 int ph_calibrate(ph_cal_point_t point, float ph_value);
+int ph_calibrate_by_value(float calibrationValue);
 int ph_calibrate_low();
 int ph_calibrate_mid();
 int ph_calibrate_high();
@@ -129,6 +150,16 @@ int rtd_clear_calibration();
 int rtd_get_info(char *info, int len);
 int rtd_get_status(char *status, int len);
 int rtd_sleep();
+
+// ─── Pressure sensor (EZO-PRS)  ──────────────────────────────
+prs_reading_t prs_get_reading();
+int prs_calibrate(float psi_value);
+int prs_calibrate_zero();
+int prs_get_cal_status(ezo_cal_status_t *cal);
+int prs_clear_calibration();
+int prs_get_info(char *info, int len);
+int prs_get_status(char *status, int len);
+int prs_sleep();
 
 // ─── Dosing pump (EZO-PMP) ────────────────────────────────────────────────────
 // Dose a fixed volume (ml) — pump runs until volume is dispensed then stops

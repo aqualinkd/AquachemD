@@ -8,9 +8,33 @@
 #include "net_services.h"
 
 bool set_cond_state(struct aquachemdata *acdata, acd_key_t *cond, acd_state_t state);
-void set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
+bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
 
 void check_master(struct aquachemdata *acdata);
+
+
+acd_scope_t check_master_action(struct aquachemdata *acdata) {
+  if (acdata->keys->scope == ACD_ACTION_BLOCK || acdata->keys->state == ACD_LED_OFF){
+    return ACD_ACTION_BLOCK;
+  } else if (acdata->keys->scope == ACD_ACTION_LIMIT){
+    return ACD_ACTION_LIMIT;
+  }
+  return ACD_ACTION_ALLOW;
+}
+
+void sensor_read_error(struct aquachemdata *acddata, acd_key_t *key) {
+  if (key->err_cnt++ >= SENSOR_FAULT_THRESHOLD) {
+    LOG(LOG_ERR, "Sensor %s too many read errors, removing from rotation", key->label);
+    //LOG(LOG_WARNING, "Add code to remove key in sensor_error(), will need to also modify main function for loop since key->next will be null on return", key->label);
+    setMASK(key->flags,  ACD_FLAG_FAULTED);
+    //SET_IF_CHANGED(key->state, ACD_LED_DISABLED, acddata->is_dirty);
+    set_key_state(acddata, key, ACD_LED_DISABLED);
+    key->err_cnt = 0;
+  } else {
+    //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata->is_dirty);
+    set_key_state(acddata, key, ACD_LED_OFF);
+  }
+}
 
 
 float get_sensor_value(struct aquachemdata *acdata, acd_type_t type)
@@ -259,85 +283,183 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
   return true;
 }
 
-
-void check_master(struct aquachemdata *acdata) {
+/*
+void OLD_check_master_OLD(struct aquachemdata *acdata) {
   acd_key_t *failed_condition = NULL;
-//printf("***** check_master()\n");
+  //acd_action_t action = ACD_ACTION_ALLOW;
+
+  // Turn everything to disabled if master if off
   if ( acdata->keys->state == ACD_LED_OFF ) {
     for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
-      if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF)
+      if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF ) {
         set_key_state(acdata, curr, ACD_LED_DISABLED);
+        //LOG(LOG_ERR, "State Manager - set %s to disable\n",curr->label);
+      } else {
+        //LOG(LOG_ERR, "State Manager - leave %s at %s\n",curr->label, acd_state_to_str(curr->state));
+      }
     }
     return;
   }
 
+  // Check for any conditions that are not met.
+  acdata->keys->scope = ACD_ACTION_ALLOW; // Reset to good, below will set to bad.
   for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
+    if (IS_CONDITION(curr->type)) {LOG(LOG_INFO, "State Manager - Condition %s, scope %s, %s",curr->label, acd_scope_to_str(curr->scope), curr->met?"Safe":"Not Safe");}
     if (IS_CONDITION(curr->type) && curr->met == false) {
-      failed_condition = curr;
-      //printf("***** check_master() - failed condition %s\n",failed_condition->label);
-      //break;
+      if (curr->scope == ACD_ACTION_BLOCK) {
+        failed_condition = curr;
+        acdata->keys->scope = ACD_ACTION_BLOCK;
+      } else if (curr->scope == ACD_ACTION_LIMIT && acdata->keys->scope != ACD_ACTION_BLOCK) {
+        // Don't set to limit if already block
+        acdata->keys->scope = ACD_ACTION_LIMIT; 
+      }
+      LOG(LOG_INFO,"Condition %s not met",curr->label);
     }
   }
 
+  LOG(LOG_INFO, "State Manager - Master actions = %s",acdata->keys->scope==ACD_ACTION_ALLOW?"Allow":(acdata->keys->scope==ACD_ACTION_LIMIT?"Limit":"Block") );
+
+  // failed condition LOCAL scope blocks outputs but not inputs. Master set to limit.
+  // failed condition GLOBAL scope blocks everything inputs & outputs except input/sensor scope of local.
+  // sensor/input scope local = keep reading on failed global condition (ie MQTT external sensor, or maybe filter pressure)
+
+  // Set master status depening on any conditions that were not met.
   if (failed_condition == NULL) {
-    //printf("***** check_master() - set ON\n");
     SET_IF_CHANGED(acdata->keys->state, ACD_LED_ON, acdata->is_dirty);
   } else {
-    //printf("***** check_master() - set ENABLED\n");
     SET_IF_CHANGED(acdata->keys->state, ACD_LED_ENABLED, acdata->is_dirty);
   }
 
   for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
     if (IS_OUTPUT(curr->type)) {
-      //printf("***** check_master() - set output %s\n",curr->label);
-      if (failed_condition != NULL && curr->state == ACD_LED_ON) {
-        // NEED TO TURN OFF DOSER
-        LOG(LOG_NOTICE, "Condition %s failed, %s is on turning off", failed_condition->label, curr->label);
-        LOG(LOG_ERR, "ADD CODE TO HANDLE THIS");
+      // turn off any outputs on any conditions that are not met
+      if ( (failed_condition != NULL || acdata->keys->scope == ACD_ACTION_LIMIT) && curr->state == ACD_LED_ON) {
         turn_pump_off(acdata, curr);
+        if (failed_condition != NULL)
+          LOG(LOG_INFO, "State Manager - Condition %s not safe!, %s is on turning off", failed_condition->label, curr->label);
+        else
+          LOG(LOG_INFO, "State Manager - Condition not safe!, %s is on turning off", curr->label);
       }
 
-      if (failed_condition == NULL && curr->state != ACD_LED_OFF && curr->state != ACD_LED_ON) {
-        SET_IF_CHANGED(curr->state, ACD_LED_ENABLED, acdata->is_dirty);
-      } else if (failed_condition != NULL && curr->state != ACD_LED_OFF) {
-        SET_IF_CHANGED(curr->state, ACD_LED_DISABLED, acdata->is_dirty);
+      // Set the outputs to disabled or enabled depending on condition(s)
+      if (failed_condition != NULL || acdata->keys->scope == ACD_ACTION_LIMIT ) {
+        if (SET_IF_CHANGED(curr->state, ACD_LED_DISABLED, acdata->is_dirty)) {
+          LOG(LOG_INFO, "State Manager - Set %s input to %s (scope %s)",acd_state_to_str(curr->state), curr->label, acd_scope_to_str(curr->scope));
+        }
+      } else if (failed_condition == NULL && curr->state != ACD_LED_OFF && curr->state != ACD_LED_ON) {
+        if (SET_IF_CHANGED(curr->state, ACD_LED_ENABLED, acdata->is_dirty)) {
+          LOG(LOG_INFO, "State Manager - Set %s input to %s (scope %s)",acd_state_to_str(curr->state), curr->label, acd_scope_to_str(curr->scope));
+        }
       }
     } else if (IS_INPUT(curr->type)) {
-      if (failed_condition == NULL)
-        SET_IF_CHANGED(curr->state, ACD_LED_ON, acdata->is_dirty);
-      else
-        SET_IF_CHANGED(curr->state, ACD_LED_DISABLED, acdata->is_dirty);
-    }
-  }
-}
-
-/*
-void master_state_change(struct aquachemdata *acdata, acd_state_t new_state) {
-
-  SET_IF_CHANGED(acdata->keys->state, new_state, acdata->is_dirty);
-
-  acd_state_t new_sensor_state = ACD_LED_ENABLED;
-
-  if (acdata->keys->state == ACD_LED_OFF) {
-    new_sensor_state = ACD_LED_DISABLED;
-  } else if (acdata->keys->state == ACD_LED_ON) {
-    new_sensor_state = ACD_LED_ENABLED;
-  } else if (acdata->keys->state == ACD_LED_ENABLED) {
-    new_sensor_state = ACD_LED_DISABLED;
-  }
-
-  LOG(LOG_DEBUG,"AquachemD is %s, turning sensors to %s\n",acd_state_to_str(acdata->keys->state), acd_state_to_str(new_sensor_state));
-  for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
-    if (!IS_CONDITION(curr->type)) {
-      set_key_state(acdata, curr, new_sensor_state);
+     if (acdata->keys->scope == ACD_ACTION_ALLOW || acdata->keys->scope == ACD_ACTION_LIMIT) {
+        // ACD_ACTION_ALLOW
+        if (SET_IF_CHANGED(curr->state, ACD_LED_ENABLED, acdata->is_dirty)) {
+          LOG(LOG_INFO, "State Manager - Set %s input to %s (scope %s)",acd_state_to_str(curr->state), curr->label, acd_scope_to_str(curr->scope));
+        }
+     } else {
+       // ACD_ACTION_LIMIT or ACD_ACTION_BLOCK
+       if (curr->scope == ACD_SCOPE_GLOBAL) {
+          if (SET_IF_CHANGED(curr->state, ACD_LED_DISABLED, acdata->is_dirty)) {
+            LOG(LOG_INFO, "State Manager - Set %s input to %s (scope %s)",acd_state_to_str(curr->state), curr->label, acd_scope_to_str(curr->scope));
+          }
+        } else {
+          if (SET_IF_CHANGED(curr->state, ACD_LED_ENABLED , acdata->is_dirty)) {
+            LOG(LOG_INFO, "State Manager - Set %s input to %s (scope %s)",acd_state_to_str(curr->state), curr->label, acd_scope_to_str(curr->scope));
+          }
+        }
+     } 
     }
   }
 }
 */
-void set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state)
+
+
+void check_master(struct aquachemdata *acdata) {
+  acd_key_t *failed_condition = NULL;
+  //acd_action_t action = ACD_ACTION_ALLOW;
+
+  // Turn everything to disabled if master if off
+  if ( acdata->keys->state == ACD_LED_OFF ) {
+    for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
+      if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF /*&& curr->scope != ACD_SCOPE_LOCAL*/) {
+        set_key_state(acdata, curr, ACD_LED_DISABLED);
+        //LOG(LOG_ERR, "State Manager - set %s to disable\n",curr->label);
+      } else {
+        //LOG(LOG_ERR, "State Manager - leave %s at %s\n",curr->label, acd_state_to_str(curr->state));
+      }
+    }
+    return;
+  }
+
+  // Check for any conditions that are not met.
+  acdata->keys->scope = ACD_ACTION_ALLOW; // Reset to good, below will set to bad.
+  for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
+    if (IS_CONDITION(curr->type)) {LOG(LOG_INFO, "State Manager - Condition %s, scope %s, %s",curr->label, acd_scope_to_str(curr->scope), curr->met?"Safe":"Not Safe");}
+    if (IS_CONDITION(curr->type) && curr->met == false) {
+      if (curr->scope == ACD_ACTION_BLOCK) {
+        failed_condition = curr;
+        acdata->keys->scope = ACD_ACTION_BLOCK;
+      } else if (curr->scope == ACD_ACTION_LIMIT && acdata->keys->scope != ACD_ACTION_BLOCK) {
+        // Don't set to limit if already block
+        acdata->keys->scope = ACD_ACTION_LIMIT; 
+      }
+      LOG(LOG_INFO,"Condition %s not met",curr->label);
+    }
+  }
+
+  LOG(LOG_INFO, "State Manager - Master actions = %s",acdata->keys->scope==ACD_ACTION_ALLOW?"Allow":(acdata->keys->scope==ACD_ACTION_LIMIT?"Limit":"Block") );
+
+  // failed condition LOCAL scope blocks outputs but not inputs. Master set to limit.
+  // failed condition GLOBAL scope blocks everything inputs & outputs except input/sensor scope of local.
+  // sensor/input scope local = keep reading on failed global condition (ie MQTT external sensor, or maybe filter pressure)
+
+  // Set master status depening on any conditions that were not met.
+  if (failed_condition == NULL) {
+    //SET_IF_CHANGED(acdata->keys->state, ACD_LED_ON, acdata->is_dirty);
+    set_key_state(acdata, acdata->keys, ACD_LED_ON);
+  } else {
+    //SET_IF_CHANGED(acdata->keys->state, ACD_LED_ENABLED, acdata->is_dirty);
+    set_key_state(acdata, acdata->keys, ACD_LED_ENABLED);
+  }
+
+  for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
+    if (IS_OUTPUT(curr->type)) {
+      // turn off any outputs on any conditions that are not met
+      if ( (failed_condition != NULL || acdata->keys->scope == ACD_ACTION_LIMIT) && curr->state == ACD_LED_ON) {
+        turn_pump_off(acdata, curr);
+        if (failed_condition != NULL)
+          LOG(LOG_INFO, "State Manager - Condition %s not safe!, %s is on turning off", failed_condition->label, curr->label);
+        else
+          LOG(LOG_INFO, "State Manager - Condition not safe!, %s is on turning off", curr->label);
+      }
+
+      // Set the outputs to disabled or enabled depending on condition(s)
+      if (failed_condition != NULL || acdata->keys->scope == ACD_ACTION_LIMIT ) {
+        set_key_state(acdata, curr, ACD_LED_DISABLED);
+      } else if (failed_condition == NULL && curr->state != ACD_LED_OFF && curr->state != ACD_LED_ON) {
+        set_key_state(acdata, curr, ACD_LED_ENABLED);
+      }
+    } else if (IS_INPUT(curr->type)) {
+      if (acdata->keys->scope == ACD_ACTION_ALLOW || acdata->keys->scope == ACD_ACTION_LIMIT) {
+        set_key_state(acdata, curr, ACD_LED_ENABLED);
+      } else { // ACD_ACTION_BLOCK
+       if (curr->scope == ACD_SCOPE_GLOBAL) {
+          set_key_state(acdata, curr, ACD_LED_DISABLED);
+        } else {
+          set_key_state(acdata, curr, ACD_LED_ENABLED);
+        }
+      } 
+    }
+  }
+}
+
+
+bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state)
 {
   //  Master         off / on / enabled ----> Means a condition is not met.
-  //  sensors        on / disabled
+  //  sensors        on / disabled / enabled (when master turns them on only, then go to on after first reading.
+  //. sensors        off when a single poll failed, disabled when taken out of poll cycle.
   //  doser (sensor) on / off / disabled / enabled
 
   bool goodState = true;
@@ -353,25 +475,56 @@ void set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
     case ACD_TYPE_EZO_PH:
     case ACD_TYPE_EZO_ORP:
     case ACD_TYPE_EZO_TEMP:
+    case ACD_TYPE_EZO_PRS:
     case ACD_TYPE_MQTT_TEMP:
     case ACD_TYPE_D1W_TEMP:
-      if (state != ACD_LED_ON && state != ACD_LED_DISABLED) {goodState = false;}
+    /*
+      if (state != ACD_LED_ON && state != ACD_LED_DISABLED) {
+        goodState = false;
+      }*/
+     // Above is accurate for a request, below is accurate for master to change.
+      if (state != ACD_LED_ON && state != ACD_LED_DISABLED && state != ACD_LED_ENABLED && state != ACD_LED_OFF) {
+        goodState = false;
+      }
+      if (goodState && acdata->keys->state != ACD_LED_ON && state == ACD_LED_ON && key->scope == ACD_SCOPE_GLOBAL) {
+        // If mater was turned off while sampeling we can get the change request here.
+        goodState = false;
+      }
       break;
     case ACD_TYPE_GPIO_PMP:
     case ACD_TYPE_EZO_PMP:
-      if (state != ACD_LED_OFF && state != ACD_LED_ON && state != ACD_LED_ENABLED && state != ACD_LED_DISABLED) {goodState = false;}
-      if (state == ACD_LED_ENABLED && acdata->keys->state != ACD_LED_ON) {state = ACD_LED_DISABLED;}
+      if (state != ACD_LED_OFF && state != ACD_LED_ON && state != ACD_LED_ENABLED && state != ACD_LED_DISABLED) {
+        goodState = false;
+      }
+      if (state == ACD_LED_ENABLED && acdata->keys->state != ACD_LED_ON) {
+        state = ACD_LED_DISABLED;
+      }
       break;
-    default:
+    case ACD_TYPE_NONE:
       goodState = false;
       break;
   }
 
   if (!goodState) {
     LOG(LOG_ERR, "Device %s can't be set to %s", key->label, acd_state_to_str(state));
-    return;
+    return false;
   }
-  SET_IF_CHANGED(key->state , state, acdata->is_dirty);
+
+  // If being asked to turn on, clear any flags.
+  if ( (state == ACD_LED_ON || state == ACD_LED_ENABLED) && isMASKSET(key->flags, ACD_FLAG_FAULTED)) {
+    removeMASK(key->flags, ACD_FLAG_FAULTED);
+  }
+
+  //return SET_IF_CHANGED(key->state , state, acdata->is_dirty);
+
+  if (SET_IF_CHANGED(key->state , state, acdata->is_dirty)) {
+    LOG(LOG_INFO, "State Manager - Set %s to %s (scope %s)",acd_state_to_str(key->state), key->label, acd_scope_to_str(key->scope));
+    return true;
+  } else {
+    LOG(LOG_DEBUG, "State Manager - Request to set same state, ignored %s to %s (scope %s)",acd_state_to_str(key->state), key->label, acd_scope_to_str(key->scope));
+    //LOG(LOG_INFO, "State Manager - No change for %s, remains at %s (scope %s)",curr->label, acd_state_to_str(curr->state), acd_scope_to_str(curr->scope));
+    return false;
+  }
 }
 
 
@@ -380,7 +533,9 @@ bool set_cond_state(struct aquachemdata *acdata, acd_key_t *cond, acd_state_t st
   //  conditions     on / off
 
   if (state == ACD_LED_ON || state == ACD_LED_OFF ) {
-    SET_IF_CHANGED(cond->state , state, acdata->is_dirty);
+    if (SET_IF_CHANGED(cond->state , state, acdata->is_dirty)) {
+      LOG(LOG_INFO, "State Manager - Condition %s changed to %s",cond->label, acd_state_to_str(cond->state));
+    }
     //if ( state == ACD_LED_OFF && acdata->keys->state == ACD_LED_ON) {
     //  master_state_change(acdata, ACD_LED_ENABLED);
     //}

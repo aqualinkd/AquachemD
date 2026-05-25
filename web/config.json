@@ -73,7 +73,7 @@
     },
     "TEMP_1": {
       "display": true,
-      "uom": "&deg;",
+      "uom": "&deg;C",
       "precision": 1,
       "thresholds": {
         "outofrange": {
@@ -121,6 +121,25 @@
         }
       }
     },
+    "PRS_1": {
+      "display": true,
+      "uom": "psi",
+      "precision": 1,
+      "on_text": "",
+      "thresholds": {
+        "outofrange": {
+          "min": 0,
+          "max": 20,
+          "maxtext": "Clean Filter"
+        },
+        "attention": {
+          "min": 0,
+          "max": 18,
+          "mintext": "Low",
+          "maxtext": "High"
+        }
+      }
+    },
     "CS_1": {
       "display": true
     },
@@ -133,7 +152,7 @@
     "_____comment_devices": "KEPT: Device configuration controls display and threshold settings for each device",
     "TEMP_2": {
       "display": true,
-      "uom": "&deg;C",
+      "uom": "&deg;",
       "precision": 1
     },
     "TEMP_3": {
@@ -211,6 +230,7 @@
     "disable_off_icon_background": "true",
     "_light_program_use_dropdown": "UNUSED: Light programs are AqualinkD-specific features",
     "_link_spa_and_spa_heater": "UNUSED: Spa heater is AqualinkD-specific",
-    "orp_runtime_in_minutes": true
+    "orp_runtime_in_minutes": true,
+    "disply_temp_in_f": true
   }
 }

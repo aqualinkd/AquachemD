@@ -85,7 +85,7 @@ void gpio_detect(bool deepscan)
 int gpio_open(gpio_handle_t *h, const char *chip_path, int pin,
               gpio_dir_t direction, gpio_active_t active/*, const char *label*/)
 {
-  memset(h, 0, sizeof(*h));
+  //memset(h, 0, sizeof(*h));
   h->pin       = pin;
   h->direction = direction;
   h->active    = active;
