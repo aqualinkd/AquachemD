@@ -182,7 +182,7 @@ download_latest_release() {
   mkdir -p "$TEMP_INSTALL"
   local tar_url=""
   if [ "$USE_RELEASE_PKG" -eq $TRUE ]; then
-    tar_url=$(curl -fsSL "$REPO/releases/latest" | grep -Po '"browser_download_url": "\K.*?(?=")' | grep ${BIN}-release.tar.gz)
+    tar_url=$(curl -fsSL "$REPO/releases/latest" | grep -Po '"browser_download_url": "\K.*?(?=")' | grep -i ${BIN}-release.tar.gz)
   else
     tar_url=$(curl -fsSL "$REPO/releases/latest" | grep -Po '"tarball_url": "\K.*?(?=")')
   fi

@@ -87,7 +87,7 @@ jobs:
       - name: Compile AquachemD Architectures
         run: |
           make clean
-          make all arm64 armhf
+          make arm64 armhf
 
       - name: Create release archive
         run: tar -czvf AquachemD-release.tar.gz web/ release/
