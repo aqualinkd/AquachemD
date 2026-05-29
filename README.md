@@ -14,7 +14,7 @@ Linux daemon to read pH, ORP, Temperature sensors, control chem feeders & GPIO. 
 * Statists tiles
 * Validate online install (Dev release)
 * Finalize - or _ for remote install script
-
+* Add tag's for dev release
 ---
 
 ## 🚀 Project Overview
