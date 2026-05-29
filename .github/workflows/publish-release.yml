@@ -35,8 +35,14 @@ jobs:
             # If it contains anything else (e.g., 0.1.0-Dev-1), mark as pre-release
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
             echo "make_latest=false" >> $GITHUB_OUTPUT
-            # NOW strip it down to just the 3 sets of digits for the release tag
-            VERSION=$(echo "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+            
+            BASE_VERSION=$(echo "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+
+            # Normalize variations like "0.2.2 (Dev #1)" or "0.2.2 Dev 1" to "0.2.2-Dev.1"
+            DEV_NUMBER=$(echo "$VERSION" | sed -E 's/.*[dD][eE][vV][^0-9]*([0-9]+).*/\1/')
+            
+            VERSION="${BASE_VERSION}-Dev.${DEV_NUMBER}"
+            
             echo "Pre Release Version: $VERSION"
           fi
           
