@@ -30,10 +30,14 @@ jobs:
           if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
             echo "make_latest=true" >> $GITHUB_OUTPUT
+            echo "Release Version: $VERSION"
           else
             # If it contains anything else (e.g., 0.1.0-Dev-1), mark as pre-release
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
             echo "make_latest=false" >> $GITHUB_OUTPUT
+            # NOW strip it down to just the 3 sets of digits for the release tag
+            VERSION=$(echo "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+            echo "Pre Release Version: $VERSION"
           fi
           
           # Save the clean version string to outputs for subsequent steps
