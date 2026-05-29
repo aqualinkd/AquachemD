@@ -6,6 +6,15 @@ Linux daemon to read pH, ORP, Temperature sensors, control chem feeders & GPIO. 
 
 **AquaChemD** is an open-source, high-precision automated pool chemical dosing and monitoring controller designed to bridge the gap between expensive proprietary systems and DIY enthusiasts. It provides a professional-grade platform for monitoring pH, ORP (Oxidation-Reduction Potential), and Temperature with autonomous logic for balancing water chemistry[cite: 1].
 
+# Currently in development, (Any release before V1.0.0 is development)
+## ToDo before 1st release
+* Finish web config editor
+* Config file writeback
+* Log reading in startup / install (read back to Journal ID's, look for start & install ID's)
+* Statists tiles
+* Validate online install (Dev release)
+* Finalize - or _ for remote install script
+
 ---
 
 ## 🚀 Project Overview

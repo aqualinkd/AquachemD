@@ -1,11 +1,18 @@
 #ifndef ACD_TYPES_H_
 #define ACD_TYPES_H_  
 
+#include <time.h>
+
 #include "ezo.h"
 #include "1wire.h"
 #include "gpio.h"
 
-
+/*
+typedef enum {
+  ACD_DAY,
+  ACD_WEEK
+} acd_period_t;   // Just used for metrics at the moment.
+*/
 
 typedef enum {
     ACD_TYPE_NONE = 0,
@@ -78,6 +85,15 @@ typedef enum {
 #define ACD_ACTION_LIMIT  ACD_SCOPE_LOCAL
 #define ACD_ACTION_BLOCK  ACD_SCOPE_GLOBAL
 
+
+typedef struct {
+    float average;
+    time_t last_sample_time;
+    float min;
+    float max;
+} sensor_stats_t;
+
+
 typedef struct acd_key_t {
     acd_type_t type;
     acd_state_t state;
@@ -96,6 +112,8 @@ typedef struct acd_key_t {
       bool met;    // For conditions, met or not.
       bool ison;   // For output pump,  
     };
+
+    sensor_stats_t stats;// Only for sensors, so prime union for future.
 
     union {
         ezo_sensor_t  ezo;
@@ -122,7 +140,10 @@ typedef struct runtime_range_t{
 #define ORP_PUMP               (1 << 2)
 
 #define ACD_FLAG_FAULTED       (1 << 3)   
-#define ACD_FLAG_ACTIVE   (1 << 4)   // not used at present
+#define ACD_FLAG_ACTIVE        (1 << 4)   // not used at present
+
+#define AVG_DAILY              (1 << 5)
+#define AVG_WEEKLY             (1 << 6)
 
 //#define CONDITION_SCOPE_GLOBAL (1 << 3) // For conditions Set if global interlock, clear if local restriction
 //#define CONDITION_SCOPE_LOCAL  (1 << 4) // ONLY for master key, if on and this is set, then re can read sensors but not dose.

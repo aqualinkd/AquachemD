@@ -17,7 +17,7 @@ CFG_ENTRY( "main_label",             main_label,             "AquachemD",       
 
 /* --- 1. GLOBAL SYSTEM & LOGGING --- */
 CFG_ENTRY( "listen_address",         listen_address,         "http://0.0.0.0:80",  CFG_STRING,  CFG_GRP_ADVANCED|CFG_FORCE_RESTART, 0,                NULL )
-CFG_ENTRY( "log_level",              log_level,              LOG_NOTICE,           CFG_TXT_INT, 0,                                  0,                CFG_V_log_level )
+CFG_ENTRY( "log_level",              log_level,              LOG_NOTICE,           CFG_TXT_INT, 0,                                  0,                CFG_O_log_level )
 CFG_ENTRY( "mg_log_level",           mg_log_level,           0,                    CFG_INT,     CFG_READONLY|CFG_HIDE,              0,                NULL )
 
 /* --- 2. WEB & DIRECTORIES --- */
@@ -30,17 +30,17 @@ CFG_ENTRY( "mqtt_passwd",            mqtt_passwd,            NULL,              
 CFG_ENTRY( "mqtt_aquachemd_topic",   mqtt_aquachemd_topic,   "aquachemd",          CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
 CFG_ENTRY( "mqtt_aqualinkd_topic",   mqtt_aqualinkd_topic,   "aqualinkd",          CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
 CFG_ENTRY( "mqtt_discovery_topic",   mqtt_discovery_topic,   "homeassistant",      CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
-CFG_ENTRY( "mqtt_discovery_use_mac", mqtt_discovery_use_mac, true,                 CFG_BOOL,    0,                                  0,                CFG_V_BOOL )
-CFG_ENTRY( "mqtt_timed_update",      mqtt_timed_update,      true,                 CFG_BOOL,    0,                                  0,                CFG_V_BOOL )
-CFG_ENTRY( "mqtt_repost_sensors",    mqtt_repost_sensors,    false,                CFG_BOOL,    0,                                  0,                CFG_V_BOOL )
-CFG_ENTRY( "mqtt_discovery_strict_availability",mqtt_strict_avail,false,           CFG_BOOL,    0,                                  0,               CFG_V_BOOL )
+CFG_ENTRY( "mqtt_discovery_use_mac", mqtt_discovery_use_mac, true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "mqtt_timed_update",      mqtt_timed_update,      true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "mqtt_repost_sensors",    mqtt_repost_sensors,    false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "mqtt_discovery_strict_availability",mqtt_strict_avail,false,           CFG_BOOL,    0,                                  0,               CFG_O_BOOL )
 
 /* --- 4. GPIO CONFIGURATION --- */
 CFG_ENTRY( "gpio_chip",              gpio_chip,              "/dev/gpiochip0",     CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
 
 /* --- 5. POLLING & CONVERSION --- */
 CFG_ENTRY( "sensor_poll_time",       sensor_poll_time,       60,                   CFG_INT,     0,                                  0,                NULL )
-CFG_ENTRY( "mqtt_convert_to_degF",   convert_mqtt_temp,      false,                CFG_BOOL,    0,                                  0,                CFG_V_BOOL )
+CFG_ENTRY( "mqtt_convert_to_degF",   convert_mqtt_temp,      false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
 CFG_ENTRY( "ph_reading_temp_min",    ph_reading_temp_min,    1,                    CFG_INT,     0,                                  0,                NULL )
 CFG_ENTRY( "ph_reading_temp_max",    ph_reading_temp_max,    60,                   CFG_INT,     0,                                  0,                NULL )
@@ -57,9 +57,9 @@ CFG_ENTRY( "orp_default_dose_time",  orp_default_dose_time,  1500,              
 CFG_ENTRY( "cert_dir",               cert_dir,               NULL,                 CFG_STRING,  CFG_GRP_ADVANCED|CFG_FORCE_RESTART, 0,                NULL )
 #endif
 
-CFG_ENTRY( "post_condition",         post_condition,         true,                 CFG_BOOL,    0,                                  0,                CFG_V_BOOL )
-CFG_ENTRY( "temp_compensated_ph",    temp_compensated_ph,    true,                 CFG_BOOL,    0,                                  0,                CFG_V_BOOL )
-CFG_ENTRY( "log_zerorun_pump_events",log_zerorun_pump_events,false,                CFG_BOOL,    0,                                  0,                CFG_V_BOOL )
+CFG_ENTRY( "post_condition",         post_condition,         true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "temp_compensated_ph",    temp_compensated_ph,    true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "log_zerorun_pump_events",log_zerorun_pump_events,false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
 
 
@@ -67,7 +67,7 @@ CFG_ENTRY( "log_zerorun_pump_events",log_zerorun_pump_events,false,             
 CFG_ENTRY( "mqtt_condition_label",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_condition_topic",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_condition_value",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "mqtt_condition_scope_global",  keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                CFG_V_BOOL )
+CFG_ENTRY( "mqtt_condition_scope_global",  keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                CFG_O_BOOL )
 
 CFG_ENTRY( "gpio_condition_label",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_pin",           keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -79,16 +79,22 @@ CFG_ENTRY( "ph_sensor_label",        keys,                   NULL,              
 CFG_ENTRY( "ph_sensor_type",         keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "ph_sensor_address",      keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "ph_sensor_scope_global", keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "ph_sensor_statistics",   keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
 
 CFG_ENTRY( "orp_sensor_label",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "orp_sensor_type",        keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "orp_sensor_address",     keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "orp_sensor_scope_global",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "orp_sensor_statistics",  keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
 
 CFG_ENTRY( "prs_sensor_label",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_type",        keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_address",     keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_scope_global",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "prs_sensor_statistics",  keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
 
 CFG_ENTRY( "temp_sensor_label",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "temp_sensor_type",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -98,6 +104,8 @@ CFG_ENTRY( "temp_sensor_path",       keys,                   NULL,              
 CFG_ENTRY( "temp_sensor_offset",     keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "temp_sensor_scale",      keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "temp_sensor_scope_global",keys,                  NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "temp_sensor_statistics", keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
 
 CFG_ENTRY( "ph_doser_label",         keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "ph_doser_type",          keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -116,5 +124,8 @@ CFG_ENTRY( "orp_doser_required_state",keys,                  NULL,              
 CFG_ENTRY( "orp_doser_ml_per_second", keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 /* --- JSON Metadata Definitions --- */
-#define CFG_V_log_level "[\"DEBUG\",\"INFO\",\"NOTICE\",\"WARNING\",\"ERROR\"]"
-#define CFG_V_BOOL "[\"Yes\",\"No\"]"
+#define CFG_O_log_level "[\"DEBUG\",\"INFO\",\"NOTICE\",\"WARNING\",\"ERROR\"]"
+#define CFG_O_BOOL "[\"Yes\",\"No\"]"
+#define CFG_O_ONOFF "[\"on\",\"off\"]"
+#define CFG_O_ACTIVE "[\"Active High\",\"Active Low\"]"
+#define CFG_O_STATS "[\"None\",\"Daily\",\"Weekly\"]"

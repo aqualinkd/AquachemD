@@ -20,6 +20,9 @@
 
 #define MAX_JSON_BUFFER_SIZE 8192
 
+
+
+
 static cJSON *devices_map = NULL;
 
 // This buffer holds the resulting JSON string, NOT thread safe, needs to be here as it's returned.
@@ -150,7 +153,7 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
   cJSON_AddStringToObject(device, "status", acd_state_to_str(acddata->keys->state));
   cJSON_AddNumberToObject(device, "int_status", acddata->keys->state);
   cJSON_AddStringToObject(device, "type", "switch");
-  cJSON_AddStringToObject(device, "type", "switch");
+  //cJSON_AddStringToObject(device, "type", "switch");
   cJSON *attributes = cJSON_CreateArray();
   cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_OFF)));
   cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ON)));
@@ -192,22 +195,21 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
         cJSON_AddItemToObject(device, "attributes", attributes);
       } else {
         cJSON_AddStringToObject(device, "type", "sensor");
+        if (isMASKSET(curr->flags,AVG_DAILY) || isMASKSET(curr->flags,AVG_WEEKLY) ) {
+          // statistical_sensor
+          cJSON *stats = cJSON_CreateObject();
+          cJSON_AddNumberToObject(stats, "avg", curr->stats.average);
+          cJSON_AddNumberToObject(stats, "max", curr->stats.max);
+          cJSON_AddNumberToObject(stats, "min", curr->stats.min);
+          cJSON_AddStringToObject(stats, "range", time_range_to_str(curr->flags));
+          cJSON_AddItemToObject(device, "stats", stats);
+        } 
       }
     }
 
     cJSON_AddItemToObject(devices, curr->ID, device);
+    
   }
-/*
-  for (acd_condition_t *curr = acddata->conditions; curr != NULL; curr = curr->next) { 
-    device = cJSON_CreateObject();
-    cJSON_AddStringToObject(device, "id", curr->ID);
-    cJSON_AddStringToObject(device, "label", curr->label);
-    cJSON_AddStringToObject(device, "status", acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
-    cJSON_AddNumberToObject(device, "int_status", curr->met);
-    cJSON_AddStringToObject(device, "type", "binary_sensor");
-    cJSON_AddItemToObject(devices, curr->ID, device);
-  }
-*/
 }
 
 const char* get_devices_json(struct aquachemdata *acddata) {
@@ -240,6 +242,11 @@ const char* get_devices_json(struct aquachemdata *acddata) {
           uint32_t remaining_sec = get_timer_left_sec(curr);
           cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "timer_active"), acd_state_to_str(remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF));
           cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "timer_duration"), remaining_sec);
+        } else if ( IS_INPUT(curr->type) && (isMASKSET(curr->flags,AVG_DAILY) || isMASKSET(curr->flags,AVG_WEEKLY)) ) {
+          cJSON *stats = cJSON_GetObjectItemCaseSensitive(item, "stats");
+          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(stats, "avg"), curr->stats.average);
+          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(stats, "max"), curr->stats.max);
+          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(stats, "min"), curr->stats.min);
         }
       } 
     }
@@ -249,6 +256,17 @@ const char* get_devices_json(struct aquachemdata *acddata) {
       cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
       cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), curr->met);
     }
+    */
+   /*
+    item = cJSON_GetObjectItemCaseSensitive(devices_map, "AVG_1");
+    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), acddata->sensorMetrics.ph_daily.average);
+    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "max_value"), acddata->sensorMetrics.ph_daily.max);
+    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "min_value"), acddata->sensorMetrics.ph_daily.min);
+
+    item = cJSON_GetObjectItemCaseSensitive(devices_map, "AVG_2");
+    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), acddata->sensorMetrics.orp_daily.average);
+    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "max_value"), acddata->sensorMetrics.orp_daily.max);
+    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "min_value"), acddata->sensorMetrics.orp_daily.min);
     */
   }
 

@@ -415,6 +415,47 @@ float temp_c_to_k(float celsius)
 
 
 
+uint8_t parse_statistics(const char *str)
+{
+    if (!str) return 0x00;
+    
+    // If your cleanwhitespace() function modifies the string inline, 
+    // you can cast or pass a mutable copy, otherwise standard const char* works.
+    char *clean = cleanwhitespace((char *)str);
+    
+    if (strcasecmp(clean, "DAY") == 0 || 
+        strcasecmp(clean, "DAILY") == 0)
+    {
+      return AVG_DAILY;
+    } else if (strcasecmp(clean, "WEEK") == 0 || 
+               strcasecmp(clean, "WEEKLY") == 0)  
+    {
+      return AVG_WEEKLY;
+    }
+
+    // None is also an option, but that's returns 0x00
+   
+    return 0x00;
+}
+
+// For config.
+const char *statistics_to_str(uint8_t val)
+{
+  if (isMASKSET(val, AVG_DAILY)) {return "Daily";}
+  if (isMASKSET(val, AVG_WEEKLY)) {return "Weekly";}
+  return "None";
+}
+
+// For UI / MQTT
+const char *time_range_to_str(uint8_t val)
+{
+  if (isMASKSET(val, AVG_DAILY)) {return "24h";}
+  if (isMASKSET(val, AVG_WEEKLY)) {return "7d";} 
+  return "";
+}
+
+
+
 #include <time.h>
 
 void precise_delay(long nanoseconds) {

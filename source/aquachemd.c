@@ -39,6 +39,7 @@ Usage:
 #include <strings.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "version.h"
 #include "aquachemd.h"
@@ -51,6 +52,7 @@ Usage:
 #include "acd_timer.h"
 #include "gpio_monitor.h"
 #include "state_manager.h"
+#include "sensor_stats.h"
 
 #ifdef USE_SYSTEMD
 #include <systemd/sd-daemon.h>
@@ -71,7 +73,7 @@ void intHandler(int sig_num)
    * 
    */
 
-  LOG(LOG_NOTICE, "Stopping!\n");
+ 
 
   for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
     if (curr->type == ACD_TYPE_GPIO_PMP) {
@@ -82,7 +84,25 @@ void intHandler(int sig_num)
     }
   }
 
-  
+  if (sig_num == SIGRESTART) {
+    if (is_running_under_systemd()) {
+      LOG(LOG_WARNING, "Restarting %s!\n",AQUACHEMD_SHORT_NAME);
+      // If we are deamonized, we need to use the system
+      if(fork() == 0) {
+        sleep(2);
+        char *newargv[] = {"/bin/systemctl", "restart", "aquachemd", NULL};
+        char *newenviron[] = { NULL };
+        execve(newargv[0], newargv, newenviron);
+        exit (EXIT_SUCCESS);
+      }
+    } else {
+      LOG(LOG_ERR, "Can't restart %s, not running as daemon!\n",AQUACHEMD_SHORT_NAME);
+      return;
+    }
+  }
+
+  LOG(LOG_NOTICE, "Stopping %s!\n",AQUACHEMD_SHORT_NAME);
+
   exit(EXIT_SUCCESS);
 }
 
@@ -99,7 +119,6 @@ void setup_signal_handlers(void) {
     sigaction(SIGQUIT, &sa, NULL);  // Ctrl+backslash
     sigaction(SIGPIPE, &sa, NULL);  // broken pipe
 }
-
 
 
 typedef enum {
@@ -340,7 +359,6 @@ int main(int argc, char *argv[])
 
   start_net_services(&acddata);
 
-
   // Setup any specifics for GPIO / D1W etc
   for (acd_key_t *curr = acddata.keys; curr != NULL; curr = curr->next) {
     if (curr->type == ACD_TYPE_GPIO_COND) {
@@ -364,6 +382,10 @@ int main(int argc, char *argv[])
       curr->state = ACD_LED_ENABLED;
     } else if (IS_INPUT(curr->type)) {
       curr->state = ACD_LED_DISABLED; // DON'T use setKeyLed() here, startup need to force to enabled.
+      if (isMASKSET(curr->flags,AVG_DAILY) || isMASKSET(curr->flags,AVG_WEEKLY) ) {
+        //pthread_mutex_init(&curr->stats.lock, NULL);
+        reset_sensor_average(&curr->stats);
+      }
     } else if (IS_OUTPUT(curr->type)) {
       // GPIO status will be set from sync_pump_state() above
       //if (curr->type != ACD_TYPE_GPIO_PMP) {
@@ -386,8 +408,20 @@ int main(int argc, char *argv[])
 
   // ── Normal mode — loop reading sensors ──────────────────────────────────────
 
+  static int last_day = -1;
+  static int last_week = -1;
+  struct tm *tm_now;
+
   update_display_message(&acddata, ACD_MSG_CLEAR, NULL);
   clock_gettime(CLOCK_MONOTONIC, &next_wake);
+
+  tm_now = localtime(&next_wake.tv_sec);
+  if (last_day == -1) {
+    last_day = tm_now->tm_yday;
+    last_week = tm_now->tm_wday;
+  }
+
+
   while (1)
   {
     acd_scope_t sensors_read_scope = ACD_SCOPE_GLOBAL;
@@ -473,6 +507,7 @@ int main(int argc, char *argv[])
             //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
+            update_sensor_average(key);
           } else {
             LOG(LOG_WARNING, "D1w Temp Sensor '%s' read failed (status %d)\n", key->label, temp_reading.status);
             //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
@@ -492,6 +527,7 @@ int main(int argc, char *argv[])
             //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
+            update_sensor_average(key);
           } else {
             LOG(LOG_WARNING, "EZO Temp Sensor '%s' read failed (status %d)\n", key->label, temp_reading.status);
             //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
@@ -528,6 +564,7 @@ int main(int argc, char *argv[])
             //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
+            update_sensor_average(key);
           } else {
             LOG(LOG_WARNING, "EZO pH Sensor '%s' read failed (status %d)\n", key->label, ph_reading.status);
             //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
@@ -543,6 +580,7 @@ int main(int argc, char *argv[])
             //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
+            update_sensor_average(key);
           } else {
             LOG(LOG_WARNING, "EZO ORP Sensor '%s' read failed (status %d)\n", key->label, orp_reading.status);
             //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
@@ -558,6 +596,7 @@ int main(int argc, char *argv[])
             //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
+            update_sensor_average(key);
           } else {
             LOG(LOG_WARNING, "EZO PRS Sensor '%s' read failed (status %d)\n", key->label, prs_reading.status);
             //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
@@ -579,9 +618,31 @@ int main(int argc, char *argv[])
 
 next_wake:
     
+    tm_now = localtime(&next_wake.tv_sec);
+
+    if (tm_now->tm_yday != last_day) {
+      LOG(LOG_NOTICE, "Day change detected\n");
+      reset_metrics(&acddata, AVG_DAILY);
+      last_day = tm_now->tm_yday;
+    }
+    if (tm_now->tm_wday == 0 && last_week != 0) {
+      LOG(LOG_NOTICE, "Week change detected\n");
+      reset_metrics(&acddata, AVG_WEEKLY);
+      last_week = tm_now->tm_wday;
+    }
+
     LOG(LOG_NOTICE,"- reading(s) took: %.2fs -\n", elapsed_ms(&next_wake) / 1000);
     // Advance the target wake time by one interval
     next_wake.tv_sec += _acdconfig_.sensor_poll_time;
+
+    // check for drift
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    
+    // If we fell behind (loop took longer than poll_seconds), reset the base to 'now' 
+    if (now.tv_sec >= next_wake.tv_sec) {
+      next_wake = now; // Reset base to current time
+    }
     // Sleep until the next wake time
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake, NULL);
   }
@@ -589,7 +650,7 @@ next_wake:
   return 0;
 }
 
-#ifdef EXAMPLE_CODEß
+#ifdef EXAMPLE_CODE
 
 // Below is some code to implement a more robust task scheduler that would allow for more complex tasks 
 // like dosing for a specific duration without blocking the main loop. 

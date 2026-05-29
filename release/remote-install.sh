@@ -91,23 +91,18 @@ CONTEXT="REMOTE"
 SELF="remote_install.sh"
 OUTPUT="/var/log/${BIN}_upgrade.log"
 
-REQUIRED_SPACE_MB=18 
+REQUIRED_SPACE_MB=2
 REL_VERSION=""
 DEV_VERSION=""
 INSTALLED_VERSION=""
 
 TEMP_INSTALL="/tmp/${BIN}"
-UNTAR_CMD="tar xz --strip-components=1 --directory=$TEMP_INSTALL"
+UNTAR_CMD="tar xz --directory=$TEMP_INSTALL"
 
 FROM_CURL=$FALSE
 SYSTEMD_LOG=$FALSE
-USE_RELEASE_PKG=$TRUE
-temp_file="" # Global for trap cleanup
 
-if [ "$USE_RELEASE_PKG" -eq $TRUE ]; then
-  REQUIRED_SPACE_MB=2
-  UNTAR_CMD="tar xz --directory=$TEMP_INSTALL"
-fi
+temp_file="" # Global for trap cleanup
 
 if command -v "systemd-cat" &>/dev/null; then
   SYSTEMD_LOG=$TRUE
@@ -181,11 +176,9 @@ check_can_upgrade() {
 download_latest_release() {
   mkdir -p "$TEMP_INSTALL"
   local tar_url=""
-  if [ "$USE_RELEASE_PKG" -eq $TRUE ]; then
-    tar_url=$(curl -fsSL "$REPO/releases/latest" | grep -Po '"browser_download_url": "\K.*?(?=")' | grep -i ${BIN}-release.tar.gz)
-  else
-    tar_url=$(curl -fsSL "$REPO/releases/latest" | grep -Po '"tarball_url": "\K.*?(?=")')
-  fi
+
+  tar_url=$(curl -fsSL "$REPO/releases/latest" | grep -Po '"browser_download_url": "\K.*?(?=")' | grep -i ${BIN}-release.tar.gz)
+  
   if [[ "$tar_url" == "" ]]; then return "$FALSE"; fi
   curl -fsSL "$tar_url" | $UNTAR_CMD
   if [ $? -ne 0 ]; then return "$FALSE"; fi
@@ -202,11 +195,9 @@ download_latest_development() {
 
 download_version() {
   local tar_url=""
-  if [ "$USE_RELEASE_PKG" -eq $TRUE ]; then
-    tar_url=$(curl -fsSL "$REPO/releases" | awk 'match($0,/.*"browser_download_url": "(.*\/'"${BIN}"'-release\.tar\.gz)".*/)' | grep "$1/" | awk -F '"' '{print $4}' )
-  else
-    tar_url=$(curl -fsSL "$REPO/releases" | awk 'match($0,/.*"tarball_url": "(.*\/tarball\/.*)".*/)' | grep "$1\"" | awk -F '"' '{print $4}')
-  fi
+
+  tar_url=$(curl -fsSL "$REPO/releases" | awk 'match(tolower($0),/.*"browser_download_url": "(.*\/'"${BIN}"'-release\.tar\.gz)".*/)' | grep "$1/" | awk -F '"' '{print $4}' )
+
   if [[ ! -n "$tar_url" ]]; then return "$FALSE"; fi
   mkdir -p "$TEMP_INSTALL"
   curl -fsSL "$tar_url" | $UNTAR_CMD
@@ -215,11 +206,7 @@ download_version() {
 }
 
 get_all_versions() {
-  if [ "$USE_RELEASE_PKG" -eq $TRUE ]; then
-    curl -fsSL "$REPO/releases" | awk 'match($0,/.*"browser_download_url": "(.*\/'"${BIN}"'-release\.tar\.gz)".*/)' | awk -F '/' '{split($(NF-1), a, "\""); print a[1]}'
-  else
-    curl -fsSL "$REPO/releases" | awk 'match($0,/.*"tarball_url": "(.*\/tarball\/.*)".*/)' | awk -F '/' '{split($NF,a,"\""); print a[1]}'
-  fi
+  curl -fsSL "$REPO/releases" | awk 'match(tolower($0),/.*"browser_download_url": "(.*\/'"${BIN}"'-release\.tar\.gz)".*/)' | awk -F '/' '{split($(NF-1), a, "\""); print a[1]}'
 }
 
 run_install_script() {
@@ -284,9 +271,9 @@ main() {
       echo "AquachemD Installation script"
       echo "$SELF               <- download and install latest AquachemD version"
       echo "$SELF latest        <- download and install latest AquachemD version"
-      if [ "$USE_RELEASE_PKG" -eq $FALSE ]; then
-        echo "$SELF development   <- download and install latest AquachemD development version"
-      fi
+#      if [ "$USE_RELEASE_PKG" -eq $FALSE ]; then
+#        echo "$SELF development   <- download and install latest AquachemD development version"
+#      fi
       echo "$SELF clean         <- Remove AquachemD"
       echo "$SELF list          <- List available versions to install"
       echo "$SELF v1.0.0        <- install AquachemD v1.0.0"

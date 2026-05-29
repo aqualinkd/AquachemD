@@ -58,7 +58,7 @@ static void cJSON_AddFloat(cJSON *object, const char *name, float value) {
 }
 
 
-static struct {
+typedef struct {
     char *label;
     char *topic_path;
     char *char_value;
@@ -71,14 +71,25 @@ static struct {
     unsigned char address;
     acd_type_t pending_type;
     uint8_t flags;
-} _staging;
+} acd_staging_t;
 
+static acd_staging_t _staging;
+
+
+void add_condition_mqtt(const acd_staging_t *st);
+void add_condition_gpio(const acd_staging_t *st);
+void add_output_gpio(const acd_staging_t *st);
+void add_sensor_ezo(const acd_staging_t *st);
+void add_sensor_d1w(const acd_staging_t *st);
+void add_sensor_mqtt(const acd_staging_t *st);
+/*
 void add_condition_mqtt(const char *label, const char *topic, const char *value, bool is_global);
 void add_condition_gpio(const char *label, int pin, gpio_active_t pin_mode, gpio_req_t pin_state, bool is_global);
 void add_output_gpio(const char *label, acd_type_t type, int pin, gpio_active_t pin_mode, gpio_req_t pin_state, float ml_ps, uint32_t flags);
 void add_sensor_ezo(const char *label, acd_type_t type, unsigned char address, bool is_global);
 void add_sensor_d1w(const char *label, acd_type_t type, const char *path, float offset, float scale, bool is_global);
 void add_sensor_mqtt(const char *label, acd_type_t type, const char *topic, bool is_global);
+*/ 
 
 void init_cfg_parameters() {
     LOG(LOG_DEBUG, "Initializing config with %d entries", CFG_PARAM_COUNT);
@@ -125,6 +136,43 @@ void action_staging() {
         case ACD_TYPE_EZO_PH:
         case ACD_TYPE_EZO_ORP:
         case ACD_TYPE_EZO_TEMP:
+        case ACD_TYPE_EZO_PRS:
+            add_sensor_ezo(&_staging);
+            break;
+        case ACD_TYPE_MQTT_TEMP:
+            add_sensor_mqtt(&_staging);
+            break;
+        case ACD_TYPE_D1W_TEMP:
+            add_sensor_d1w(&_staging);
+            break;
+        case ACD_TYPE_GPIO_PMP:
+            add_output_gpio(&_staging);
+            break;
+        case ACD_TYPE_MQTT_COND:
+            add_condition_mqtt(&_staging);
+            break;
+        case ACD_TYPE_GPIO_COND:
+            add_condition_gpio(&_staging);
+            break;
+        case ACD_TYPE_EZO_PMP:
+            LOG(LOG_ERR, "EZO Pump not supported yet, Ignoring %s", _staging.label);
+        default:
+            LOG(LOG_ERR, "Didn't create config entry for %s", _staging.label);
+            break;
+    }
+    
+    // Ensure cleanup happens after extraction
+    clear_staging();
+}
+
+/*
+void action_staging() {
+    if (!_staging.label) return;
+
+    switch (_staging.pending_type) {
+        case ACD_TYPE_EZO_PH:
+        case ACD_TYPE_EZO_ORP:
+        case ACD_TYPE_EZO_TEMP:
         case ACD_TYPE_EZO_PMP:
         case ACD_TYPE_EZO_PRS:
             add_sensor_ezo(_staging.label, _staging.pending_type, _staging.address, _staging.is_global);
@@ -150,6 +198,7 @@ void action_staging() {
     }
     clear_staging();
 }
+*/
 
 bool parse_dose_range(runtime_range_t *steps, uint8_t *count, const char *value, bool sort_descending) {
     if (*count >= MAX_DOSING_RANGES) return false;
@@ -245,6 +294,9 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 }
                 else if (strncasecmp(param, "temp_sensor_scale", 17) == 0) {
                     _staging.value2 = strtof(value, NULL);
+                }
+                else if (strstr(param, "_sensor_statistics")) {
+                    setMASK(_staging.flags, parse_statistics(value));
                 }
                 else if (strstr(param, "_condition_scope_global") ||
                          strstr(param, "_sensor_scope_global")) {
@@ -561,6 +613,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
         // Every block gets an internal array describing its configurable fields
         cJSON *block_fields = cJSON_AddArrayToObject(block, "fields");
         cJSON *f_item; // Temporary object pointer for building field definitions
+        cJSON *s_item;
 
         switch (curr->type) {
             case ACD_TYPE_MQTT_COND:
@@ -584,7 +637,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "key", "mqtt_condition_scope_global");
                 cJSON_AddStringToObject(f_item, "type", "boolean");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_V_BOOL));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
                 cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_ACTION_BLOCK?true:false);
                 
                 cJSON_AddItemToArray(block_fields, f_item);
@@ -605,7 +658,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", gpio_active_to_str(curr->data.gpio.active));
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse("[\"Active High\",\"Active Low\"]"));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_ACTIVE));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
@@ -613,14 +666,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", gpio_req_to_str(curr->data.gpio.required));
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse("[\"on\",\"off\"]"));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_ONOFF));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
                 cJSON_AddStringToObject(f_item, "key", "gpio_condition_scope_global");
                 cJSON_AddStringToObject(f_item, "type", "boolean");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_V_BOOL));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
                 cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_ACTION_BLOCK?true:false);
                 cJSON_AddItemToArray(block_fields, f_item);
                 break;
@@ -645,15 +698,35 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                if (curr->type == ACD_TYPE_EZO_PH) {cJSON_AddStringToObject(f_item, "key", "ph_sensor_scope_global");}
-                else if (curr->type == ACD_TYPE_EZO_ORP) {cJSON_AddStringToObject(f_item, "key", "orp_sensor_scope_global");}
-                else if (curr->type == ACD_TYPE_EZO_PRS) {cJSON_AddStringToObject(f_item, "key", "prs_sensor_scope_global");}
-                else {cJSON_AddStringToObject(f_item, "key", "temp_sensor_scope_global");}
+                s_item = cJSON_CreateObject();
+                if (curr->type == ACD_TYPE_EZO_PH) {
+                    cJSON_AddStringToObject(f_item, "key", "ph_sensor_scope_global");
+                    cJSON_AddStringToObject(s_item, "key", "ph_sensor_statistics");
+                }
+                else if (curr->type == ACD_TYPE_EZO_ORP) {
+                    cJSON_AddStringToObject(f_item, "key", "orp_sensor_scope_global");
+                    cJSON_AddStringToObject(s_item, "key", "orp_sensor_statistics");
+                }
+                else if (curr->type == ACD_TYPE_EZO_PRS) {
+                    cJSON_AddStringToObject(f_item, "key", "prs_sensor_scope_global");
+                    cJSON_AddStringToObject(s_item, "key", "prs_sensor_statistics");
+                }
+                else {
+                    cJSON_AddStringToObject(f_item, "key", "temp_sensor_scope_global");
+                    cJSON_AddStringToObject(s_item, "key", "temp_sensor_statistics");
+                }
 
                 cJSON_AddStringToObject(f_item, "type", "boolean");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_V_BOOL));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
                 cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                cJSON_AddStringToObject(s_item, "type", "select");
+                cJSON_AddBoolToObject(s_item, "readonly", false);
+                cJSON_AddItemToObject(s_item, "options", cJSON_Parse(CFG_O_STATS));
+                cJSON_AddStringToObject(s_item, "value", statistics_to_str(curr->flags));
+                cJSON_AddItemToArray(block_fields, s_item);
 
                 break;
 
@@ -711,7 +784,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", gpio_active_to_str(curr->data.gpio.active));
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse("[\"Active High\",\"Active Low\"]"));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_ACTIVE));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
@@ -720,7 +793,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", gpio_req_to_str(curr->data.gpio.required));
                 printf("***** %s required_state %s\n",curr->label, gpio_req_to_str(curr->data.gpio.required));
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse("[\"on\",\"off\"]"));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_ONOFF));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
@@ -870,6 +943,9 @@ void check_print_config (struct aquachemdata *acdata)
   //acdata->conditions = _acdconfig_.conditions; // Make conditions available in main data struct for future use.
 
   acdata->keys->next = _acdconfig_.keys; // Make sensors available in main data struct keys, first key is pre-set 
+
+  // make sure a valid poll time. ie >= 1
+  _acdconfig_.sensor_poll_time = (_acdconfig_.sensor_poll_time < 1) ? 1 : _acdconfig_.sensor_poll_time;
 
   // Anything that's not in the config table should be added as a special case here until it's added to the table. This is for handling things that need to be displayed in a special way or that aren't actually stored in the config struct but are still important to display.
   LOG(LOG_NOTICE, "%-*s = %s\n",MAX_PRINTLEN,"Configuration file", _acdconfig_.config_file);
@@ -1073,7 +1149,7 @@ void generate_sensor_id(acd_key_t *node) {
     node->ID = strdup(buf);
 }
 
-char	*generate_label(const char *base, acd_label_type_t type, const char *label) {
+char *generate_label(const char *base, acd_label_type_t type, const char *label) {
 
   if (label && strlen(label) > 0) {
     return strdup(label);
@@ -1111,8 +1187,160 @@ char	*generate_label(const char *base, acd_label_type_t type, const char *label)
   return strdup(buf);
 }
 
+// Priority groups — lower number = closer to head
+static int node_priority(acd_type_t type) {
+    if (type == ACD_TYPE_MASTER)                return 0;
+    if (IS_CONDITION(type))                     return 1;
+    if (type == ACD_TYPE_EZO_TEMP  ||
+        type == ACD_TYPE_MQTT_TEMP ||
+        type == ACD_TYPE_D1W_TEMP)              return 2;
+    if (IS_INPUT(type))                         return 3;  // PH, ORP, etc.
+    if (IS_OUTPUT(type))                        return 4;
+    return 5;                                              // unknown/safety
+}
 
+void append_to_key_list(acd_key_t *new_node) {
+    new_node->next = NULL;
+    int new_prio = node_priority(new_node->type);
 
+    // Insert at head if list is empty or new node beats the head
+    if (_acdconfig_.keys == NULL ||
+        node_priority(_acdconfig_.keys->type) > new_prio) {
+        new_node->next = _acdconfig_.keys;
+        _acdconfig_.keys = new_node;
+        return;
+    }
+
+    // Walk until the next node has a strictly higher priority
+    acd_key_t *curr = _acdconfig_.keys;
+    while (curr->next != NULL && node_priority(curr->next->type) <= new_prio) {
+        curr = curr->next;
+    }
+    new_node->next = curr->next;
+    curr->next = new_node;
+}
+
+// Specialized function for MQTT Condition
+void add_condition_mqtt(const acd_staging_t *st) {
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
+    if (!new_node) return;
+
+    new_node->type = ACD_TYPE_MQTT_COND;
+    
+    new_node->label = generate_label(st->topic_path, ACD_LABEL_MQTT, st->label);
+    new_node->data.mqtt.topic = strdup(st->topic_path);
+    new_node->data.mqtt.target_value = strdup(st->char_value);
+    new_node->met = false; // Initial state, not met.
+    new_node->scope = st->is_global ? ACD_ACTION_BLOCK : ACD_ACTION_LIMIT;
+    
+    generate_condition_id(new_node);
+    append_to_key_list(new_node);
+}
+
+// Specialized function for GPIO Condition
+void add_condition_gpio(const acd_staging_t *st) {
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
+    if (!new_node) return;
+
+    new_node->type = ACD_TYPE_GPIO_COND;
+
+    new_node->label = generate_label(int_to_str(st->pin), ACD_LABEL_GPIO, st->label);
+    new_node->data.gpio.pin = st->pin;
+    new_node->data.gpio.active = st->pin_mode;
+    new_node->data.gpio.required = st->pin_state;
+    new_node->met = false; // Initial state, not met.
+    new_node->scope = st->is_global ? ACD_ACTION_BLOCK : ACD_ACTION_LIMIT;
+    
+    generate_condition_id(new_node);
+    append_to_key_list(new_node);
+}
+
+// Specialized function for Atlas Scientific EZO
+void add_sensor_ezo(const acd_staging_t *st) {
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
+    if (!new_node) return;
+
+    new_node->type = st->pending_type;
+    new_node->label = generate_label(hex_to_str(st->address), ACD_LABEL_EZO, st->label);
+    new_node->data.ezo.address = st->address;
+    new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+    
+    generate_sensor_id(new_node);
+
+    if (st->flags != 0) {
+      new_node->flags = st->flags;
+      //new_node->stats.ID = malloc(strlen(new_node->ID)+ 5);
+      //sprintf(new_node->stats.ID, "STS_%s", new_node->ID);
+    }
+
+    append_to_key_list(new_node);
+}
+
+// Specialized function for MQTT Sensor
+void add_sensor_mqtt(const acd_staging_t *st) {
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
+    if (!new_node) return;
+  
+    new_node->type = st->pending_type;
+    new_node->label = generate_label(st->topic_path, ACD_LABEL_MQTT, st->label);
+    new_node->data.mqtt.topic = strdup(st->topic_path);
+    new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+
+    generate_sensor_id(new_node);
+
+    if (st->flags != 0) {
+      new_node->flags = st->flags;
+      //new_node->stats.ID = malloc(strlen(new_node->ID)+ 5);
+      //sprintf(new_node->stats.ID, "STS_%s", new_node->ID);
+    }
+
+    append_to_key_list(new_node);
+}
+
+// Specialized function for DS18B20 1-Wire
+void add_sensor_d1w(const acd_staging_t *st) {
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
+    if (!new_node) return;
+  
+    new_node->type = st->pending_type;
+    new_node->label = generate_label(st->topic_path, ACD_LABEL_D1W, st->label);
+    strcpy(new_node->data.w1.path, st->topic_path);
+    new_node->data.w1.offset = st->value;  // Mapped from _staging.value
+    new_node->data.w1.scale = st->value2;  // Mapped from _staging.value2
+    new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+
+    generate_sensor_id(new_node);
+
+    if (st->flags != 0) {
+      new_node->flags = st->flags;
+      //new_node->stats.ID = malloc(strlen(new_node->ID)+ 5);
+      //sprintf(new_node->stats.ID, "STS_%s", new_node->ID);
+    }
+
+    append_to_key_list(new_node);
+}
+
+// Specialized function for GPIO Output / Pump
+void add_output_gpio(const acd_staging_t *st) {
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
+    if (!new_node) return;
+  
+    new_node->type = st->pending_type;
+    new_node->label = generate_label(int_to_str(st->pin), ACD_LABEL_PMP, st->label);
+    new_node->data.gpio.pin = st->pin;
+    new_node->data.gpio.active = st->pin_mode;
+    new_node->data.gpio.required = st->pin_state;
+    new_node->flow_rate = st->value; // Mapped from _staging.value (ml_ps)
+  
+    if (st->flags != 0) {
+        new_node->flags = st->flags;
+    }
+  
+    generate_sensor_id(new_node);
+    append_to_key_list(new_node);
+}
+
+/*
 
 // Priority groups — lower number = closer to head
 static int node_priority(acd_type_t type) {
@@ -1244,16 +1472,12 @@ void add_output_gpio(const char *label, acd_type_t type, int pin, gpio_active_t 
   if (flags != 0) {
     new_node->flags = flags;
   }
-  /*
-  if (runtime <= 0) {
-    new_node->runtime = _acdconfig_.ph_default_dose_time;
-  } else {
-    new_node->runtime = runtime;
-  }
-  */
+
   generate_sensor_id(new_node);
 
   append_to_key_list(new_node);
 
   //LOG(LOG_ERR, "GPIO %s Pin %d, active %d, state %d",new_node->label, new_node->data.gpio.pin, new_node->data.gpio.active, pin_state);
 }
+
+*/

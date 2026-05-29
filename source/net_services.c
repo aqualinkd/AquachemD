@@ -19,6 +19,7 @@
 #include "state_manager.h"
 #include "acd_scheduler.h"
 #include "acd_timer.h"
+#include "sensor_stats.h"
 
 
 
@@ -382,6 +383,12 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
     return uCalibrate;
   } else if (strncmp(ri1, "instantreading", 9) == 0) {
     return uInstantReading;
+  } else if (strncmp(ri1, "reset-daily", 11) == 0) {
+    reset_metrics(_aquachemd_data, AVG_DAILY);
+    return uActioned;
+  } else if (strncmp(ri1, "reset-weekly", 12) == 0) {
+    reset_metrics(_aquachemd_data, AVG_WEEKLY);
+    return uActioned;
   } else if (ri2 != NULL && (strncasecmp(ri2, "set", 3) == 0)) {
     for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
       if (uri_strcmp(ri1, curr->ID) && (value == ACD_LED_OFF || value == ACD_LED_ON || value == ACD_LED_ENABLED)) {
@@ -405,6 +412,21 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
         }
       }
     }
+  } else if (strncmp(ri1, "restart", 7) == 0 ) { // Only valid from websocket.
+    LOG(LOG_NOTICE, "Received restart request!\n");
+    raise(SIGRESTART);
+    return uActioned;
+  } else if (strncmp(ri1, "installrelease", 14) == 0 ) { // Only valid from websocket.
+    if (ri2 != NULL) {
+      LOG(LOG_NOTICE, "Received install release request, %s\n",ri2);
+      //_aqualink_data->upgrade_version = malloc( (sizeof(char*) * strlen(ri2)) + 1);
+      //snprintf(_aqualink_data->upgrade_version, strlen(ri2)+1, ri2);
+    } else {
+      LOG(LOG_NOTICE, "Received install release request, but no version named, using latest!\n");
+      //_aqualink_data->upgrade_version = "latest";
+    }
+    //raise(SIGRUPGRADE);
+    return uActioned;
   } else {
     *rtnmsg = UNKNOWN_REQUEST;
   }
@@ -472,7 +494,8 @@ void action_websocket_request(struct mg_connection *nc, struct mg_ws_message *wm
   float val;
   char *msg = NULL;
   //char message[2048];
-  char message[7680];
+  char message[8192];
+  //char message[10000];
 
   log_mg_str(LOG_DEBUG, "WS: Websocket message", wm->data);
 

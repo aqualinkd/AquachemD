@@ -18,8 +18,10 @@
 //void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
 //bool stateChangeRequest(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
 
-void intHandler(int sig_num);
+#define SIGRESTART SIGUSR1
+#define SIGRUPGRADE SIGUSR2
 
+void intHandler(int sig_num);
 
 /**
  * SET_IF_CHANGED: Updates a variable and sets a flag if the value has changed.
@@ -79,6 +81,14 @@ void intHandler(int sig_num);
     })
 */
 
+
+typedef struct {
+    sensor_stats_t ph_daily;
+    sensor_stats_t ph_weekly;
+    sensor_stats_t orp_daily;
+    sensor_stats_t orp_weekly;
+} sensor_metrics_t;
+
 #define DISPLAY_MSG_SIZE 64
 
 struct aquachemdata
@@ -89,6 +99,7 @@ struct aquachemdata
   int open_websockets;
   bool acdManagerActive;
 
+  sensor_metrics_t sensorMetrics;
   //ph_reading_t ph_reading;
   //orp_reading_t orp_reading;
   //rtd_reading_t temp_reading;
