@@ -148,7 +148,7 @@ void LOG_PUMP_EVENT(acd_key_t *key, uint32_t seconds, float reading, float ml)
 {
   // key->value = value of sensor when pump started (ie ph or orp)
   // Always do a standard human-readable log
-  LOG(LOG_NOTICE, "PUMP_EVENT: %s ran for %us (Value: %.2f) estimated %.2fml", key->ID, seconds, key->value, ml);
+  LOG(LOG_NOTICE, "PUMP_EVENT: %s ran for %us (Value: %.2f) estimated %.2fml", key->ID, seconds, reading, ml);
 
 #ifdef USE_SYSTEMD
   if (_enable_journal) {
@@ -414,7 +414,7 @@ float temp_c_to_k(float celsius)
 }
 
 
-
+/*
 uint8_t parse_statistics(const char *str)
 {
     if (!str) return 0x00;
@@ -453,7 +453,7 @@ const char *time_range_to_str(uint8_t val)
   if (isMASKSET(val, AVG_WEEKLY)) {return "7d";} 
   return "";
 }
-
+*/
 
 
 #include <time.h>
@@ -475,6 +475,7 @@ const char* acd_state_to_str(acd_state_t state) {
         case ACD_LED_ON:       return "ON";
         case ACD_LED_ENABLED:  return "ENABLED";
         case ACD_LED_DISABLED: return "DISABLED";
+        case ACD_LED_DELAY:    return "DELAY";
         case ACD_LED_UNKNOWN: 
         default:               return "UNKNOWN";
     }

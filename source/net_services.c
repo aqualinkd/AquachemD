@@ -20,6 +20,7 @@
 #include "acd_scheduler.h"
 #include "acd_timer.h"
 #include "sensor_stats.h"
+#include "web_config.h"
 
 
 
@@ -35,7 +36,7 @@ static struct mg_http_serve_opts _http_server_opts;
 static struct mg_http_serve_opts _http_server_opts_nocache;
 
 void reset_last_mqtt_status();
-void broadcast_aquachemdstate(struct mg_connection *nc);
+void broadcast_aquachemdstate(struct mg_connection *nc, bool force_all);
 void start_mqtt(struct mg_mgr *mgr);
 static void ws_send(struct mg_connection *nc, const char *msg);
 bool broadcast_systemd_logmessages(bool acdMgrActive);
@@ -162,7 +163,8 @@ void log_mg_str(int level, char *name, struct mg_str str) {
 
 bool process_sensor_request(char *buffer, size_t buf_size, char *ws_request, float calibrationValue, bool is_calibration)
 {
-  int rtn=EZO_SUCCESS;
+  int cal_rtn=EZO_SUCCESS;
+  int read_rtn=EZO_SUCCESS;
   float value = 0.0f;
   if (_aquachemd_data == NULL) {
     goto f_end;
@@ -173,52 +175,63 @@ bool process_sensor_request(char *buffer, size_t buf_size, char *ws_request, flo
   if (strcasecmp(ws_request, "cal_ph") == 0) {
     if (is_calibration) {
       LOG(LOG_NOTICE, "Calibrating pH - %.2f",calibrationValue);
-      rtn = ph_calibrate_by_value(calibrationValue);
+      cal_rtn = ph_calibrate_by_value(calibrationValue);
     }
-    if (rtn == EZO_SUCCESS) {
+    if (cal_rtn == EZO_SUCCESS) {
       LOG(LOG_NOTICE, "Reading pH");
       ph_reading_t reading = ph_get_reading();
-      if (reading.status == EZO_SUCCESS){value=reading.value; rtn=reading.status; LOG(LOG_NOTICE, "pH reading %.2f",value);}
+      if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "pH reading %.2f",value);}
+      else {LOG(LOG_ERR, "Failed to read pH sensor, status %d", reading.status);}
+      read_rtn = reading.status;
     }
 
   } else if (strcasecmp(ws_request, "cal_orp") == 0) {
     if (is_calibration) {
       LOG(LOG_NOTICE, "Calibrating ORP - %.2f",calibrationValue);
-      rtn = orp_calibrate(calibrationValue);
+      cal_rtn = orp_calibrate(calibrationValue);
     }
-    if (rtn == EZO_SUCCESS) {
+    if (cal_rtn == EZO_SUCCESS) {
       LOG(LOG_NOTICE, "Reading ORP");
       orp_reading_t reading = orp_get_reading();
-      if (reading.status == EZO_SUCCESS){value=reading.value; rtn=reading.status; LOG(LOG_NOTICE, "ORP reading %.2f",value);}
+      if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "ORP reading %.2f",value);}
+      else {LOG(LOG_ERR, "Failed to read ORP sensor, status %d", reading.status);}
+      read_rtn = reading.status;
     }
 
   } else if (strcasecmp(ws_request, "cal_rtd") == 0) {
     if (is_calibration) {
       LOG(LOG_NOTICE, "Calibrating Temperature - %.2f",calibrationValue);
-      rtn = rtd_calibrate(calibrationValue);
+      cal_rtn = rtd_calibrate(calibrationValue);
     }
-    if (rtn == EZO_SUCCESS) {
+    if (cal_rtn == EZO_SUCCESS) {
       LOG(LOG_NOTICE, "Reading Temperature");
       rtd_reading_t reading = rtd_get_reading();
-      if (reading.status == EZO_SUCCESS){value=reading.value; rtn=reading.status; LOG(LOG_NOTICE, "Temperature reading %.2f",value);}
+      if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "Temperature reading %.2f",value);}
+      else {LOG(LOG_ERR, "Failed to read Temperature sensor, status %d", reading.status);}
+      read_rtn = reading.status;
     }
 
   } else if (strcasecmp(ws_request, "cal_prs") == 0) {
     if (is_calibration) {
       LOG(LOG_NOTICE, "Calibrating Pressure - %.2f",calibrationValue);
-      rtn = prs_calibrate(calibrationValue);
+      cal_rtn = prs_calibrate(calibrationValue);
     }
-    if (rtn == EZO_SUCCESS) {
+    if (cal_rtn == EZO_SUCCESS) {
       LOG(LOG_NOTICE, "Reading Pressure");
       prs_reading_t reading = prs_get_reading();
-      if (reading.status == EZO_SUCCESS){value=reading.value; rtn=reading.status; LOG(LOG_NOTICE, "Pressure reading %.2f",value);}
+      if (reading.status == EZO_SUCCESS){value=reading.value; LOG(LOG_NOTICE, "Pressure reading %.2f",value);}
+      else {LOG(LOG_ERR, "Failed to read Pressure sensor, status %d", reading.status);}
+      read_rtn = reading.status;
     }
   }
 
   f_end:
 
-  if (rtn != EZO_SUCCESS) {
-    snprintf(buffer,buf_size, "{\"type\":\"instant_sensor_message\",\"status\":\"error\",\"error\":\"%d\"}",rtn);
+  if (cal_rtn != EZO_SUCCESS) {
+    snprintf(buffer,buf_size, "{\"type\":\"instant_sensor_message\",\"status\":\"error\",\"error\":\"%d\",\"error_msg\":\"error calibrating sensor\"}",cal_rtn);
+    return false;
+  } else if (read_rtn != EZO_SUCCESS) {
+    snprintf(buffer,buf_size, "{\"type\":\"instant_sensor_message\",\"status\":\"error\",\"error\":\"%d\",\"error_msg\":\"error reading sensor\"}",read_rtn);
     return false;
   } else {
     snprintf(buffer,buf_size, "{\"type\":\"instant_sensor_message\",\"status\":\"ok\",\"request_type\":\"%s\",\"action_type\":\"%s\",\"value\":\"%.2f\"}",
@@ -383,12 +396,16 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
     return uCalibrate;
   } else if (strncmp(ri1, "instantreading", 9) == 0) {
     return uInstantReading;
-  } else if (strncmp(ri1, "reset-daily", 11) == 0) {
-    reset_metrics(_aquachemd_data, AVG_DAILY);
-    return uActioned;
-  } else if (strncmp(ri1, "reset-weekly", 12) == 0) {
-    reset_metrics(_aquachemd_data, AVG_WEEKLY);
-    return uActioned;
+    /*
+  } else if (strncmp(ri1, "reset_stats", 11) == 0) {
+    if ( reset_sensors_average_by_duration(_aquachemd_data, ri2) ) {
+      return uActioned;
+    } */
+  // Handle "aquachemd/reset_stats" at moment aquachemd can be anything as we don;t check.
+  } else if (ri2 != NULL && strncmp(ri2, "reset_stats", 11) == 0) {
+    if ( reset_sensors_average_by_hours(_aquachemd_data, value) ) {
+      return uActioned;
+    }
   } else if (ri2 != NULL && (strncasecmp(ri2, "set", 3) == 0)) {
     for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
       if (uri_strcmp(ri1, curr->ID) && (value == ACD_LED_OFF || value == ACD_LED_ON || value == ACD_LED_ENABLED)) {
@@ -419,13 +436,15 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
   } else if (strncmp(ri1, "installrelease", 14) == 0 ) { // Only valid from websocket.
     if (ri2 != NULL) {
       LOG(LOG_NOTICE, "Received install release request, %s\n",ri2);
+      set_upgrade_version(ri2);
       //_aqualink_data->upgrade_version = malloc( (sizeof(char*) * strlen(ri2)) + 1);
       //snprintf(_aqualink_data->upgrade_version, strlen(ri2)+1, ri2);
     } else {
       LOG(LOG_NOTICE, "Received install release request, but no version named, using latest!\n");
       //_aqualink_data->upgrade_version = "latest";
+      set_upgrade_version("latest");
     }
-    //raise(SIGRUPGRADE);
+    raise(SIGRUPGRADE);
     return uActioned;
   } else {
     *rtnmsg = UNKNOWN_REQUEST;
@@ -528,6 +547,10 @@ void action_websocket_request(struct mg_connection *nc, struct mg_ws_message *wm
       build_aquachem_config_json(message, sizeof(message));
       ws_send(nc, message);
       break;
+    case uSaveWebConfig:
+      save_web_config_json((char *)wm->data.buf, wm->data.len, message, sizeof(message), _aquachemd_data);
+      ws_send(nc, message);
+      break;
     case uACDmanager:
       if (!is_websocket_acdmanager(nc)){
         set_websocket_acdmanager(nc);
@@ -608,13 +631,13 @@ bool action_mqtt_condition_message(acd_key_t *condition, struct mg_mqtt_message 
   LOG(LOG_INFO, "MQTT: Received message for condition '%s': %.*s\n", condition->label, mqtt_msg->data.len, mqtt_msg->data.buf);
   
   if (strncmp(mqtt_msg->data.buf, condition->data.mqtt.target_value, mqtt_msg->data.len) == 0) {
-    if (SET_IF_CHANGED(condition->met, true, _aquachemd_data->is_dirty)) {
+    if (ASSIGN_IF_CHANGED(condition->met, true, _aquachemd_data->is_dirty, condition->is_dirty)) {
       LOG(LOG_INFO, "MQTT Condition Change: %s is now SATISFIED\n", condition->label); 
     } 
     set_key_state(_aquachemd_data, condition, ACD_LED_ON);
     return true;
   } else {
-    if (SET_IF_CHANGED(condition->met, false, _aquachemd_data->is_dirty)) {
+    if (ASSIGN_IF_CHANGED(condition->met, false, _aquachemd_data->is_dirty, condition->is_dirty)) {
       LOG(LOG_INFO, "MQTT Condition Change: %s is now NOT MET\n", condition->label); 
     }
     set_key_state(_aquachemd_data, condition, ACD_LED_OFF);
@@ -633,7 +656,7 @@ bool action_mqtt_sensor_message(acd_key_t *sensor, struct mg_mqtt_message *mqtt_
     float new_value = strtof(mqtt_msg->data.buf, NULL);
     LOG(LOG_INFO, "MQTT: Updating sensor '%s' value to %.2f\n", sensor->label, new_value);
     //sensor->state = ACD_LED_ON;
-    SET_IF_CHANGED(sensor->value, new_value, _aquachemd_data->is_dirty); // Mark data as dirty so it gets sent to clients right away instead of waiting for next sensor read. 
+    ASSIGN_IF_CHANGED(sensor->value, new_value, _aquachemd_data->is_dirty, sensor->is_dirty); // Mark data as dirty so it gets sent to clients right away instead of waiting for next sensor read. 
     set_key_state(_aquachemd_data, sensor, ACD_LED_ON);
     return true;
   } else {
@@ -929,18 +952,24 @@ void send_mqtt_temp_msg(struct mg_connection *nc, char *ID, float value)
 
 
 
-void mqtt_broadcast_aquachemdstate(struct mg_connection *nc)
+void mqtt_broadcast_aquachemdstate(struct mg_connection *nc, bool force_all)
 {
 
   char topic[250];
   char msg[11];
 
   // Post main ACD state
-  send_mqtt_acd_state_msg(nc, _aquachemd_data->keys->ID, _aquachemd_data->keys->state);
-  send_mqtt_string_msg(nc, "display_message", _aquachemd_data->display_message);
+  if (force_all || _aquachemd_data->keys->is_dirty) {
+    send_mqtt_acd_state_msg(nc, _aquachemd_data->keys->ID, _aquachemd_data->keys->state);
+    send_mqtt_string_msg(nc, "display_message", _aquachemd_data->display_message);
+    CLEAR_DIRTY(_aquachemd_data->keys->is_dirty);
+  }
 
   // Post sensors & conditions if enabled.  
   for (acd_key_t *curr = _aquachemd_data->keys->next; curr != NULL; curr = curr->next) { 
+    
+    if (!curr->is_dirty && !force_all) {continue;}
+
     if (IS_CONDITION(curr->type) && _acdconfig_.post_condition) {
       send_mqtt_acd_state_msg(nc, curr->ID, curr->met?ACD_LED_ON:ACD_LED_OFF);
     } else if (IS_OUTPUT(curr->type)) {
@@ -956,35 +985,31 @@ void mqtt_broadcast_aquachemdstate(struct mg_connection *nc)
       if (curr->state == ACD_LED_ON) {
         send_mqtt_float_msg(nc, curr->ID, curr->value);
       }
-      
     }
+    CLEAR_DIRTY(curr->is_dirty);
   }
 
-  // Post to aqualinkd if enabled (only pH & ORP)
-  if (_acdconfig_.mqtt_aqualinkd_topic != NULL) {
+  {
+   static float last_ph = 0;
+   static float last_orp = 0;
+   // Post to aqualinkd if enabled (only pH & ORP)
+   if (_acdconfig_.mqtt_aqualinkd_topic != NULL) {
     for (acd_key_t *curr = _aquachemd_data->keys->next; curr != NULL; curr = curr->next) {
-      if (curr->type == ACD_TYPE_EZO_PH && curr->index == MASTER_ID && curr->state == ACD_LED_ON) {
+      if (curr->type == ACD_TYPE_EZO_PH && curr->index == MASTER_ID && curr->state == ACD_LED_ON && curr->value != last_ph) {
         sprintf(msg, "%.2f", curr->value);
         sprintf(topic, "%s/CHEM/pH/set", _acdconfig_.mqtt_aqualinkd_topic);
         send_mqtt(nc, topic, msg);
+        last_ph = curr->value;
         LOG(LOG_DEBUG, "MQTT: Broadcasted pump pH %s to Aqualinkd\n", msg);
-      } else if (curr->type == ACD_TYPE_EZO_ORP && curr->index == MASTER_ID && curr->state == ACD_LED_ON) {
+      } else if (curr->type == ACD_TYPE_EZO_ORP && curr->index == MASTER_ID && curr->state == ACD_LED_ON && curr->value != last_orp) {
         sprintf(msg, "%.2f", curr->value);
         sprintf(topic, "%s/CHEM/ORP/set", _acdconfig_.mqtt_aqualinkd_topic);
         send_mqtt(nc, topic, msg);
+        last_orp = curr->value;
         LOG(LOG_DEBUG, "MQTT: Broadcasted pump ORP %s to Aqualinkd\n", msg);
       }
     }
-/*
-    sprintf(msg, "%.2f", _aquachemd_data->ph_reading.value);
-    sprintf(mqtt_pub_topic, "%s/CHEM/pH/set", _acdconfig_.mqtt_aqualinkd_topic);
-    send_mqtt(nc, mqtt_pub_topic, msg);
-
-    sprintf(msg, "%.2f", _aquachemd_data->orp_reading.value);
-    sprintf(mqtt_pub_topic, "%s/CHEM/ORP/set", _acdconfig_.mqtt_aqualinkd_topic);
-    send_mqtt(nc, mqtt_pub_topic, msg);
-*/    
-    //LOG(LOG_DEBUG, "MQTT: Broadcasted pH %.2f and ORP %.2f to Aqualinkd\n", _aquachemd_data->ph_reading.value, _aquachemd_data->orp_reading.value);
+   }
   }
 }
 
@@ -1016,7 +1041,7 @@ void reset_last_mqtt_status()
 {
 }
 
-void broadcast_aquachemdstate(struct mg_connection *nc) 
+void broadcast_aquachemdstate(struct mg_connection *nc, bool force_all) 
 {
   struct mg_connection *c;
   static int mqtt_count=0;
@@ -1037,7 +1062,7 @@ void broadcast_aquachemdstate(struct mg_connection *nc)
     if (is_websocket(c) /*&& !is_websocket_acdmanager(c)*/) {
       ws_send(c, get_devices_json(_aquachemd_data));
     } else if (is_mqtt(c)) {
-      mqtt_broadcast_aquachemdstate(c);
+      mqtt_broadcast_aquachemdstate(c, force_all);
     }
   }
 
@@ -1129,6 +1154,18 @@ bool network_service(struct mg_mgr *mgr, struct aquachemdata *acdata) {
   return true;
 }
 
+
+
+// The Mongoose poll timeout in milliseconds
+#define POLL_TIMEOUT_MS        100 
+
+// How often to force a heartbeat refresh (in seconds)
+#define HEARTBEAT_INTERVAL_SEC 300 
+
+// Calculate the number of ticks required (1000ms in a second)
+#define HEARTBEAT_TICKS_TARGET ((HEARTBEAT_INTERVAL_SEC * 1000) / POLL_TIMEOUT_MS)
+
+
 void *net_services_thread( void *ptr )
 {
   _aquachemd_data = (struct aquachemdata *) ptr;
@@ -1147,18 +1184,26 @@ void *net_services_thread( void *ptr )
 
   while (_keepNetServicesRunning == true)
   {
+    static uint32_t heartbeat_ticks = 0;
+    bool force_all = false;
     int journald_fail = 0;
+
     // Start MQTT on first iteration after HTTP server is ready
     if (!mqtt_started) {
       start_mqtt(&_mgr);
       mqtt_started = true;
     }
     
-    mg_mgr_poll(&_mgr, 100);
+    mg_mgr_poll(&_mgr, POLL_TIMEOUT_MS);
+
+    if (++heartbeat_ticks >= HEARTBEAT_TICKS_TARGET) { 
+      force_all = true;
+      heartbeat_ticks = 0; // Reset timer
+    }
 
     // Update overall status
-    if (_aquachemd_data->is_dirty == true /*|| _broadcast == true*/) {
-      broadcast_aquachemdstate(_mgr.conns);
+    if (_aquachemd_data->is_dirty == true || force_all == true) {
+      broadcast_aquachemdstate(_mgr.conns, force_all);
       CLEAR_DIRTY(_aquachemd_data->is_dirty);
     } else {
       //LOG(LOG_DEBUG, "No state change, not broadcasting\n");

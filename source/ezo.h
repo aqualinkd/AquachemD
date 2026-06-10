@@ -29,6 +29,7 @@
 #define EZO_PENDING     254
 #define EZO_SYNTAX_ERR  2
 #define EZO_NO_DATA     255
+#define EZO_ERROR       -1    // Hardware, communication, or bus-level failure
 
 // Command wait times in milliseconds
 #define EZO_WAIT_READ       900

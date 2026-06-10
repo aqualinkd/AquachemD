@@ -6,6 +6,7 @@
 #include "ezo.h"
 #include "1wire.h"
 #include "gpio.h"
+#include "sysfs.h"
 
 /*
 typedef enum {
@@ -33,8 +34,11 @@ typedef enum {
     ACD_TYPE_EZO_PRS,
     ACD_TYPE_MQTT_TEMP,
     ACD_TYPE_D1W_TEMP,
+    ACD_TYPE_SYSFS_VALUE,
     #define ACD_IN_FIRST ACD_TYPE_EZO_PH
-    #define ACD_IN_LAST  ACD_TYPE_D1W_TEMP
+    //#define ACD_IN_LAST  ACD_TYPE_D1W_TEMP
+    #define ACD_IN_LAST  ACD_TYPE_SYSFS_VALUE
+
 
     // Outputs (Actuators)
     ACD_TYPE_GPIO_PMP,
@@ -67,10 +71,11 @@ typedef struct {
 
 typedef enum {
     ACD_LED_UNKNOWN = -1,
-    ACD_LED_OFF = 0,
-    ACD_LED_ON,
+    ACD_LED_OFF = 0,     // Maps to false
+    ACD_LED_ON = 1,      // Maps to true
     ACD_LED_ENABLED,
-    ACD_LED_DISABLED // Sensor caused button to be disabled.
+    ACD_LED_DISABLED, // Sensor caused button to be disabled.
+    ACD_LED_DELAY // Condition has a delay before turning on.
 } acd_state_t;
 
 
@@ -91,6 +96,8 @@ typedef struct {
     time_t last_sample_time;
     float min;
     float max;
+    float tau_seconds;
+    pthread_mutex_t lock;
 } sensor_stats_t;
 
 
@@ -99,6 +106,7 @@ typedef struct acd_key_t {
     acd_state_t state;
     acd_scope_t scope;
     
+    volatile bool is_dirty;
     char *label;
     char *ID;
     uint8_t index; //values from 0 to 255
@@ -106,7 +114,11 @@ typedef struct acd_key_t {
     uint8_t err_cnt;
     
     float value; // sensor uses for current value, pump uses for value of ph/orp when turned on.
-    float flow_rate; // ml per second rate for pumps
+      
+    union {
+      float flow_rate; // ml per second rate for pumps
+      uint32_t delay_on;    // condition uses for a delay before setting to on.
+    };
 
     union {
       bool met;    // For conditions, met or not.
@@ -116,10 +128,11 @@ typedef struct acd_key_t {
     sensor_stats_t stats;// Only for sensors, so prime union for future.
 
     union {
-        ezo_sensor_t  ezo;
-        gpio_handle_t gpio;
-        w1_sensor_t   w1;
-        mqtt_sensor_t mqtt;
+        ezo_sensor_t   ezo;
+        gpio_handle_t  gpio;
+        w1_sensor_t    w1;
+        mqtt_sensor_t  mqtt;
+        sysfs_sensor_t sysfs;  
     } data;
 
     struct acd_key_t *next;
@@ -135,15 +148,15 @@ typedef struct runtime_range_t{
 #define MAX_DOSING_RANGES 5
 
 // For special_mask in acd_key
-#define TIMER_ACTIVE           (1 << 0) 
-#define PH_PUMP                (1 << 1) 
-#define ORP_PUMP               (1 << 2)
+#define TIMER_ACTIVE           (1 << 0)
+#define DELAY_ACTIVE           (1 << 1)
+#define PH_PUMP                (1 << 2) 
+#define ORP_PUMP               (1 << 3)
 
-#define ACD_FLAG_FAULTED       (1 << 3)   
-#define ACD_FLAG_ACTIVE        (1 << 4)   // not used at present
+#define ACD_FLAG_FAULTED       (1 << 4)   
+#define ACD_FLAG_ACTIVE        (1 << 5)   // not used at present
 
-#define AVG_DAILY              (1 << 5)
-#define AVG_WEEKLY             (1 << 6)
+#define CALC_AVERAGE           (1 << 6)
 
 //#define CONDITION_SCOPE_GLOBAL (1 << 3) // For conditions Set if global interlock, clear if local restriction
 //#define CONDITION_SCOPE_LOCAL  (1 << 4) // ONLY for master key, if on and this is set, then re can read sensors but not dose.
@@ -176,5 +189,7 @@ typedef struct runtime_range_t{
 */
 #define SD_PUMP_EVENT_ID "332918807d4b46949f50e93149872583"
 #define SD_MESSAGE_STARTUP_ID "5e982c7a12344567890abcdef1234567"
+#define SD_MESSAGE_UPGRADE_ID "c3b9b418e24440939b4bfae6dfbc1122"
+
 
 #endif // ACD_TYPES_H_

@@ -73,7 +73,7 @@
     },
     "TEMP_1": {
       "display": true,
-      "uom": "&deg;C",
+      "____uom": "&deg;C",
       "precision": 1,
       "thresholds": {
         "outofrange": {
@@ -149,8 +149,10 @@
      "CS_3": {
       "display": true
     },
-    "_____comment_devices": "KEPT: Device configuration controls display and threshold settings for each device",
-    "TEMP_2": {
+     "CS_4": {
+      "display": true
+    },
+     "TEMP_2": {
       "display": true,
       "uom": "&deg;",
       "precision": 1
@@ -160,7 +162,11 @@
       "uom": "&deg;",
       "precision": 1
     },
-    "_comment_devices_end": "KEPT: Device configuration is actively used for display and thresholds"
+     "TEMP_4": {
+      "display": true,
+      "uom": "&deg;",
+      "precision": 1
+    }
   },
   "slider_range": {
     "_heater_slider_min": 36,

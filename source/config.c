@@ -12,6 +12,7 @@
 #include "utils.h"
 #include "aquachemd.h"
 #include "cJSON.h"
+#include "sensor_stats.h"
 
 void set_config_defaults();
 
@@ -64,6 +65,7 @@ typedef struct {
     char *char_value;
     float value;
     float value2;
+    float value3;
     int   pin;
     bool  pin_mode;
     bool  pin_state;
@@ -82,6 +84,7 @@ void add_output_gpio(const acd_staging_t *st);
 void add_sensor_ezo(const acd_staging_t *st);
 void add_sensor_d1w(const acd_staging_t *st);
 void add_sensor_mqtt(const acd_staging_t *st);
+void add_sensor_sysfs(const acd_staging_t *st);
 /*
 void add_condition_mqtt(const char *label, const char *topic, const char *value, bool is_global);
 void add_condition_gpio(const char *label, int pin, gpio_active_t pin_mode, gpio_req_t pin_state, bool is_global);
@@ -124,6 +127,7 @@ void clear_staging() {
     _staging.pin_state = 0;
     _staging.value = 0;
     _staging.value2 = 0;
+    _staging.value3 = 0;
     _staging.pending_type = ACD_TYPE_MASTER;
     _staging.flags = 0;
     _staging.is_global = true;
@@ -153,6 +157,9 @@ void action_staging() {
             break;
         case ACD_TYPE_GPIO_COND:
             add_condition_gpio(&_staging);
+            break;
+        case ACD_TYPE_SYSFS_VALUE:
+            add_sensor_sysfs(&_staging);
             break;
         case ACD_TYPE_EZO_PMP:
             LOG(LOG_ERR, "EZO Pump not supported yet, Ignoring %s", _staging.label);
@@ -278,6 +285,11 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     if (_staging.topic_path) free(_staging.topic_path);
                     _staging.topic_path = strdup(value);
                 }
+                else if (strncasecmp(param, "sysfs_sensor_path", 17) == 0) {
+                     _staging.pending_type = ACD_TYPE_SYSFS_VALUE;
+                     if (_staging.topic_path) free(_staging.topic_path);
+                    _staging.topic_path = strdup(value);
+                }
                 else if (strstr(param, "_address")) {
                     _staging.address = (unsigned char)strtoul(value, NULL, 16);
                 }
@@ -296,7 +308,12 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     _staging.value2 = strtof(value, NULL);
                 }
                 else if (strstr(param, "_sensor_statistics")) {
-                    setMASK(_staging.flags, parse_statistics(value));
+                    /* For NEW average caculation */
+                    _staging.value3 = parse_duration_to_seconds(value);
+                    if (_staging.value3 > 0) {
+                      setMASK(_staging.flags, CALC_AVERAGE);
+                    }
+                    //setMASK(_staging.flags, parse_statistics(value));
                 }
                 else if (strstr(param, "_condition_scope_global") ||
                          strstr(param, "_sensor_scope_global")) {
@@ -327,6 +344,20 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     if (_staging.char_value) free(_staging.char_value);
                     _staging.char_value = strdup(value);
                     _staging.pending_type = ACD_TYPE_MQTT_COND;
+                }
+                else if (strncasecmp(param, "sysfs_sensor_regex", 18) == 0) {
+                    if (_staging.char_value) free(_staging.char_value);
+                    _staging.char_value = strdup(value);
+                }
+                else if (strncasecmp(param, "sysfs_sensor_uom", 16) == 0) {
+                    //if (_staging.topic_path) free(_staging.topic_path);
+                    //_staging.topic_path = strdup(value);
+                }
+                else if (strncasecmp(param, "sysfs_sensor_scale", 18) == 0) {
+                    _staging.value2 = strtof(value, NULL);
+                }
+                else if (strncasecmp(param, "sysfs_sensor_offset", 19) == 0) {
+                    _staging.value = strtof(value, NULL);
                 }
                 return true;
             }
@@ -614,6 +645,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
         cJSON *block_fields = cJSON_AddArrayToObject(block, "fields");
         cJSON *f_item; // Temporary object pointer for building field definitions
         cJSON *s_item;
+        char tmp_buf[32];
 
         switch (curr->type) {
             case ACD_TYPE_MQTT_COND:
@@ -722,10 +754,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
                 cJSON_AddItemToArray(block_fields, f_item);
 
-                cJSON_AddStringToObject(s_item, "type", "select");
-                cJSON_AddBoolToObject(s_item, "readonly", false);
-                cJSON_AddItemToObject(s_item, "options", cJSON_Parse(CFG_O_STATS));
-                cJSON_AddStringToObject(s_item, "value", statistics_to_str(curr->flags));
+                //cJSON_AddStringToObject(s_item, "type", "select");
+                //cJSON_AddBoolToObject(s_item, "readonly", false);
+                //cJSON_AddItemToObject(s_item, "options", cJSON_Parse(CFG_O_STATS));
+                //cJSON_AddStringToObject(s_item, "value", statistics_to_str(curr->flags));
+                cJSON_AddStringToObject(f_item, "type", "text");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                duration_seconds_to_string(curr->stats.tau_seconds, tmp_buf, sizeof(tmp_buf));
+                cJSON_AddStringToObject(f_item, "value", tmp_buf);
                 cJSON_AddItemToArray(block_fields, s_item);
 
                 break;
@@ -792,7 +828,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", gpio_req_to_str(curr->data.gpio.required));
-                printf("***** %s required_state %s\n",curr->label, gpio_req_to_str(curr->data.gpio.required));
+                //printf("***** %s required_state %s\n",curr->label, gpio_req_to_str(curr->data.gpio.required));
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_ONOFF));
                 cJSON_AddItemToArray(block_fields, f_item);
 
@@ -1035,6 +1071,7 @@ void check_print_config (struct aquachemdata *acdata)
       case ACD_TYPE_EZO_PRS:   type_str = "sensor (EZO PMP)"; break;
       case ACD_TYPE_D1W_TEMP:  type_str = "sensor (1-Wire Temp)"; break;
       case ACD_TYPE_MQTT_TEMP: type_str = "sensor (MQTT Temp)"; break;
+      case ACD_TYPE_SYSFS_VALUE: type_str = "sensor (System File)"; break;
       case ACD_TYPE_GPIO_PMP:
         type_str = "pump (GPIO)";
         snprintf(buffer, sizeof(buffer), "(%s)", role);
@@ -1077,7 +1114,8 @@ typedef enum {
   ACD_LABEL_EZO,
   ACD_LABEL_D1W,
   ACD_LABEL_PMP,  // Doser
-  ACD_LABEL_PRS
+  ACD_LABEL_PRS,
+  ACD_LABEL_SYSFS
 } acd_label_type_t;
 
 const char* hex_to_str(unsigned char c) {
@@ -1111,6 +1149,7 @@ void generate_sensor_id(acd_key_t *node) {
     static int count_temp = MASTER_ID;
     static int count_pmp = MASTER_ID;
     static int count_prs = MASTER_ID;
+    static int count_sysfs = MASTER_ID;
 
     char buf[32]; 
     const char *prefix = "";
@@ -1138,6 +1177,10 @@ void generate_sensor_id(acd_key_t *node) {
         case ACD_TYPE_EZO_PMP:
             prefix = "PMP";
             node->index = count_pmp++;
+            break;
+        case ACD_TYPE_SYSFS_VALUE:
+            prefix = "SYS";
+            node->index = count_sysfs++;
             break;
         default:
             prefix = "UNK";
@@ -1179,6 +1222,9 @@ char *generate_label(const char *base, acd_label_type_t type, const char *label)
       break;
     case ACD_LABEL_PRS:
       snprintf(buf, sizeof(buf), "PRS_%s", base);
+      break;
+    case ACD_LABEL_SYSFS:
+      snprintf(buf, sizeof(buf), "SYS_%s", base);
       break;
     default:
       snprintf(buf, sizeof(buf), "%s_UNKNOWN", base);
@@ -1232,6 +1278,8 @@ void add_condition_mqtt(const acd_staging_t *st) {
     new_node->data.mqtt.target_value = strdup(st->char_value);
     new_node->met = false; // Initial state, not met.
     new_node->scope = st->is_global ? ACD_ACTION_BLOCK : ACD_ACTION_LIMIT;
+
+    new_node->delay_on = 0;
     
     generate_condition_id(new_node);
     append_to_key_list(new_node);
@@ -1251,6 +1299,8 @@ void add_condition_gpio(const acd_staging_t *st) {
     new_node->met = false; // Initial state, not met.
     new_node->scope = st->is_global ? ACD_ACTION_BLOCK : ACD_ACTION_LIMIT;
     
+    new_node->delay_on = 0;
+    
     generate_condition_id(new_node);
     append_to_key_list(new_node);
 }
@@ -1264,7 +1314,8 @@ void add_sensor_ezo(const acd_staging_t *st) {
     new_node->label = generate_label(hex_to_str(st->address), ACD_LABEL_EZO, st->label);
     new_node->data.ezo.address = st->address;
     new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
-    
+    new_node->stats.tau_seconds = st->value3;
+
     generate_sensor_id(new_node);
 
     if (st->flags != 0) {
@@ -1308,6 +1359,7 @@ void add_sensor_d1w(const acd_staging_t *st) {
     new_node->data.w1.offset = st->value;  // Mapped from _staging.value
     new_node->data.w1.scale = st->value2;  // Mapped from _staging.value2
     new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+    new_node->stats.tau_seconds = st->value3;
 
     generate_sensor_id(new_node);
 
@@ -1337,6 +1389,31 @@ void add_output_gpio(const acd_staging_t *st) {
     }
   
     generate_sensor_id(new_node);
+    append_to_key_list(new_node);
+}
+
+
+void add_sensor_sysfs(const acd_staging_t *st) {
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
+    if (!new_node) return;
+  
+    new_node->type = st->pending_type;
+    new_node->label = generate_label(st->topic_path, ACD_LABEL_SYSFS, st->label);
+    strcpy(new_node->data.sysfs.path, st->topic_path);
+    new_node->data.sysfs.offset = st->value;  // Mapped from _staging.value
+    new_node->data.sysfs.multiplier = st->value2;  // Mapped from _staging.value2
+
+    if (st->char_value) {
+      new_node->data.sysfs.regex_pattern = strdup(st->char_value);
+      new_node->data.sysfs.parser_type = PARSER_REGEX;
+    } else {
+      new_node->data.sysfs.parser_type = PARSER_RAW;    
+    }
+    //new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+    new_node->scope = ACD_SCOPE_LOCAL;
+
+    generate_sensor_id(new_node);
+
     append_to_key_list(new_node);
 }
 

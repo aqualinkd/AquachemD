@@ -19,6 +19,23 @@ FALSE=1
 # Initialize output log destination (overridden by specific logic files)
 OUTPUT=""
 
+log_init_session() {
+  local msg="$1"
+  
+  # Print to console
+  echo "$msg"
+
+  if command -v systemd-journal-send &>/dev/null && [[ -n "${SD_MSG_ID:-}" ]]; then
+    systemd-journal-send \
+      MESSAGE_ID="$SD_MSG_ID" \
+      SYSLOG_IDENTIFIER="${BIN}" \
+      PRIORITY=5 \
+      MESSAGE="$msg"
+  else
+    logger -p "local0.notice" -t ${BIN} -- "$msg"
+  fi
+}
+
 # Centralized Logger Engine
 log_to_journal() {
   local priority="$1"
@@ -43,7 +60,6 @@ log_to_journal() {
   # Log to systemd journal database if available
   if command -v systemd-journal-send &>/dev/null; then
     systemd-journal-send \
-      MESSAGE_ID="$SD_MSG_ID" \
       SYSLOG_IDENTIFIER="${BIN}" \
       PRIORITY="$priority" \
       MESSAGE="$msg"
@@ -110,6 +126,7 @@ LOG_SYSTEMD=1   # 1=false, 0=true
 _frommake=$FALSE
 _ignorearch=$FALSE
 _nosystemd=$FALSE
+_noinitmsg=$FALSE
 
 printHelp() {
   echo "Usage: $0 [options]"
@@ -146,6 +163,7 @@ while [[ $# -gt 0 ]]; do
     from-make)  _frommake=$TRUE ;;
     ignorearch) _ignorearch=$TRUE ;;
     nosystemd)  _nosystemd=$TRUE ;;
+    noinitmsg)  _noinitmsg=$TRUE ;;
     help|-help|--help|-h) printHelp; exit 0 ;;
     clean|delete) clean ;;
     *) echo "Unknown argument: $1"; printHelp; exit 1 ;;
@@ -155,6 +173,10 @@ done
 
 if ! tty > /dev/null 2>&1 || [ "${1:-}" = "syslog" ]; then
   LOG_SYSTEMD=0
+fi
+
+if [ "$_noinitmsg" -eq $FALSE ]; then
+  log_init_session "--- Starting AquachemD Installation/Upgrade ---"
 fi
 
 check_root_privileges
@@ -186,6 +208,7 @@ command -v systemctl >/dev/null 2>&1 || { log "Error: systemctl missing. Systemd
 
 SERVICE_EXISTS=1
 if [ "$_nosystemd" -eq $FALSE ]; then
+  log "Stopping daemon $SERVICE"
   systemctl stop $SERVICE > /dev/null 2>&1
   SERVICE_EXISTS=$?
 fi

@@ -22,6 +22,7 @@
 #define SIGRUPGRADE SIGUSR2
 
 void intHandler(int sig_num);
+void set_upgrade_version(char *version);
 
 /**
  * SET_IF_CHANGED: Updates a variable and sets a flag if the value has changed.
@@ -36,31 +37,21 @@ void intHandler(int sig_num);
 #include <stdbool.h>
 #include <string.h>
 
-#define SET_IF_CHANGED(src, val, flag) \
-    ({                                                           \
-        __typeof__(src) __new_val = (val);                       \
-        bool __changed = false;                                  \
-        if ((src) != __new_val) {                                \
-            (src) = __new_val;                                   \
-            (flag) = true;   /* Set ONLY on change, never cleared */ \
-            __changed = true;                                    \
-        }                                                        \
-        __changed;           /* Evaluates/returns bool to caller */ \
-    })
 
-#define SET_IF_CHANGED_STRCPY(src, val, flag)                  \
+
+#define ASSIGN_IF_CHANGED(src, val, global_dirty, local_dirty) \
     ({                                                         \
-        const char *__new_val = (val);                         \
+        __typeof__(src) __new_val = (val);                     \
         bool __changed = false;                                \
-        if (strncmp((src), __new_val, sizeof(src)) != 0) {     \
-            strncpy((src), __new_val, sizeof(src));            \
-            (src)[sizeof(src) - 1] = '\0';                     \
-            (flag) = true;   /* Set ONLY on change, never cleared */ \
-            __changed = true;                                    \
+        if ((src) != __new_val) {                              \
+            (src) = __new_val;                                 \
+            (global_dirty) = true;                             \
+            (local_dirty)  = true;                             \
+            __changed = true;                                  \
         }                                                      \
-        __changed;           /* Evaluates/returns bool to caller */ \
+        __changed;                                             \
     })
- /*
+/*
 #define SET_IF_CHANGED(src, val, flag) \
     ({                                                           \
         __typeof__(src) __new_val = (val);                       \

@@ -541,6 +541,7 @@
     font-weight: bold;
     font-size: 16px;
     z-index: 10;            /* Forces it above the table buttons */
+    pointer-events: none; /* Allows clicks to pass through to buttons below */
   }
 
   </style>
@@ -1111,6 +1112,63 @@
     */
   }
 
+
+  function showDoseHistory(data) {
+  // Loop through each unique pump using the totals array
+   update_log_message(" ");
+
+   for (const total of data.totals) {
+    const currentPump = total.pump_id;
+  
+    update_log_message(`======================= ${currentPump} Details =======================`);
+  
+    // 1. Filter and loop through matching history rows for this pump
+    const pumpHistory = data.history.filter(item => item.pump_id === currentPump);
+    for (const entry of pumpHistory) {
+      update_log_message(` [${entry.timestamp}] Run time: ${entry.seconds}s | Sensor reading ${entry.reading.toFixed(2)} | Dosed: ${entry.ml.toFixed(2)} ml`);
+    }
+  
+    update_log_message(`---------------------------------------------`);
+
+    // --- NEW: Calculate True Time Span Covered By The Log ---
+    let durationString = "0 hours";
+    
+    if (pumpHistory.length > 0) {
+      // Clean up the double spacing in "Jun  9" so JavaScript Date can parse it reliably on all platforms
+      const cleanTimestamps = pumpHistory.map(entry => {
+        const sanitizedStr = entry.timestamp.replace(/\s+/g, ' ');
+        return new Date(sanitizedStr).getTime();
+      });
+
+      // Find the absolute oldest entry in this batch
+      const earliestTime = Math.min(...cleanTimestamps);
+      const currentTime = Date.now(); // Current time on the controller dashboard
+      
+      // Calculate total time elapsed since tracking started
+      const timeDeltaMs = currentTime - earliestTime;
+
+      if (timeDeltaMs > 0) {
+        const totalHours = Math.floor(timeDeltaMs / (1000 * 60 * 60));
+        const days = Math.floor(totalHours / 24);
+        const hours = totalHours % 24;
+
+        if (days > 0) {
+          durationString = `${days} day${days > 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''}`;
+        } else {
+          durationString = `${hours} hour${hours !== 1 ? 's' : ''}`;
+        }
+      }
+    }
+
+    // 2. Output the summary data
+    update_log_message(`${currentPump} ${total.pump_name} TOTAL: ${total.sum_dose_ml.toFixed(2)} ml over ${total.sum_runtime_s}s`);
+    update_log_message(`Stats Window Tracking Covers: Last ${durationString}\n`);
+
+    update_log_message(`============================================================`);
+    update_log_message(" ");
+   }
+  }
+  /*
   function showDoseHistory(data) {
 
     // Loop through each unique pump using the totals array
@@ -1124,7 +1182,7 @@
     // 1. Filter and loop through matching history rows for this pump
       const pumpHistory = data.history.filter(item => item.pump_id === currentPump);
       for (const entry of pumpHistory) {
-        update_log_message(` [${entry.timestamp}] Run time: ${entry.seconds}s | Dosed: ${entry.ml.toFixed(2)} ml`);
+        update_log_message(` [${entry.timestamp}] Run time: ${entry.seconds}s | Sensor reading ${entry.reading.toFixed(2)} | Dosed: ${entry.ml.toFixed(2)} ml`);
       }
     
       update_log_message(`---------------------------------------------`);
@@ -1135,7 +1193,7 @@
       update_log_message(" ");
     }
   }
-
+*/
 
   async function showWebConfig() {
     var h = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
@@ -2227,6 +2285,7 @@ function renderConfigTable() {
 
         <button class="collapsible">Calibration</button>
          <div class="content restrictable-area" id="calibration">
+         <!-- <div class="content" id="calibration">-->
           <div id="calibration_table" style="width: 100%;">
            <table border='0' style="width: 100%; table-layout: fixed;">
             <tr>

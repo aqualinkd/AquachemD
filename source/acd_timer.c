@@ -19,6 +19,7 @@ struct timerthread {
   pthread_mutex_t thread_mutex;
   pthread_cond_t thread_cond;
   acd_key_t *key;
+  uint32_t mask_type;
   struct aquachemdata *acddata;
   int duration_min;
   uint32_t duration_sec;
@@ -120,7 +121,17 @@ void clear_timer(struct aquachemdata *acddata, acd_key_t *key)
   pthread_mutex_unlock(&_ll_mutex);
 }
 
+void _start_timer(struct aquachemdata *acddata, acd_key_t *key, int duration_min, uint32_t duration_sec, uint32_t mask_type);
+
 void start_timer(struct aquachemdata *acddata, acd_key_t *key, int duration_min, uint32_t duration_sec)
+{
+  _start_timer(acddata, key, duration_min, duration_sec, TIMER_ACTIVE);
+}
+void start_delay(struct aquachemdata *acddata, acd_key_t *key, int duration_min, uint32_t duration_sec)
+{
+  _start_timer(acddata, key, duration_min, duration_sec, DELAY_ACTIVE);
+}
+void _start_timer(struct aquachemdata *acddata, acd_key_t *key, int duration_min, uint32_t duration_sec, uint32_t mask_type)
 {
   pthread_mutex_lock(&_ll_mutex);
   struct timerthread *t_ptr = find_timerthread(key);
@@ -145,7 +156,8 @@ void start_timer(struct aquachemdata *acddata, acd_key_t *key, int duration_min,
   tmthread->duration_min = duration_min;
   tmthread->duration_sec = duration_sec;
   tmthread->started_at = time(NULL); 
-  
+  tmthread->mask_type = mask_type;
+
   // CRITICAL: Initialize threading primitives
   pthread_mutex_init(&tmthread->thread_mutex, NULL);
   pthread_cond_init(&tmthread->thread_cond, NULL);
@@ -185,10 +197,11 @@ void *timer_worker(void *ptr)
   int cnt = 0;
 
   LOG(LOG_NOTICE, "Start timer for '%s'\n", tmthread->key->label);
-  tmthread->key->flags |= TIMER_ACTIVE;
+  //tmthread->key->flags |= TIMER_ACTIVE;
+  tmthread->key->flags |= tmthread->mask_type;
 
   // Wait for device to turn on
-  while (tmthread->key->state == ACD_LED_OFF) {
+  while (tmthread->key->state == ACD_LED_OFF && tmthread->mask_type == TIMER_ACTIVE) {
     LOG(LOG_DEBUG, "waiting for key state '%s' to change\n", tmthread->key->label);
     precise_delay(WAIT_TIME_BEFORE_ON_CHECK);
     if (cnt++ == 5) {
@@ -248,14 +261,25 @@ void *timer_worker(void *ptr)
   LOG(LOG_NOTICE, "End timer for '%s'\n", tmthread->key->label);
 
   // Determine if we timed out naturally or were cancelled
-  if ((tmthread->duration_min != 0 || tmthread->duration_sec != 0) && tmthread->key->state != ACD_LED_OFF && tmthread->key->state != ACD_LED_ENABLED) {
-    LOG(LOG_INFO, "Timer waking turning '%s' off\n", tmthread->key->label);
-    state_change_request(tmthread->acddata, tmthread->key, ACD_LED_OFF);
-  } else if (tmthread->key->state != ACD_LED_ON) {
-    LOG(LOG_INFO, "Timer waking '%s' is already off\n", tmthread->key->label);
+  if (isMASKSET(tmthread->key->flags, TIMER_ACTIVE)) {
+    if ((tmthread->duration_min != 0 || tmthread->duration_sec != 0) && tmthread->key->state != ACD_LED_OFF && tmthread->key->state != ACD_LED_ENABLED) {
+      LOG(LOG_INFO, "Timer waking turning '%s' off\n", tmthread->key->label);
+      state_change_request(tmthread->acddata, tmthread->key, ACD_LED_OFF);
+    } else if (tmthread->key->state != ACD_LED_ON) {
+      LOG(LOG_INFO, "Timer waking '%s' is already off\n", tmthread->key->label);
+    }
+  } else if (isMASKSET(tmthread->key->flags, DELAY_ACTIVE)) {
+    if (tmthread->key->state == ACD_LED_DELAY) {
+      state_change_request(tmthread->acddata, tmthread->key, ACD_LED_ON);
+    } else {
+      LOG(LOG_INFO, "Timer waking '%s' is not in delay, not turning on\n", tmthread->key->label);
+    }
   }
+     
 
-  tmthread->key->flags &= ~TIMER_ACTIVE;
+  //tmthread->key->flags &= ~TIMER_ACTIVE;
+  tmthread->key->flags &= ~tmthread->mask_type;
+
 
   // --- CRITICAL FIX: Lock Linked List before modifying and freeing ---
   pthread_mutex_lock(&_ll_mutex);
@@ -441,7 +465,8 @@ void *timer_worker( void *ptr )
   LOG( LOG_NOTICE, "Start timer for '%s'\n",tmthread->key->label);
 
   // Add mask so we know timer is active
-  tmthread->key->flags |= TIMER_ACTIVE;
+  //tmthread->key->flags |= TIMER_ACTIVE;
+  tmthread->key->flags |= tmthread->mask_type;
 
   while (tmthread->key->led->state == OFF) {
     LOG( LOG_DEBUG, "waiting for key state '%s' to change\n",tmthread->key->label);
@@ -523,11 +548,16 @@ void *timer_worker( void *ptr )
 
   // if duration_min is 0 we were killed, if not we got here on timeout, so turn off device.
 
-  if ( (tmthread->duration_min != 0 || tmthread->duration_sec != 0) && tmthread->key->led->state != OFF) {
-    LOG( LOG_INFO, "Timer waking turning '%s' off\n",tmthread->key->label);
-    panel_device_request(tmthread->acddata, ON_OFF, tmthread->deviceIndex, false, NET_TIMER);
-  } else if (tmthread->key->led->state == OFF) {
-    LOG( LOG_INFO, "Timer waking '%s' is already off\n",tmthread->key->label);
+  if (isMASKSET(tmthread->key->flags, TIMER_ACTIVE)) {
+    if ( (tmthread->duration_min != 0 || tmthread->duration_sec != 0) && tmthread->key->led->state != OFF) {
+      LOG( LOG_INFO, "Timer waking turning '%s' off\n",tmthread->key->label);
+      panel_device_request(tmthread->acddata, ON_OFF, tmthread->deviceIndex, false, NET_TIMER);
+    } else if (tmthread->key->led->state == OFF) {
+      LOG( LOG_INFO, "Timer waking '%s' is already off\n",tmthread->key->label);
+    }
+  } else if (isMASKSET(tmthread->key->flags, DELAY_ACTIVE)) {
+    LOG( LOG_INFO, "Timer waking turning '%s' on\n",tmthread->key->label);
+    panel_device_request(tmthread->acddata, ON_OFF, tmthread->deviceIndex, false, NET_TIMER); 
   }
   
   if (tmthread->key->led->state != OFF) {
@@ -535,7 +565,8 @@ void *timer_worker( void *ptr )
   }
 
   // remove mask so we know timer is dead
-  tmthread->key->flags &= ~ TIMER_ACTIVE;
+  //tmthread->key->flags &= ~ TIMER_ACTIVE;
+  tmthread->key->flags &= ~ tmthread->mask_type;
 
   if (tmthread->next != NULL && tmthread->prev != NULL){
     // Middle of linked list

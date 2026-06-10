@@ -822,12 +822,16 @@
       DIMMER: 'dimmer',
       VSP: 'vsp',
       ALT_LABEL: 'alt_label',
+      RESET_STATS: 'reset_stats',
 
       // Controller types
       HEATER: 'heater',
       SWG: 'swg',
       FREEZE: 'freeze',
       CHILLER: 'chiller',
+
+      // Value options
+      STATS: 'stats',
     });
 
     const _DeviceTypes = Object.freeze({
@@ -839,6 +843,7 @@
       VALUE: 'value',
       TEMPERATURE: 'temperature',
       SENSOR: 'sensor',
+      AVERAGE: 'average', // Dynamically created from a Sensor device with Stats as attribute. 
 
       // Setpoints.  ie heater, SWG, freeze, chiller etc.
       CONTROLLER: 'controller',
@@ -1392,6 +1397,7 @@
         div.appendChild(subdiv);
       }
 
+      
       var title_subdiv = document.createElement('div');
       title_subdiv.setAttribute('class', 'tile_name');
       title_subdiv.setAttribute('id', id + '_name');
@@ -1400,16 +1406,21 @@
       // Value and Thermostat are the same, but value is read only and no state
       //if (type != "value") {
       {
-        // Add extra status line to VSP if we can
-        if (attributes?.includes(_DeviceAttributes.VSP)) {
+        // Add extra status line to VSP or Stats tile if we can
+        LOG("Create id "+id);
+        if (attributes?.includes(_DeviceAttributes.VSP) || _devices.devices[id]?.type == _DeviceTypes.AVERAGE ) {
+        //if (attributes?.includes(_DeviceAttributes.VSP) || id.endsWith("_stats") ) {
           //var title1linechatlimit = getComputedStyle(document.documentElement).getPropertyValue('--tile_name-charlimit');
           if (name.length <= _tile_line_char_limit) {
+            LOG("Create 2nd line");
             subdiv = document.createElement('div');
             subdiv.setAttribute('class', 'tile_status');
             subdiv.setAttribute('id', id + '_status_line2');
             div.appendChild(subdiv);
             title_subdiv.classList.add("tile_name_1line");
             title_subdiv.classList.remove("tile_name");
+          } else {
+            LOG("NAME TOO LONG");
           }
         }
         subdiv = document.createElement('div');
@@ -1559,7 +1570,68 @@
       return !isNaN(parseFloat(val)) && isFinite(val);
     }
 
+    function formatTileValue(id, value) {
+      var ext = '';
+      var type = null;
+      
+      if (value == undefined || value == -999) {
+          value = '--';
+      } else {
+          let uom;
+          if ((uom = document.getElementById(id).getAttribute('UOM')) != null) {
+            ext = uom;
+            //ext = '<span class="uom_text">'+uom+'</span>';
+          } else if ((type = document.getElementById(id).getAttribute('type')) != null) {
+            if (type == _DeviceTypes.TEMPERATURE ||
+              _devices.devices[id]?.attributes?.includes(_DeviceAttributes.HEATER) ||
+              _devices.devices[id]?.attributes?.includes(_DeviceAttributes.FREEZE) ||
+              _devices.devices[id]?.attributes?.includes(_DeviceAttributes.CHILLER)) {
+              ext = '&deg;';
+            } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.SWG)) {
+              ext = '%';
+            } else if ((type == 'value' && id == 'CHEM/ORP') || ((type == 'sensor' || type == 'average') && id.startsWith('ORP_'))) {
+              ext = "mV";
+            } else {
+              //LOG("*** No UOM for "+id+" and type "+type);
+            }
+          }
+      }
+
+      if (_config?.tile_settings?.disply_temp_in_f) {
+        LOG("UOM for "+id+" is "+ext);
+        if (ext.toLowerCase() == "°c" || ext.toLowerCase() == "&deg;c" ) {
+          value = (value * 9/5) + 32;
+          ext = "°f"; 
+        }
+      }
+
+      if (_config.devices[id]?.precision !== undefined && isActuallyNumeric(value)) {
+        value = value.toFixed(_config.devices[id]?.precision);
+      } else if (isActuallyNumeric(value) && (type == 'sensor' || type == 'average') && id.startsWith('ORP_')) {
+        // Default ORP precision to 0 if not set and value is numeric
+        value = parseFloat(value).toFixed(0);
+      } else if (isActuallyNumeric(value) && (type == 'sensor' || type == 'average') && id.startsWith('PH_')) {
+        // Default PH precision to 2 if not set and value is numeric
+        value = parseFloat(value).toFixed(2);
+      }
+      value = reduct(value) + formatUOM(ext);
+
+      return value;
+    }
+    
     function setTileValue(id, value, status = 'on') {
+    
+      if (status != 'off' && status != 'disabled') {
+        setTileThresholds(id, value, status);
+      }
+
+      var tile;
+      if ((tile = document.getElementById(id + '_tile_icon_value')) != null) {
+        tile.innerHTML = formatTileValue(id, value)
+      }
+    }
+
+    function OLD_setTileValue_OLD(id, value, status = 'on') {
       var ext = '';
       var type = null;
       //LOG("setTileValue "+id+" "+value);
@@ -1690,7 +1762,7 @@
         }
       } catch (exception) { }
     }
-    /*
+    
     function setTileOnTextLine2(id, text) {
       // UNUSED: Second status line for tiles not used in AquachemD.
       try {
@@ -1701,7 +1773,7 @@
       } catch(exception) { console.log(exception); }
       return false;
     }
-    */
+    
     /*
     function getTileOnText(id) {
       // UNUSED: Tile text getter not used in current implementation.
@@ -1799,7 +1871,13 @@
 
     function isDeviceOff(id) {
       // 1 = on, 2 = enabled
-      if (_devices.devices[id].int_status != 1 && _devices.devices[id].int_status != 2) {
+      //if (_devices.devices[id].int_status != 1 && _devices.devices[id].int_status != 2) {
+      //  return true;
+      //}
+      // If the device doesn't exist, its status safely defaults to 0
+      const status = _devices.devices[id]?.int_status ?? 0;
+
+      if (status !== 1 && status !== 2) {
         return true;
       }
 
@@ -1807,8 +1885,8 @@
     }
 
     function getTileExtraStatusText(id) {
-
-      if (_devices.devices[id].attributes?.includes(_DeviceAttributes.TIMER)) {
+      
+      if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.TIMER)) {
         if (_devices.devices[id].timer_active == 'ON') {
           if (_devices.devices[id].timer_duration) {
             //return 'Timer ' + toHoursAndMinutes(_devices.devices[id].timer_duration);
@@ -1819,13 +1897,13 @@
         } else {
           //LOG("ID="+id+" Has Timer OFF");
         }
-      } else if (_devices.devices[id].attributes?.includes(_DeviceAttributes.PROGRAM)) {
-      } else if (_devices.devices[id].attributes?.includes(_DeviceAttributes.DIMMER)) {
-      } else if (_devices.devices[id].attributes?.includes(_DeviceAttributes.VSP)) {
-      } else if (_devices.devices[id].attributes?.includes(_DeviceAttributes.SWG)) {
-      } else if (_devices.devices[id].attributes?.includes(_DeviceAttributes.FREEZE)) {
-      } else if (_devices.devices[id].attributes?.includes(_DeviceAttributes.CHILLER)) {
-      } else if (_devices.devices[id].attributes?.includes(_DeviceAttributes.ALT_LABEL)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.PROGRAM)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.DIMMER)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.VSP)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.SWG)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.FREEZE)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.CHILLER)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.ALT_LABEL)) {
       }
 
       return null;
@@ -2033,6 +2111,7 @@
         case _DeviceTypes.VALUE:
         case _DeviceTypes.TEMPERATURE:
         case _DeviceTypes.SENSOR:
+        case _DeviceTypes.AVERAGE:
           add_tile(object.id, object.label, object.status, object.type, object.attributes);
           if (object.uom !== undefined) {
             setTileUOM(object.id, object.uom);
@@ -2065,7 +2144,13 @@
         setTileValue(device.id, device.value, device.status);
       } else if (device.type == _DeviceTypes.SWITCH || device.type == _DeviceTypes.BINARY_SENSOR) {
         setTileOn(device.id, device.status);
+      } else if (device.type == _DeviceTypes.AVERAGE) {
+        setTileOn(device.id, device.status);
+        setTileValue(device.id, device.value, device.status);
+        setTileOnText(device.id, "Max : "+formatTileValue(device.id ,device.max));
+        setTileOnTextLine2(device.id, "Min : "+formatTileValue(device.id ,device.min));
       }
+      
     }
 
     function isTileOptionsOpen() {
@@ -2358,6 +2443,7 @@
     var V_RPM = 5;
     var V_GPM = 6;
     var V_TIMER = 7;
+    var V_RESET_STATS = 8;
 
     function showScheduler(caller) {
 
@@ -2435,6 +2521,8 @@
                   }
                 } else if (obj.attributes?.includes(_DeviceAttributes.TIMER)) {
                   return "timer";
+                /*} else if (obj.attributes?.includes(_DeviceAttributes.STATS)) {
+                  return "stats";*/
                 }
                 break;
             }
@@ -2609,6 +2697,7 @@
     function cs_getDeviceOptions(deviceobj, val1, val2) {
       //setpoint = Temp
       LOG("cs_getDeviceOptions for device "+deviceobj.label+" type "+deviceobj.type+" val1="+val1+" val2="+val2);
+      LOG(deviceobj.attributes);
       var html = '<option value="' + V_ON + '" ' + cs_isSelected(V_ON, val1, val2) + '>On</option><option value="' + V_OFF + '" ' + cs_isSelected(V_OFF, val1, val2) + '>Off</option>';
 
       switch (deviceobj.type) {
@@ -2621,6 +2710,9 @@
             }
           } else if(deviceobj.attributes?.includes(_DeviceAttributes.TIMER)) {
             html = html + '<option value="' + V_TIMER + '" ' + cs_isSelected("timer", val1, val2) + '>Timer</option>';
+          } else if(deviceobj.attributes?.includes(_DeviceAttributes.RESET_STATS)) {
+            LOG("ADD RESET");
+            html = html + '<option value="' + V_RESET_STATS + '" ' + cs_isSelected("reset_stats", val1, val2) + '>Stats</option>';
           }
           break;
         case _DeviceTypes.CONTROLLER:
@@ -2720,6 +2812,10 @@
                 if (commandID == V_TIMER) {
                   return "/timer";
                 }
+              } else if (obj.attributes?.includes(_DeviceAttributes.RESET_STATS)) {
+                if (commandID == V_RESET_STATS) {
+                  return "/reset_stats";
+                }
               }
               break;
           }
@@ -2749,6 +2845,7 @@
         if (min && hour && daym && month && dayw && device && command) {
           if (command >= 2) {
             command = cs_getExtraCommand(device, command);
+            /*. This needs to check 1d 25h 1w etc */
             if (isNaN(value)) {
               row.querySelector('#value').classList.add("cs_error");
               document.getElementById("crontext").innerHTML = "<span class='cs_crontext'>&nbsp;<font color='red'>FIX ERROR</font>&nbsp;</span>";
@@ -2820,6 +2917,69 @@
     }
 
     function check_devices(data) {
+        if (data.display_message)
+          displayMessage(formatSatus(data.display_message));
+        else
+          displayMessage("");
+
+        if (data.time && data.date) {
+          var el = document.getElementById("datetime");
+          if (_landscape) {
+            el.innerHTML = data.time.toLowerCase().replace(" ", "&nbsp;") + ((_landscape) ? "&nbsp;" : "<br>") + data.date.toLowerCase().replace(" ", "&nbsp;");
+          } else {
+            el.innerHTML = data.time.toLowerCase().replace(" ", "&nbsp;");
+          }
+        }
+
+        // --- STEP 1: MUTATE DATA POOL ---
+        const physicalDeviceIds = Object.keys(data.devices);
+
+        physicalDeviceIds.forEach(id => {
+          const device = data.devices[id];
+          device.status = device.status.toLowerCase();
+
+          if (device.attributes?.includes("stats")) {
+            const statsId = `${id}_stats`;
+
+            if (!data.devices[statsId]) {
+              data.devices[statsId] = {
+                id: statsId,
+                //label: `Average ${device.label} ${device.stats?.duration}`,
+                //label: `Average ${device.label}${device.stats?.duration ? ` (${device.stats.duration})` : ''}`,
+                label: `Avg ${device.label}${device.stats?.duration ? `/${device.stats.duration}` : ''}`,
+                status: device.status,
+                int_status: device.int_status, // Fixed typo: was device.status
+                type: _DeviceTypes.AVERAGE,
+                attributes: device.attributes,
+                value: device.stats?.avg || 0, // Protected against missing stats object
+                avg: device.stats?.avg || 0,
+                max: device.stats?.max || 0,
+                min: device.stats?.min || 0,
+                duration: device.stats?.duration || 0,
+              };
+            }
+          }
+        });
+
+        _devices = data;
+
+        // --- STEP 3: RENDER LAYER ---
+        var deviceArray = Object.values(data.devices);
+        deviceArray.sort(deviceSort);
+
+        deviceArray.forEach(device => {
+          device.status = device.status.toLowerCase();
+
+          if (document.getElementById(device.id) == null) {
+            createTile(device);
+          }
+          updateTile(device);
+        });
+
+        return data;
+      }
+
+      function OLD_check_devices_OLD(data) {
       //_temperature_units = data['temp_units'];
       //_scheduler_devices_json = [];
       //data['devices'].sort(deviceSort);
@@ -2839,6 +2999,29 @@
         }
       }
 
+      /*
+      if (object?.attributes?.includes(_DeviceAttributes.STATS)){
+            // Create a second tile for the stats.
+            add_tile(object.id+"_stats", "Average "+object.label, object.status, object.type, object.attributes);
+          }
+      */
+     /*
+      let deviceArray = [];
+      Object.values(data.devices).forEach(device => {
+        deviceArray.push(device);
+    
+        // Inject the virtual stats device right next to its parent data
+        if (device.attributes?.includes("stats")) {
+          deviceArray.push({
+            id: `${device.id}_stats`,
+            label: `${device.label} Stats`,
+            status: device.status,
+            type: "stats",
+            parent_id: device.id
+          });
+        }
+      });
+*/
       var deviceArray = Object.values(data.devices);
       deviceArray.sort(deviceSort);
       deviceArray.forEach(device => {
@@ -2912,8 +3095,7 @@
       try {
         const data = JSON.parse(msg.data);
         if (data.type === 'devices') {
-          _devices = data;
-          check_devices(_devices);
+          _devices = check_devices(data);
           resetBackgroundSize();
         } else if (data.type === 'schedules') {
           cs_schedules(data);
@@ -3220,7 +3402,7 @@
         <table border='0' width='100%' cellpadding='0' cellspacing='0'>
           <tr>
             <td width="25px" align='left' id='td_cog' style="vertical-align:middle">
-              <a id="cog_link" href="/aqmanager.html">
+              <a id="cog_link" href="/manager.html">
                 <svg viewBox='0 0 10 8' width='18' height='18'>
                   <path d='M1 1h8M1 4h 8M1 7h8' stroke='#FFF' stroke-width='1.2' stroke-linecap='round' />
                 </svg>

@@ -19,9 +19,10 @@ CFG_ENTRY( "main_label",             main_label,             "AquachemD",       
 CFG_ENTRY( "listen_address",         listen_address,         "http://0.0.0.0:80",  CFG_STRING,  CFG_GRP_ADVANCED|CFG_FORCE_RESTART, 0,                NULL )
 CFG_ENTRY( "log_level",              log_level,              LOG_NOTICE,           CFG_TXT_INT, 0,                                  0,                CFG_O_log_level )
 CFG_ENTRY( "mg_log_level",           mg_log_level,           0,                    CFG_INT,     CFG_READONLY|CFG_HIDE,              0,                NULL )
-
+CFG_ENTRY( "log_sensor_readings",    log_sensor_readings,    false,                CFG_BOOL,    0,                                  0,                NULL )
 /* --- 2. WEB & DIRECTORIES --- */
-CFG_ENTRY( "web_directory",          web_directory,          "/var/www/aquachemd", CFG_STRING,  CFG_GRP_ADVANCED|CFG_READONLY,      0,                NULL )
+CFG_ENTRY( "web_directory",          web_directory,          "/var/www/aquachemd", CFG_STRING,  CFG_GRP_ADVANCED|CFG_READONLY|CFG_HIDE,      0,     NULL )
+//CFG_ENTRY( "web_config",             web_config,             "",                   CFG_STRING,  CFG_GRP_ADVANCED|CFG_READONLY|CFG_HIDE,      0,     NULL )
 
 /* --- 3. MQTT COMMUNICATION --- */
 CFG_ENTRY( "mqtt_server",            mqtt_server,            NULL,                 CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
@@ -48,9 +49,12 @@ CFG_ENTRY( "ph_reading_temp_max",    ph_reading_temp_max,    60,                
 /* --- 6. DOSING RANGES (Restored CFG_CUSTOM) --- */
 CFG_ENTRY( "ph_dose_range",          ph_steps,               NULL,                 CFG_CUSTOM,  CFG_MULTIPLE,                       0,                NULL )
 CFG_ENTRY( "ph_default_dose_time",   ph_default_dose_time,   20,                   CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "ph_average_dose_calc",   ph_average_dose_calc,   false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+
 
 CFG_ENTRY( "orp_dose_range",         orp_steps,              NULL,                 CFG_CUSTOM,  CFG_MULTIPLE,                       0,                NULL )
 CFG_ENTRY( "orp_default_dose_time",  orp_default_dose_time,  1500,                 CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "orp_average_dose_calc",  orp_average_dose_calc,  false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
 /* --- 7. SECURITY / TLS (Conditional) --- */
 #if MG_TLS > 0
@@ -123,9 +127,19 @@ CFG_ENTRY( "orp_doser_pin_mode",     keys,                   NULL,              
 CFG_ENTRY( "orp_doser_required_state",keys,                  NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "orp_doser_ml_per_second", keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
+
+CFG_ENTRY( "sysfs_sensor_label",      keys,                   NULL,                 CFG_STRING, CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sysfs_sensor_path",       keys,                   NULL,                 CFG_STRING, CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sysfs_sensor_offset",     keys,                   NULL,                 CFG_FLOAT,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sysfs_sensor_scale",      keys,                   NULL,                 CFG_FLOAT,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sysfs_sensor_regex",      keys,                   NULL,                 CFG_STRING, CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "sysfs_sensor_scope_global",keys,                  NULL,                 CFG_BOOL,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sysfs_sensor_uom",        keys,                   NULL,                 CFG_STRING, CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
+
 /* --- JSON Metadata Definitions --- */
 #define CFG_O_log_level "[\"DEBUG\",\"INFO\",\"NOTICE\",\"WARNING\",\"ERROR\"]"
 #define CFG_O_BOOL "[\"Yes\",\"No\"]"
 #define CFG_O_ONOFF "[\"on\",\"off\"]"
 #define CFG_O_ACTIVE "[\"Active High\",\"Active Low\"]"
-#define CFG_O_STATS "[\"None\",\"Daily\",\"Weekly\"]"
+//#define CFG_O_STATS "[\"None\",\"Daily\",\"Weekly\"]"

@@ -114,6 +114,10 @@ int build_schedules_js(char* buffer, int size) {
     regex_t regexCompiled;
     const char *regexString = "(#{0,1})([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s.*(\\/api\\/.*\\/set).* value=([0-9]+).*";
     
+    // Pickup the letter after number (d,w,h) for day, week, hour.
+    // NOTE the below regex expects the '-' for '-PUT' for the end limit
+    //const char *regexString = "(#{0,1})([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s.*(\\/api\\/.*\\/set).* value=([0-9]+[wdh]?) -.*";
+    
     size_t maxGroups = 15;
     regmatch_t groupArray[maxGroups];
 

@@ -15,6 +15,11 @@ Linux daemon to read pH, ORP, Temperature sensors, control chem feeders & GPIO. 
 * Validate online install (Dev release)
 * Finalize - or _ for remote install script
 * Add tag's for dev release
+* DONE - Service restart / reload - DONE
+* Print stats on a reset.
+* Use averages for dosing.
+* Look at using SWG% to increase dose times.
+* Add delay to conditions (will also need to add Delay to states and (flash) in UI)
 ---
 
 ## 🚀 Project Overview

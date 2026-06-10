@@ -25,8 +25,8 @@
 static int ezo_open(int address)
 {
   int fd = open(I2C_BUS, O_RDWR);
-  if (fd < 0) return -1;
-  if (ioctl(fd, I2C_SLAVE, address) < 0) { close(fd); return -1; }
+  if (fd < 0) return EZO_ERROR;
+  if (ioctl(fd, I2C_SLAVE, address) < 0) { close(fd); return EZO_ERROR; }
   return fd;
 }
 
@@ -50,7 +50,7 @@ static int ezo_read(int fd, char *response, int len, int wait_ms)
   usleep(wait_ms * 1000);
 
   if (read(fd, buf, sizeof(buf)) < 0)
-    return -1;
+    return EZO_ERROR;
 
   if (buf[0] != EZO_SUCCESS)
     return buf[0];
@@ -68,7 +68,7 @@ static int ezo_send_cmd(int fd, const char *cmd)
 static int ezo_command(int address, const char *cmd, char *result, int result_len)
 {
   int fd = ezo_open(address);
-  if (fd < 0) return -1;
+  if (fd < 0) return EZO_ERROR;
 
   int wait_ms = ezo_get_wait_ms(cmd);
   ezo_send_cmd(fd, cmd);
@@ -232,7 +232,7 @@ int ezo_get_cal_status(int address, ezo_cal_status_t *cal)
     if (sscanf(response, "?CAL,%d", &points) == 1)
       cal->points = points;
     else
-      cal->points = -1;
+      cal->points = EZO_ERROR;
   }
   return status;
 }
@@ -240,7 +240,7 @@ int ezo_get_cal_status(int address, ezo_cal_status_t *cal)
 int ezo_sleep(int address)
 {
   int fd = ezo_open(address);
-  if (fd < 0) return -1;
+  if (fd < 0) return EZO_ERROR;
   ezo_send_cmd(fd, "Sleep");
   close(fd);
   return EZO_SUCCESS;
@@ -250,7 +250,7 @@ int ezo_sleep(int address)
 
 ph_reading_t ph_get_reading()
 {
-  ph_reading_t result = {0.0f, -1};
+  ph_reading_t result = {0.0f, EZO_ERROR};
   char response[32];
   result.status = ezo_command(EZO_PH_ADDR, "R", response, sizeof(response));
   if (result.status == EZO_SUCCESS)
@@ -260,7 +260,7 @@ ph_reading_t ph_get_reading()
 
 ph_reading_t ph_get_reading_compensated(float temp_c)
 {
-  ph_reading_t result = {0.0f, -1};
+  ph_reading_t result = {0.0f, EZO_ERROR};
   char cmd[32];
   char response[32];
   snprintf(cmd, sizeof(cmd), "T,%.2f", temp_c);
@@ -282,7 +282,7 @@ ph_reading_t ph_get_reading_filtered()
     if (r.status == EZO_SUCCESS)
       readings[valid++] = r.value;
   }
-  if (valid == 0) return (ph_reading_t){0.0f, -1};
+  if (valid == 0) return (ph_reading_t){0.0f, EZO_ERROR};
   if (valid < 3)  return (ph_reading_t){readings[0], EZO_SUCCESS};
   if (readings[0] > readings[1]) { float t = readings[0]; readings[0] = readings[1]; readings[1] = t; }
   if (readings[1] > readings[2]) { float t = readings[1]; readings[1] = readings[2]; readings[2] = t; }
@@ -332,7 +332,7 @@ int ph_calibrate_by_value(float calibrationValue) {
 
 orp_reading_t orp_get_reading()
 {
-  orp_reading_t result = {0.0f, -1};
+  orp_reading_t result = {0.0f, EZO_ERROR};
   char response[32];
   result.status = ezo_command(EZO_ORP_ADDR, "R", response, sizeof(response));
   if (result.status == EZO_SUCCESS)
@@ -359,7 +359,7 @@ int orp_sleep()                                { return ezo_sleep(EZO_ORP_ADDR);
 static int rtd_command(const char *cmd, char *result, int result_len)
 {
   int fd = ezo_open(EZO_RTD_ADDR);
-  if (fd < 0) return -1;
+  if (fd < 0) return EZO_ERROR;
   int wait_ms = (strncasecmp(cmd, "R", 1) == 0 && strlen(cmd) == 1)
     ? EZO_WAIT_RTD : ezo_get_wait_ms(cmd);
   ezo_send_cmd(fd, cmd);
@@ -370,7 +370,7 @@ static int rtd_command(const char *cmd, char *result, int result_len)
 
 rtd_reading_t rtd_get_reading()
 {
-  rtd_reading_t result = {0.0f, RTD_SCALE_CELSIUS, -1};
+  rtd_reading_t result = {0.0f, RTD_SCALE_CELSIUS, EZO_ERROR};
   char response[32];
   result.status = rtd_command("R", response, sizeof(response));
   if (result.status == EZO_SUCCESS)
@@ -409,7 +409,7 @@ int rtd_sleep()                                { return ezo_sleep(EZO_RTD_ADDR);
 
 prs_reading_t prs_get_reading()
 {
-  prs_reading_t result = {0.0f, -1};
+  prs_reading_t result = {0.0f, EZO_ERROR};
   char response[32];
   result.status = ezo_command(EZO_PRS_ADDR, "R", response, sizeof(response));
   if (result.status == EZO_SUCCESS)
@@ -488,7 +488,7 @@ int pump_set_direction(pump_dir_t dir)
 
 pump_status_t pump_get_status()
 {
-  pump_status_t result = {0.0f, 0, -1};
+  pump_status_t result = {0.0f, 0, EZO_ERROR};
   char response[32];
   result.status = ezo_command(EZO_PMP_ADDR, "?STATUS", response, sizeof(response));
   if (result.status == EZO_SUCCESS)

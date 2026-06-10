@@ -17,6 +17,7 @@
 #include "version.h"
 #include "net_services.h"
 #include "acd_timer.h"
+#include "sensor_stats.h"
 
 #define MAX_JSON_BUFFER_SIZE 8192
 
@@ -157,6 +158,7 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
   cJSON *attributes = cJSON_CreateArray();
   cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_OFF)));
   cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ON)));
+  cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_stats"));
   cJSON_AddItemToObject(device, "attributes", attributes);
   cJSON_AddItemToObject(devices, acddata->keys->ID, device);
 
@@ -194,15 +196,22 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
         
         cJSON_AddItemToObject(device, "attributes", attributes);
       } else {
+        char buf[16];
         cJSON_AddStringToObject(device, "type", "sensor");
-        if (isMASKSET(curr->flags,AVG_DAILY) || isMASKSET(curr->flags,AVG_WEEKLY) ) {
+        if (isMASKSET(curr->flags,CALC_AVERAGE) ) {
           // statistical_sensor
           cJSON *stats = cJSON_CreateObject();
           cJSON_AddNumberToObject(stats, "avg", curr->stats.average);
           cJSON_AddNumberToObject(stats, "max", curr->stats.max);
           cJSON_AddNumberToObject(stats, "min", curr->stats.min);
-          cJSON_AddStringToObject(stats, "range", time_range_to_str(curr->flags));
+          //cJSON_AddStringToObject(stats, "range", time_range_to_str(curr->flags));
+          duration_seconds_to_string(curr->stats.tau_seconds, buf, sizeof(buf));
+          cJSON_AddStringToObject(stats, "duration", buf);
           cJSON_AddItemToObject(device, "stats", stats);
+
+          cJSON *attributes = cJSON_CreateArray();
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("stats"));
+          cJSON_AddItemToObject(device, "attributes", attributes);
         } 
       }
     }
@@ -242,7 +251,7 @@ const char* get_devices_json(struct aquachemdata *acddata) {
           uint32_t remaining_sec = get_timer_left_sec(curr);
           cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "timer_active"), acd_state_to_str(remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF));
           cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "timer_duration"), remaining_sec);
-        } else if ( IS_INPUT(curr->type) && (isMASKSET(curr->flags,AVG_DAILY) || isMASKSET(curr->flags,AVG_WEEKLY)) ) {
+        } else if ( IS_INPUT(curr->type) && (isMASKSET(curr->flags,CALC_AVERAGE)) ) {
           cJSON *stats = cJSON_GetObjectItemCaseSensitive(item, "stats");
           cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(stats, "avg"), curr->stats.average);
           cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(stats, "max"), curr->stats.max);
@@ -489,8 +498,10 @@ bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_s
     size_t len;
     char p_id[32] = "unknown";
     char p_name[32] = "unknown";
+    char p_type[32] = "unknown";
     uint32_t sec = 0;
     float ml = 0.0;
+    float reading = 0.0;
 
     // Parse PUMP_ID
     if (sd_journal_get_data(j, "PUMP_ID", (const void **)&data, &len) >= 0)
@@ -506,6 +517,22 @@ bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_s
       const char *val = strchr(data, '=');
       if (val)
         snprintf(p_name, sizeof(p_name), "%s", val + 1);
+    }
+
+    // Parse PUMP_TYPE
+    if (sd_journal_get_data(j, "PUMP_TYPE", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        snprintf(p_type, sizeof(p_type), "%s", val + 1);
+    }
+
+    // Parse SENSOR_VAL
+    if (sd_journal_get_data(j, "SENSOR_VAL", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        reading = strtof(val + 1, NULL);
     }
 
     // Parse RUNTIME_SEC
@@ -547,6 +574,8 @@ bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_s
           cJSON_AddStringToObject(event, "timestamp", time_buf);
           cJSON_AddStringToObject(event, "pump_id", p_id);
           cJSON_AddStringToObject(event, "pump_name", p_name);
+          cJSON_AddStringToObject(event, "pump_type", p_type);
+          cJSON_AddNumberToObject(event, "reading", reading);
           cJSON_AddNumberToObject(event, "seconds", sec);
           cJSON_AddNumberToObject(event, "ml", ml);
           cJSON_AddItemToArray(history, event);

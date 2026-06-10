@@ -26,6 +26,7 @@ struct acdconfig
   char *listen_address;
   unsigned int log_level;
   unsigned int mg_log_level;
+  bool log_sensor_readings;
   char *web_directory;
 
   char *mqtt_aquachemd_topic;
@@ -54,6 +55,9 @@ struct acdconfig
 
   uint32_t ph_default_dose_time;
   uint32_t orp_default_dose_time;
+
+  bool ph_average_dose_calc;
+  bool orp_average_dose_calc;
 
   runtime_range_t ph_steps[MAX_DOSING_RANGES];
   uint8_t ph_step_count;

@@ -19,6 +19,23 @@ FALSE=1
 # Initialize output log destination (overridden by specific logic files)
 OUTPUT=""
 
+log_init_session() {
+  local msg="$1"
+  
+  # Print to console
+  echo "$msg"
+
+  if command -v systemd-journal-send &>/dev/null && [[ -n "${SD_MSG_ID:-}" ]]; then
+    systemd-journal-send \
+      MESSAGE_ID="$SD_MSG_ID" \
+      SYSLOG_IDENTIFIER="${BIN}" \
+      PRIORITY=5 \
+      MESSAGE="$msg"
+  else
+    logger -p "local0.notice" -t ${BIN} -- "$msg"
+  fi
+}
+
 # Centralized Logger Engine
 log_to_journal() {
   local priority="$1"
@@ -43,7 +60,6 @@ log_to_journal() {
   # Log to systemd journal database if available
   if command -v systemd-journal-send &>/dev/null; then
     systemd-journal-send \
-      MESSAGE_ID="$SD_MSG_ID" \
       SYSLOG_IDENTIFIER="${BIN}" \
       PRIORITY="$priority" \
       MESSAGE="$msg"
@@ -102,17 +118,12 @@ UNTAR_CMD="tar xz --directory=$TEMP_INSTALL"
 FROM_CURL=$FALSE
 SYSTEMD_LOG=$FALSE
 
-temp_file="" # Global for trap cleanup
-
 if command -v "systemd-cat" &>/dev/null; then
   SYSTEMD_LOG=$TRUE
 fi
 
 cleanup_on_exit() {
   rm -rf "$TEMP_INSTALL"
-  if [[ -n "$temp_file" && -f "$temp_file" ]]; then
-    rm -f "$temp_file"
-  fi
 }
 trap cleanup_on_exit EXIT
 
@@ -216,16 +227,14 @@ run_install_script() {
   fi
 
   log "Installing AquachemD $1"
-  temp_file=$(mktemp)
-  nohup "$TEMP_INSTALL/release/install.sh" "--logfile" "$temp_file" >> "$OUTPUT" 2>&1
-  cat "$temp_file"
-  rm -f "$temp_file"
-  temp_file="" 
+  nohup "$TEMP_INSTALL/release/install.sh" "noinitmsg" >> "$OUTPUT" 2>&1
 }
 
 remove_install() {
   curl -fsSL -H "Accept: application/vnd.github.raw" "$REPO/contents/release/install.sh" | sudo bash -s -- clean
 }
+
+log_init_session "--- Starting AquachemD Installation/Upgrade ---"
 
 main() {
   if ! tty > /dev/null 2>&1; then
@@ -250,6 +259,12 @@ main() {
   fi
 
   case ${1:-latest} in
+    local)
+      # for debug purposes only
+      cp -rfp ./release $TEMP_INSTALL
+      cp -rfp ./web $TEMP_INSTALL
+      run_install_script "local_Version"
+    ;;
     check|checkupgradable) exit $TRUE ;;
     development)
       if ! latest_development_version; then logerr "getting development version"; exit "$FALSE"; fi

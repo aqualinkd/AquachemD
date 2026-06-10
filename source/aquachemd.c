@@ -46,6 +46,7 @@ Usage:
 #include "utils.h"
 #include "ezo.h"
 #include "1wire.h"
+#include "sysfs.h"
 #include "utils.h"
 #include "config.h"
 #include "net_services.h"
@@ -62,18 +63,26 @@ Usage:
 #include "gpio.h"
 #endif
 
+bool start_upgrade();
+
 //void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
 
 void intHandler(int sig_num)
 {
+
+  if (sig_num == SIGRUPGRADE) {
+    if (! start_upgrade()) {
+      LOG(LOG_ERR, "%s upgrade failed!\n",AQUACHEMD_SHORT_NAME);
+    }
+    return; // Let the upgrade process terminate us.
+  }
+
   /*******************
    * 
    * safety guard so the stop task can't be skipped if the process is killed mid-dose. 
    * signal handler calling pump_stop() / relay_off() on SIGTERM/SIGINT 
    * 
    */
-
- 
 
   for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
     if (curr->type == ACD_TYPE_GPIO_PMP) {
@@ -376,14 +385,16 @@ int main(int argc, char *argv[])
       }
     } else if (curr->type == ACD_TYPE_D1W_TEMP) {
       w1_init_generic(&curr->data.w1, curr->data.w1.path, curr->data.w1.scale, curr->data.w1.offset);
+    } else if (curr->type == ACD_TYPE_SYSFS_VALUE) {
+      sysfs_init_sensor(&curr->data.sysfs);
     }
 
     if (curr->type == ACD_TYPE_MASTER) {
       curr->state = ACD_LED_ENABLED;
     } else if (IS_INPUT(curr->type)) {
       curr->state = ACD_LED_DISABLED; // DON'T use setKeyLed() here, startup need to force to enabled.
-      if (isMASKSET(curr->flags,AVG_DAILY) || isMASKSET(curr->flags,AVG_WEEKLY) ) {
-        //pthread_mutex_init(&curr->stats.lock, NULL);
+      if (isMASKSET(curr->flags,CALC_AVERAGE)) {
+        pthread_mutex_init(&curr->stats.lock, NULL);
         reset_sensor_average(&curr->stats);
       }
     } else if (IS_OUTPUT(curr->type)) {
@@ -408,19 +419,13 @@ int main(int argc, char *argv[])
 
   // ── Normal mode — loop reading sensors ──────────────────────────────────────
 
-  static int last_day = -1;
-  static int last_week = -1;
-  struct tm *tm_now;
+  int reading_log_level = LOG_INFO;
+  if (_acdconfig_.log_sensor_readings) {
+    reading_log_level = LOG_NOTICE;
+  } 
 
   update_display_message(&acddata, ACD_MSG_CLEAR, NULL);
   clock_gettime(CLOCK_MONOTONIC, &next_wake);
-
-  tm_now = localtime(&next_wake.tv_sec);
-  if (last_day == -1) {
-    last_day = tm_now->tm_yday;
-    last_week = tm_now->tm_wday;
-  }
-
 
   while (1)
   {
@@ -429,7 +434,7 @@ int main(int argc, char *argv[])
     char *master_temp_label;
     bool all_conditions_met = true; // Should be able to get rid of this all together now, and just use acddata.keys->state 
 
-    LOG(LOG_NOTICE,"---- taking reading(s) ----\n");
+    LOG(reading_log_level,"---- taking reading(s) ----\n");
     update_display_message(&acddata, ACD_MSG_CLEAR, NULL);
 
     if (acddata.keys->state == ACD_LED_OFF) {
@@ -442,7 +447,7 @@ int main(int argc, char *argv[])
         if (curr->type == ACD_TYPE_GPIO_COND) {
           // This should have been changed from the gpio_monitor, but 2nd check doesn't hurt
           if (sensor_is_met(&curr->data.gpio) > 0 && !curr->met) {
-            SET_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty);
+            ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
             set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
           }
         }
@@ -468,7 +473,7 @@ int main(int argc, char *argv[])
       sensors_read_scope = ACD_SCOPE_LOCAL;
     } else if (acddata.keys->scope == ACD_SCOPE_GLOBAL || acddata.keys->state == ACD_LED_OFF){
       //LOG(LOG_DEBUG,"AquachemD sensor read scope global, skipping reading of sensors!\n");
-      LOG(LOG_NOTICE, "Master state = %s, scope = %s, skipping reading of sensors!\n",acd_state_to_str(acddata.keys->state), acd_scope_to_str(acddata.keys->scope) );
+      LOG(reading_log_level, "Master state = %s, scope = %s, skipping reading of sensors!\n",acd_state_to_str(acddata.keys->state), acd_scope_to_str(acddata.keys->scope) );
       goto next_wake; // Skip the rest of the loop and go straight to sleep if any condition is not met
     }
 
@@ -498,12 +503,12 @@ int main(int argc, char *argv[])
         case ACD_TYPE_D1W_TEMP: {
           w1_reading_t temp_reading = w1_read(&key->data.w1);
           if (temp_reading.status == W1_SUCCESS) {
-            LOG(LOG_NOTICE,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
+            LOG(reading_log_level,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
             if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
               temp_reading_for_ph = temp_reading.value; 
               master_temp_label = key->label;
             }
-            SET_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty);
+            ASSIGN_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty, key->is_dirty);
             //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
@@ -518,12 +523,12 @@ int main(int argc, char *argv[])
         case ACD_TYPE_EZO_TEMP: {
           rtd_reading_t temp_reading = rtd_get_reading();
           if (temp_reading.status == EZO_SUCCESS) {
-            LOG(LOG_NOTICE,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
+            LOG(reading_log_level,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
             if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
               temp_reading_for_ph = temp_reading.value;
               master_temp_label = key->label;
             }
-            SET_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty);
+            ASSIGN_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty, key->is_dirty);
             //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
@@ -549,7 +554,7 @@ int main(int argc, char *argv[])
               update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, buf);
               break;
             }
-            LOG(LOG_NOTICE, "Using %s, %.2f for pH compensated reading", master_temp_label, temp_reading_for_ph);
+            LOG(reading_log_level, "Using %s, %.2f for pH compensated reading", master_temp_label, temp_reading_for_ph);
             ph_reading = ph_get_reading_compensated(temp_reading_for_ph);
           } else {
             LOG(LOG_WARNING, "EZO pH Sensor '%s' skipped compensation because temp is unknown\n", key->label);
@@ -559,8 +564,8 @@ int main(int argc, char *argv[])
           }
           
           if (ph_reading.status == EZO_SUCCESS) {
-            LOG(LOG_NOTICE,"EZO pH Sensor %s : %.2f\n", key->label, ph_reading.value);
-            SET_IF_CHANGED(key->value, ph_reading.value, acddata.is_dirty);
+            LOG(reading_log_level,"EZO pH Sensor %s : %.2f\n", key->label, ph_reading.value);
+            ASSIGN_IF_CHANGED(key->value, ph_reading.value, acddata.is_dirty, key->is_dirty);
             //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
@@ -575,8 +580,8 @@ int main(int argc, char *argv[])
         case ACD_TYPE_EZO_ORP: {
           orp_reading_t orp_reading = orp_get_reading();
           if (orp_reading.status == EZO_SUCCESS) {
-            LOG(LOG_NOTICE,"EZO ORP Sensor %s : %.2f mV\n", key->label, orp_reading.value);
-            SET_IF_CHANGED(key->value, orp_reading.value, acddata.is_dirty);
+            LOG(reading_log_level,"EZO ORP Sensor %s : %.2f mV\n", key->label, orp_reading.value);
+            ASSIGN_IF_CHANGED(key->value, orp_reading.value, acddata.is_dirty, key->is_dirty);
             //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
@@ -591,8 +596,8 @@ int main(int argc, char *argv[])
         case ACD_TYPE_EZO_PRS: {
           prs_reading_t prs_reading = prs_get_reading();
           if (prs_reading.status == EZO_SUCCESS) {
-            LOG(LOG_NOTICE,"EZO PRS Sensor %s : %.2f mV\n", key->label, prs_reading.value);
-            SET_IF_CHANGED(key->value, prs_reading.value, acddata.is_dirty);
+            LOG(reading_log_level,"EZO PRS Sensor %s : %.2f mV\n", key->label, prs_reading.value);
+            ASSIGN_IF_CHANGED(key->value, prs_reading.value, acddata.is_dirty, key->is_dirty);
             //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
@@ -604,6 +609,20 @@ int main(int argc, char *argv[])
             sensor_read_error(&acddata, key);
           }
 
+        } break;
+        case ACD_TYPE_SYSFS_VALUE:{
+          sysfs_reading_t reading = sysfs_read_sensor(&key->data.sysfs);
+          if (reading.status == SYSFS_SUCCESS) {
+            LOG(reading_log_level,"%s : %.2f\n", key->label, reading.value);
+            ASSIGN_IF_CHANGED(key->value, reading.value, acddata.is_dirty, key->is_dirty);
+            set_key_state(&acddata, key, ACD_LED_ON);
+            key->err_cnt=0;
+            update_sensor_average(key);
+          } else {
+            LOG(LOG_WARNING, "System FS Sensor '%s' read failed (status %d)\n", key->label, reading.status);
+            update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+            sensor_read_error(&acddata, key);
+          }
         } break;
         case ACD_TYPE_GPIO_PMP:
         case ACD_TYPE_EZO_PMP:
@@ -618,20 +637,7 @@ int main(int argc, char *argv[])
 
 next_wake:
     
-    tm_now = localtime(&next_wake.tv_sec);
-
-    if (tm_now->tm_yday != last_day) {
-      LOG(LOG_NOTICE, "Day change detected\n");
-      reset_metrics(&acddata, AVG_DAILY);
-      last_day = tm_now->tm_yday;
-    }
-    if (tm_now->tm_wday == 0 && last_week != 0) {
-      LOG(LOG_NOTICE, "Week change detected\n");
-      reset_metrics(&acddata, AVG_WEEKLY);
-      last_week = tm_now->tm_wday;
-    }
-
-    LOG(LOG_NOTICE,"- reading(s) took: %.2fs -\n", elapsed_ms(&next_wake) / 1000);
+    LOG(reading_log_level,"- reading(s) took: %.2fs -\n", elapsed_ms(&next_wake) / 1000);
     // Advance the target wake time by one interval
     next_wake.tv_sec += _acdconfig_.sensor_poll_time;
 
@@ -649,6 +655,174 @@ next_wake:
 
   return 0;
 }
+
+
+
+
+
+
+
+char *_upgrade_version = NULL;
+
+#include <unistd.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+// Update this macro when you officially transition to your new GitHub organization
+#define AQUACHEMD_REPO "AqualinkD/AquachemD"
+#define AQUACHEMD_REMOTE_INSTALL "remote-install.sh"
+
+void set_upgrade_version(char *version)
+{
+  _upgrade_version = malloc( (sizeof(char*) * strlen(version)) + 1);
+  snprintf(_upgrade_version, strlen(version), version);
+}
+
+bool start_upgrade(const char *version)
+{
+    int pipe_curl_to_bash[2];
+    pid_t pid_curl, pid_bash;
+    int status_curl, status_bash;
+    char url[256];
+
+    // Format target GitHub API URL using our repo path configuration
+    snprintf(url, sizeof(url), "https://api.github.com/repos/%s/contents/release/%s", AQUACHEMD_REPO,AQUACHEMD_REMOTE_INSTALL);
+
+    char *curl_args[] = {"curl", "-fsSl", "-H", "Accept: application/vnd.github.raw", url, NULL};
+    char *bash_args[] = {"bash", "-s", "--", (char *)(_upgrade_version ? _upgrade_version : ""), NULL};
+
+    // 1. Notice must be logged BEFORE execution, as the script will terminate this process
+    LOG(LOG_NOTICE, "Initiating daemon upgrade script (Target: %s)...", _upgrade_version ? _upgrade_version : "latest");
+
+    if (pipe(pipe_curl_to_bash) == -1)
+    {
+        LOG(LOG_ERR, "Upgrade error: unable to open pipeline");
+        return false;
+    }
+
+    // --- FORK 1: CURL ---
+    pid_curl = fork();
+    if (pid_curl == -1)
+    {
+        LOG(LOG_ERR, "Upgrade error: fork failed (curl)");
+        close(pipe_curl_to_bash[0]);
+        close(pipe_curl_to_bash[1]);
+        return false;
+    }
+
+    if (pid_curl == 0)
+    { // Inside Child Process (curl)
+        close(pipe_curl_to_bash[0]); // Close unused read end
+        if (dup2(pipe_curl_to_bash[1], STDOUT_FILENO) == -1) {
+            _exit(EXIT_FAILURE);
+        }
+        close(pipe_curl_to_bash[1]);
+        
+        execvp("curl", curl_args);
+        // If execvp returns, it failed. Prevent child from escaping into daemon main loop!
+        _exit(127); 
+    }
+
+    // --- FORK 2: BASH ---
+    pid_bash = fork();
+    if (pid_bash == -1)
+    {
+        LOG(LOG_ERR, "Upgrade error: fork failed (bash)");
+        close(pipe_curl_to_bash[0]);
+        close(pipe_curl_to_bash[1]);
+        
+        // Clean up the already running curl child to prevent resource leaks
+        kill(pid_curl, SIGTERM);
+        waitpid(pid_curl, NULL, 0);
+        return false;
+    }
+
+    if (pid_bash == 0)
+    { // Inside Child Process (bash)
+        close(pipe_curl_to_bash[1]); // Close unused write end
+        if (dup2(pipe_curl_to_bash[0], STDIN_FILENO) == -1) {
+            _exit(EXIT_FAILURE);
+        }
+        close(pipe_curl_to_bash[0]);
+        
+        execvp("bash", bash_args);
+        // If execvp returns, it failed. Prevent child from escaping.
+        _exit(127); 
+    }
+
+    // --- PARENT PROCESS CLEANUP ---
+    // Close parent copy of descriptors immediately so EOF signals pass cleanly down the pipe
+    close(pipe_curl_to_bash[0]);
+    close(pipe_curl_to_bash[1]);
+
+    /* * NOTE ON THE PROCESS LIFECYCLE:
+     * If remote_install.sh executes successfully, your service manager (systemd)
+     * will catch up to this parent process right here while it blocks on waitpid().
+     * A SIGTERM will hit this daemon, stopping it cleanly so the installer can replace it.
+     */
+
+    // Wait for curl download phase to finalize
+    if (waitpid(pid_curl, &status_curl, 0) == -1)
+    {
+        LOG(LOG_ERR, "Upgrade error: waitpid failed (curl)");
+        return false;
+    }
+
+    // If curl explicitly failed (e.g., 404, network drop), stop bash from hanging on empty stdin
+    if (WIFEXITED(status_curl) && WEXITSTATUS(status_curl) != 0) {
+        LOG(LOG_ERR, "Upgrade error: curl failed with exit code: %d", WEXITSTATUS(status_curl));
+        kill(pid_bash, SIGTERM);
+        waitpid(pid_bash, NULL, 0);
+        return false;
+    }
+
+    // Wait for bash installer phase to complete
+    if (waitpid(pid_bash, &status_bash, 0) == -1)
+    {
+        LOG(LOG_ERR, "Upgrade error: waitpid failed (bash)");
+        return false;
+    }
+
+    // Parse bash output metrics (Only reached if script doesn't force kill this process)
+    if (WIFEXITED(status_bash))
+    {
+        if (WEXITSTATUS(status_bash) != 0) {
+            LOG(LOG_ERR, "Upgrade error: bash script exited with error code: %d", WEXITSTATUS(status_bash));
+            return false;
+        }
+    }
+    else if (WIFSIGNALED(status_bash))
+    {
+        LOG(LOG_ERR, "Upgrade error: bash script terminated by signal: %d", WTERMSIG(status_bash));
+        return false;
+    }
+
+    LOG(LOG_NOTICE, "Upgrade pipeline completed without daemon restart.");
+    return true;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #ifdef EXAMPLE_CODE
 

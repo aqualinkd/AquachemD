@@ -91,7 +91,7 @@ uint32_t get_pump_runtime(struct aquachemdata *acdata, acd_key_t *key) {
   if (isMASKSET(key->flags, PH_PUMP)) {
     float current_ph = get_sensor_value(acdata, ACD_TYPE_EZO_PH);
     runtime = get_ph_dose_time(current_ph);
-    LOG(LOG_NOTICE, "Dosing time calculated as %s for %d(s) (pH %.1f)",key->label, runtime, current_ph);
+    LOG(LOG_NOTICE, "Dosing time calculated as %s for %d(s) (pH %.2f)",key->label, runtime, current_ph);
     return runtime;
   } else if (isMASKSET(key->flags, ORP_PUMP)) {
     float current_orp = get_sensor_value(acdata, ACD_TYPE_EZO_ORP);
@@ -127,7 +127,7 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration
   } else {
     LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_on()");
   }
-  SET_IF_CHANGED(key->state , ACD_LED_ON, acdata->is_dirty);
+  ASSIGN_IF_CHANGED(key->state , ACD_LED_ON, acdata->is_dirty, key->is_dirty);
   
   if (isMASKSET(key->flags, PH_PUMP)) {
     key->value = get_sensor_value(acdata, ACD_TYPE_EZO_PH);
@@ -153,11 +153,11 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
   if (start > 0) {
     uint32_t actual_runtime = (uint32_t)(now - start);
     float dose_ml = actual_runtime * key->flow_rate;
-    LOG_PUMP_EVENT(key, actual_runtime, dose_ml, dose_ml);
+    LOG_PUMP_EVENT(key, actual_runtime, key->value, dose_ml);
     post_dosing_event(key, actual_runtime, dose_ml);
   }
   
-  SET_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty);
+  ASSIGN_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
   clear_timer(acdata, key);
   key->value = 0;
 }
@@ -226,16 +226,16 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
   switch(key->type) {
     case ACD_TYPE_MASTER:
       if (key->state == ACD_LED_OFF && state == ACD_LED_ON) { //if we are off, use the on state as enabled.
-        SET_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty);
+        ASSIGN_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
         check_master(acdata); // Set things to enabled
       } else if (key->state == ACD_LED_DISABLED && state == ACD_LED_ON) { // if disabled, can't turn on
         LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
         return false;
       } else if (state == ACD_LED_OFF) { // Turn sensors off.
-        SET_IF_CHANGED(key->state , state, acdata->is_dirty);
+        ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty);
         check_master(acdata); // Set things to disabled
       } else {
-        SET_IF_CHANGED(key->state , state, acdata->is_dirty);
+        ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty);
       }
       break;
     case ACD_TYPE_GPIO_PMP:
@@ -248,9 +248,9 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
       //if we are off, use the on state as enabled.
       if (key->state == ACD_LED_OFF && (state == ACD_LED_ON || state == ACD_LED_ENABLED)) {
         if (acdata->keys->state == ACD_LED_OFF) {
-          SET_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty); // Master is off, can only set to disabled.
+          ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty); // Master is off, can only set to disabled.
         } else {
-          SET_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty); // Master is on, can only set enabled.
+          ASSIGN_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty); // Master is on, can only set enabled.
         }
       } else if (state == ACD_LED_ON) {
         if (key->state == ACD_LED_ENABLED ) {
@@ -262,9 +262,9 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
       } else if (key->state == ACD_LED_ON && state == ACD_LED_OFF) {
         turn_pump_off(acdata, key);
       } else if (key->state == ACD_LED_ENABLED && state == ACD_LED_OFF) {
-        SET_IF_CHANGED(key->state , ACD_LED_OFF, acdata->is_dirty);
+        ASSIGN_IF_CHANGED(key->state , ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
        } else if (key->state == ACD_LED_DISABLED && state == ACD_LED_OFF) {
-        SET_IF_CHANGED(key->state , ACD_LED_OFF, acdata->is_dirty);
+        ASSIGN_IF_CHANGED(key->state , ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
       } else {
         //SET_IF_CHANGED(key->state , state, acdata->is_dirty);
         LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
@@ -478,6 +478,7 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
     case ACD_TYPE_EZO_PRS:
     case ACD_TYPE_MQTT_TEMP:
     case ACD_TYPE_D1W_TEMP:
+    case ACD_TYPE_SYSFS_VALUE:
     /*
       if (state != ACD_LED_ON && state != ACD_LED_DISABLED) {
         goodState = false;
@@ -517,7 +518,7 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
 
   //return SET_IF_CHANGED(key->state , state, acdata->is_dirty);
 
-  if (SET_IF_CHANGED(key->state , state, acdata->is_dirty)) {
+  if (ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty)) {
     LOG(LOG_INFO, "State Manager - Set %s to %s (scope %s)",acd_state_to_str(key->state), key->label, acd_scope_to_str(key->scope));
     return true;
   } else {
@@ -532,8 +533,27 @@ bool set_cond_state(struct aquachemdata *acdata, acd_key_t *cond, acd_state_t st
 {
   //  conditions     on / off
 
+  // If condition set to on, but it has a delay, then start the timer.
+  if (state == ACD_LED_ON && cond->delay_on > 0) {
+    if (cond->state == ACD_LED_OFF) {
+      ASSIGN_IF_CHANGED(cond->state , ACD_LED_DELAY, acdata->is_dirty, cond->is_dirty);
+      start_delay(acdata, cond, 0, cond->delay_on);
+      return true;
+    } else if (cond->state == ACD_LED_DELAY || isMASKSET(cond->flags, DELAY_ACTIVE)) {
+      if ( get_timer_left_sec(cond) > 0 ) {
+        LOG(LOG_WARNING, "State Manager - Request to set '%s' on, but still in delay, ignored!",cond->label);
+        return false;
+      }
+      // Good to fall through to set new ON state.
+    }
+  } else if (state == ACD_LED_OFF && cond->state == ACD_LED_DELAY) {
+    // cancel the delay and fall through to turning off.
+    clear_timer(acdata, cond);
+  }
+
+
   if (state == ACD_LED_ON || state == ACD_LED_OFF ) {
-    if (SET_IF_CHANGED(cond->state , state, acdata->is_dirty)) {
+    if (ASSIGN_IF_CHANGED(cond->state , state, acdata->is_dirty, cond->is_dirty)) {
       LOG(LOG_INFO, "State Manager - Condition %s changed to %s",cond->label, acd_state_to_str(cond->state));
     }
     //if ( state == ACD_LED_OFF && acdata->keys->state == ACD_LED_ON) {
