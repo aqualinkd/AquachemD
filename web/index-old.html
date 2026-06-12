@@ -1,0 +1,3608 @@
+<!DOCTYPE html>
+<html lang='en'>
+
+<head>
+  <meta http-equiv='Content-Type' content='text/html; charset=windows-1252'>
+  <title>AquachemD</title>
+  <!-- <meta name='viewport' content='width=device-width'> -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name='mobile-web-app-capable' content='yes'>
+  <meta name='apple-mobile-web-app-capable' content='yes'>
+  <meta name='apple-mobile-web-app-status-bar-style' content='black'>
+  <meta name="apple-mobile-web-app-title" content="AquachemD">
+
+
+  <link href='aquachemd.png' rel='apple-touch-icon'>
+  <link href='aquachemd.png' rel='icon'>
+  <!--<script src='config.js'></script>-->
+  <!--<script src='?command=dynamic_config'></script>-->
+  <!--<script src='/api/dynamicconfig'></script>-->
+  <style>
+    :root {
+      --fonts: 'HelveticaNeue-Light', 'Helvetica Neue Light', 'Helvetica Neue', Helvetica, Arial, 'Lucida Grande', sans-serif;
+      --tile-width: 100px;
+      --tile_icon-height: 35px;
+      --tile_name-height: 32px;
+      --tile_name-charlimit: 12;
+      --tile_name-height1line: 17px;
+      --tile_status-height: 15px;
+      --tile_grid-gap: 10px;
+      --tile_name-lineheight: 1.2;
+      /*
+      // Large display will use the below values, just here for testing.
+      --tile-width: 125px;
+      --tile_icon-height: 45px;
+      --tile_name-height: 42px;
+      --tile_status-height: 15px;
+      --tile_grid-gap: 20px;
+      --tile_name-lineheight: 1.4;
+      */
+      /* These get overiden from config.js, don't edit */
+      --body_background: rgb(235, 235, 235);
+      --body_text: black;
+      --options_pane_background: rgb(245, 245, 245);
+      --options_pane_bordercolor: rgb(124, 124, 124);
+      --options_slider_ball: 30;
+      --options_slider_highlight: #2196F3;
+      --options_slider_lowlight: #d3d3d3;
+      --options_slider_height: 20px;
+      --options_button_background: rgb(192, 192, 192);
+      --head_background: rgb(43, 106, 143);
+      --head_text: #fff;
+      --error_background: rgb(143, 43, 43);
+      --tile_background: rgb(220, 220, 220);
+      --tile_text: rgb(110, 110, 110);
+      --tile_on_background: #fff;
+      --tile_on_text: #000;
+      --tile_status_text: rgb(87, 87, 87);
+
+      --value_tile_normal_color: rgb(4, 159, 248);
+      /*--value_tile_attention_color:  rgb(255, 187, 0);*/
+      --value_tile_attention_color: rgb(255, 160, 0);
+      --value_tile_outofrange_color: rgb(255, 100, 0);
+
+      --options_radio_ball: 20px;
+      --options_radio_highlight: #2196F3;
+      --options_radio_lowlight: #d3d3d3;
+
+      --cronhelp_background: rgb(193, 193, 193);
+      --csinputcell_background: rgb(255, 255, 255);
+
+      --tile_icon_background_color_heat: rgb(255, 123, 0);
+      --tile_icon_background_color_cool: rgb(4, 159, 248);
+      --tile_icon_background_color_enabled: rgb(78, 196, 0);
+      --tile_icon_background_color_disabled: rgb(110, 110, 110);
+
+      --tile_off_opacity: 0.95;
+    }
+
+    div {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    div::-moz-selection {
+      background: transparent;
+    }
+
+    div::selection {
+      background: transparent;
+    }
+
+    html {}
+
+    body {
+      background-color: var(--body_background);
+      font-family: var(--fonts);
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--body_text);
+      /*margin: 0 !important;*/
+      /*padding: 0 !important;*/
+      /*margin: 10px !important;*/
+      /* Font rendering (mainly for firefox) */
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .body_wrap {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0px;
+      left: 0px;
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: cover;
+      height: 100%;
+    }
+
+    .opaque {
+      top: 0px;
+      left: 0px;
+      filter: opacity(60%);
+      opacity: 0.6;
+    }
+
+    .vopaque {
+      top: 0px;
+      left: 0px;
+      filter: opacity(40%);
+      opacity: 0.4;
+    }
+
+    .options_pane {
+      background-color: var(--options_pane_background);
+      border: 2px solid var(--options_pane_bordercolor);
+      border-radius: 20px;
+      justify-content: center;
+      align-items: center;
+      /*width: 345px;*/
+      width: 360px;
+      top: 10px;
+
+      /* Carful with below, it stops mouse click propagation as well. */
+      display: flex;
+      position: relative;
+    }
+
+    .scheduler_pane {
+      background-color: var(--options_pane_background);
+      border: 2px solid var(--options_pane_bordercolor);
+      border-radius: 20px;
+      justify-content: center;
+      align-items: center;
+      /*width: 650px;*/
+      min-width: 660px;
+      max-width: 680px;
+      padding: 10px;
+
+      /* Carful with below, it stops mouse click propagation as well. */
+      display: flex;
+      position: relative;
+    }
+
+    /* UNUSED: Simulator functionality not used in AquachemD */
+    /*
+    .scheduler_table {
+      overflow-x: hidden;
+      overflow-y: auto;
+      width: 665px;
+    }
+    */
+
+    /* UNUSED: Simulator functionality not used in AquachemD */
+    /*
+    .simulator_pane {
+      background-color: var(--options_pane_background);
+      border: 2px solid var(--options_pane_bordercolor);
+      border-radius: 20px;
+      justify-content: center;
+      align-items: center;
+      width: 325px;
+      height: 405px;
+      padding: 10px;
+    }
+    */
+
+    .simiframe {
+      width: 305px;
+      height: 385px;
+    }
+
+    .options {
+      top: 10px;
+      /*left: 10px;*/
+      position: fixed;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      /*
+      height: 100%;
+      */
+    }
+
+    .wrapper {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(var(--tile-width), auto));
+      grid-auto-rows: 1fr, repeat(auto-fit, minmax(var(--tile-width), auto));
+      grid-gap: var(--tile_grid-gap);
+      padding: 0 !important;
+      margin: 10px !important;
+    }
+
+    .head {
+      /*background-color: rgb(124, 124, 124);*/
+      background-color: var(--head_background);
+      color: var(--head_text);
+      border-radius: 5px;
+      padding: 5px;
+      grid-column: 1 / -1;
+    }
+
+    .error {
+      background-color: var(--error_background) !important;
+    }
+
+    .hide {
+      display: none;
+      opacity: 0.0;
+      filter: opacity(0%);
+    }
+
+    .tile {
+      background-color: var(--tile_background);
+      color: var(--tile_text);
+      border-radius: 10px;
+      padding: 0px;
+      /*font-size: 100%;*/
+      box-sizing: border-box;
+      padding: 5px;
+      height: var(--tile-width);
+      width: var(--tile-width);
+      /*filter: opacity(90%);*/
+      opacity: var(--tile_off_opacity);
+    }
+
+    .on {
+      background-color: var(--tile_on_background);
+      color: var(--tile_on_text);
+      filter: opacity(100%);
+      opacity: 1.0;
+    }
+
+    .flash {
+      color: var(--tile_on_text);
+      filter: opacity(90%);
+      opacity: 0.9;
+      -webkit-animation-name: tile-flash;
+      /* Safari 4.0 - 8.0 */
+      -webkit-animation-duration: 2s;
+      /* Safari 4.0 - 8.0 */
+      animation-name: tile-flash;
+      animation-duration: 2s;
+      animation-iteration-count: infinite;
+    }
+
+    /* Safari 4.0 - 8.0 */
+    /*
+    @-webkit-keyframes tile-flash {
+      0% {
+        background-color: var(--tile_on_background);
+        opacity: 1.0;
+      }
+      50% {
+        background-color: var(--tile_background);
+        opacity: 0.8;
+      }
+      100% {
+        background-color: var(--tile_on_background);
+        opacity: 1.0;
+      }
+    }
+*/
+    /* Standard syntax */
+
+    @keyframes tile-flash {
+      0% {
+        background-color: var(--tile_on_background);
+        opacity: 1.0;
+      }
+
+      50% {
+        background-color: var(--tile_background);
+        opacity: 0.8;
+        /* 0.9 */
+      }
+
+      100% {
+        background-color: var(--tile_on_background);
+        opacity: 1.0;
+      }
+    }
+
+    /*
+    .off {
+      background-color: #ccc;
+      color: rgb(133, 133, 133);
+    }
+*/
+
+    .tile_icon {
+      height: var(--tile_icon-height);
+      display: table;
+      margin: 0 auto;
+      /*background-color: red;*/
+    }
+
+    .tile_name {
+      height: var(--tile_name-height);
+      /*background-color: green;*/
+      line-height: var(--tile_name-lineheight);
+    }
+
+    .tile_name_1line {
+      height: var(--tile_name-height1line);
+      /*background-color: green;*/
+      line-height: var(--tile_name-lineheight);
+    }
+
+    .tile_status {
+      color: var(--tile_status_text);
+      height: var(--tile_status-height);
+      /*background-color: blue;*/
+    }
+
+    .tile_icon_value {
+      border-radius: calc(var(--tile_icon-height) / 2);
+      font-weight: 600;
+      /*border-radius: 27px;*/
+      height: var(--tile_icon-height);
+      min-width: var(--tile_icon-height);
+      text-align: center;
+      vertical-align: middle;
+      line-height: var(--tile_icon-height);
+      filter: opacity(100%);
+      opacity: 1.0;
+    }
+
+    .heat {
+      /*background-color: rgb(255, 123, 0);*/
+      background-color: var(--tile_icon_background_color_heat);
+      color: rgb(255, 255, 255);
+    }
+
+    .cool {
+      /*background-color: rgb(4, 159, 248);*/
+      background-color: var(--tile_icon_background_color_cool);
+      color: rgb(255, 255, 255);
+    }
+
+    .enabled {
+      /*background-color: rgb(78, 196, 0);*/
+      background-color: var(--tile_icon_background_color_enabled);
+      color: rgb(255, 255, 255);
+    }
+
+    .disabled {
+      /*background-color: rgb(110, 110, 110);*/
+      background-color: var(--tile_icon_background_color_disabled);
+      color: rgb(220, 220, 220);
+    }
+
+    .rangeoptimal {
+      /*background-color: rgb(255, 123, 0);*/
+      background-color: var(--value_tile_normal_color);
+      color: rgb(255, 255, 255);
+    }
+
+    .rangewarning {
+      /*background-color: rgb(255, 187, 0);*/
+      background-color: var(--value_tile_attention_color);
+      color: rgb(255, 255, 255);
+    }
+
+    .rangecritical {
+      /*background-color: rgb(255, 123, 0);*/
+      background-color: var(--value_tile_outofrange_color);
+      color: rgb(255, 255, 255);
+    }
+
+    .uom_text {
+      font-size: 75%;
+    }
+
+    /* All for options panel */
+
+    .option_switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px
+    }
+
+    .option_switch input {
+      display: none;
+    }
+
+    .option_switch_slide {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--options_slider_lowlight);
+      /*-webkit-transition: .4s;  */
+      transition: .4s;
+      border-radius: 34px;
+    }
+
+    .option_switch_slide:before {
+      position: absolute;
+      content: "";
+      height: calc(var(--options_slider_ball)*1px);
+      width: calc(var(--options_slider_ball)*1px);
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      /*-webkit-transition: .4s;*/
+      transition: .4s;
+      border-radius: 50%;
+    }
+
+    input:checked+.option_switch_slide {
+      background-color: var(--options_slider_highlight);
+    }
+
+    input:focus+.option_switch_slide {
+      box-shadow: 0 0 1px var(--options_slider_highlight);
+    }
+
+    input:checked+.option_switch_slide:before {
+      -webkit-transform: translateX(26px);
+      -ms-transform: translateX(26px);
+      transform: translateX(26px);
+    }
+
+    .option_slider {
+      /*-webkit-appearance: none;*/
+      width: 300px;
+      height: var(--options_slider_height);
+      background: var(--options_slider_lowlight);
+      outline: none;
+      -webkit-transition: .2s;
+      transition: opacity .2s;
+      border-radius: var(--options_slider_height);
+    }
+
+    .option_slider::-webkit-slider-thumb {
+      /*-webkit-appearance: none;*/
+      appearance: none;
+      width: calc(var(--options_slider_ball)*1px);
+      height: calc(var(--options_slider_ball)*1px);
+      background: var(--options_slider_highlight);
+      cursor: pointer;
+      border-radius: calc(var(--options_slider_ball)*1px);
+    }
+
+    .option_slider::-moz-range-thumb {
+      width: calc(var(--options_slider_ball)*1px);
+      height: calc(var(--options_slider_ball)*1px);
+      background: var(--options_slider_highlight);
+      cursor: pointer;
+      border-radius: var(--options_slider_height);
+    }
+
+    .options_title {
+      /*background-color: rgb(124, 124, 124);
+      color: #fff;
+      font-weight: 200;*/
+      font-size: 18px;
+      overflow: hidden;
+    }
+
+    .options_selector {
+      font-family: var(--fonts);
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .options_button {
+      color: var(--body_text);
+      background-color: var(--options_button_background);
+      font-family: var(--fonts);
+      font-weight: 600;
+      font-size: 16px;
+      border-radius: 8px !important;
+    }
+
+    .option_text {
+      font-family: var(--fonts);
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .option_radiocontainer {
+      padding: 0.2em 0;
+      /*font-family: 'HelveticaNeue-Light', 'Helvetica Neue Light', 'Helvetica Neue', Helvetica, Arial, 'Lucida Grande', sans-serif;*/
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    /* hide the "real" radios visually */
+
+    .radio input {
+      border: 0;
+      clip: rect(0 0 0 0);
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      padding: 0;
+      position: absolute;
+      width: 1px;
+    }
+
+    /* style the "fake" radios */
+
+    .option_radio-value {
+      background-color: var(--options_radio_lowlight);
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 95% auto;
+      border-radius: 50%;
+      display: inline-block;
+      height: var(--options_radio_ball);
+      width: var(--options_radio_ball);
+      margin-right: 0.2em;
+      margin-left: 0.5em;
+      position: relative;
+      vertical-align: -0.3em;
+      /*  Beautify
+  border: 0.0625em solid #bbb;
+  box-shadow: inset 0 0.0625em 0 0.0625em rgba(0,0,0,0.075);*/
+    }
+
+    input:checked+.option_radio-value {
+      background-color: var(--options_radio_highlight);
+      /* Beautify
+  border-color: #169a9a;
+  box-shadow: 0 0.0625em 0 0.0625em rgba(0,0,0,0.075);*/
+    }
+
+    .sc_table,
+    .sc_table th,
+    .sc_table td {
+      /*border: 1px solid #ccc;*/
+      border: 0px;
+      padding: 0px;
+    }
+
+    .sc_tablehead {
+      vertical-align: top;
+      text-align: center;
+    }
+
+
+    .sc_tablerowhidden {
+      visibility: collapse;
+      line-height: 0;
+    }
+
+    .sc_tablerowhidden tr {
+      visibility: hidden;
+      height: 0;
+      max-height: 0;
+      padding: 0;
+      border: none;
+    }
+
+    .cs_commandcell {
+      background-color: var(--csinputcell_background);
+      width: 60px !important;
+      overflow: hidden;
+      overflow: -moz-hidden-unscrollable;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      padding: 0;
+    }
+
+    .cs_devicecell {
+      background-color: var(--csinputcell_background);
+      width: 150px !important;
+      overflow: hidden;
+      overflow: -moz-hidden-unscrollable;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      padding: 0;
+    }
+
+    .cs_valuecell {
+      width: 40px !important;
+    }
+
+    .cs_inputcell {
+      background-color: var(--csinputcell_background);
+      text-align: left;
+      width: 50px;
+      padding: 2px;
+      /*background-color:#f0f0f0 ;*/
+      border: none;
+      /*-webkit-appearance: textfield;*/
+      /*-webkit-appearance: none;*/
+      /*-moz-appearance: textfield;*/
+      font-size: 14px;
+      color: var(--body_text);
+    }
+
+    .cs_deletebutton {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--body_text);
+    }
+
+    .cs_crontext {
+      font-size: 18px;
+      background-color: var(--cronhelp_background);
+    }
+
+    .cs_helpright {
+      background-color: var(--cronhelp_background);
+      font-size: 12px;
+      padding-top: 0px;
+      padding-right: 0px;
+      padding-bottom: 0px;
+      padding-left: 5px;
+      font-weight: 500;
+      text-align: left;
+    }
+
+    .cs_helpleft {
+      background-color: var(--cronhelp_background);
+      font-size: 12px;
+      padding-top: 0px;
+      padding-right: 5px;
+      padding-bottom: 0px;
+      padding-left: 0px;
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .cs_error {
+      background-color: red;
+    }
+
+    /*
+.switch-on-NOT_USED {
+  width: 45px;
+  height: 45px;
+  background-image: url('hk/switch-on.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.switch-off-NOT_USED {
+  width: 45px;
+  height: 45px;
+  background-image: url('hk/switch-off.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+*/
+    .switch-icon {
+      /*
+  width: 45px;
+  height: 45px;*/
+      width: var(--tile_icon-height);
+      height: var(--tile_icon-height);
+      /*background-size: cover;*/
+      /*background-size:  var(--tile_icon-height)  var(--tile_icon-height);*/
+      background-position: center center;
+      background-size: contain;
+      background-repeat: no-repeat;
+    }
+
+
+    .pane_close_button {
+      font-size: 10px !important;
+      font-weight: bold !important;
+      /*color: var(--body_text);*/
+      /*background-color: #7f8385 !important;*/
+      border: none !important;
+      color: rgb(0, 0, 0) !important;
+      padding: 2px 2px !important;
+      text-decoration: none !important;
+      margin: 2px 2px 2px 2px !important;
+      min-width: 18px !important;
+      border-radius: 2px !important;
+      height: 18px !important;
+
+    }
+
+    .pane_close_button_contaner {
+      position: absolute;
+      top: 0;
+      right: 0;
+      padding-top: 5px;
+      padding-right: 5px;
+    }
+
+    /*
+
+    .tile_options_close_button_contaner {
+      position: absolute;
+      top: 0;
+      right: 0;
+      padding-top: 5px;
+      padding-right: 10px;
+    }
+
+    .tile_options_close_button {
+      font-size: 10px !important;
+      font-weight: bold !important;
+      border: none !important;
+      color: rgb(0, 0, 0) !important;
+      padding: 2px 2px !important;
+      text-decoration: none !important;
+      margin: 2px 2px 2px 2px !important;
+      min-width: 18px !important;
+      border-radius: 2px !important;
+      height: 18px !important;
+    }
+*/
+    /*
+    .timedate {
+      font-size: 10px;
+    }*/
+  </style>
+
+  <script type='text/javascript'>
+    //'use strict';
+    var _DEBUG = true;
+
+    var _aqualinkd = false;
+
+    /* dumb increment protocol */
+    var _socket_di;
+
+    var _devices;
+
+    var _config = {};
+    var _dynamicconfig = {};
+
+    var _aq_display_tile_size = 'small';
+
+    var _lightProgramDropdown = false;
+    var _pressEvent;
+    var _ignoreMouseEvent = false;
+    var _temperature_units;
+    var _aqualink_data;
+    var _landscape = false;
+    //var _displayNames = [];
+    //var _scheduler_devices_json = [];
+    var _tile_line_char_limit = 0;
+    var _deviceOrder = [];
+    var _enable_schedules = true;
+    var _theme = "";
+
+    var _switchOnUri;
+    var _switchOffUri;
+    var _sensorOnUri;
+    var _sensorOffUri;
+    //var _targetClearErrorMsg = new Date();
+
+    var _DisableOffIconCircle = true;
+
+    const _isDarkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    // The actual log function
+    //const _log = (...args) => console.log(`[DEBUG ${new Date().toISOString()}]:`, ...args);
+    //const _log = (...args) => console.log(`[DEBUG] `,...args);
+    const _log = (...args) => {
+      const stack = new Error().stack;
+      if (!stack) return console.log(...args);
+
+      const lines = stack.split('\n');
+      const callerLine = lines.find(l =>
+        l !== "" &&
+        !l.includes('_log') &&
+        !l.includes('debug') &&
+        !l.includes('Error')
+      );
+      const match = callerLine?.match(/^([^@]*)@.*:(\d+):\d+/);
+      const rawTag = match ? `${match[1] || 'anon'}():${match[2]}` : "unknown";
+      const MAX_WIDTH = 25;
+      let formattedTag = rawTag.length > MAX_WIDTH
+        ? ".." + rawTag.slice(-(MAX_WIDTH - 2))
+        : rawTag.padEnd(MAX_WIDTH, ' ');
+
+      console.log(`[${formattedTag}]:`, ...args);
+    };
+
+    const _nothing = () => { };
+
+    let LOG = _nothing; // No Debug
+
+    if (_DEBUG) {
+      LOG = _log; // Debug
+    }
+
+    const _DeviceAttributes = Object.freeze({
+      // Switch setable states
+      ON: 'set_on',
+      OFF: 'set_off',
+      ENABLED: 'set_enabled',
+      DISABLED: 'set_disabled',
+
+      // Switch options
+      TIMER: 'timer',
+      PROGRAM: 'program',
+      DIMMER: 'dimmer',
+      VSP: 'vsp',
+      ALT_LABEL: 'alt_label',
+      RESET_STATS: 'reset_stats',
+
+      // Controller types
+      HEATER: 'heater',
+      SWG: 'swg',
+      FREEZE: 'freeze',
+      CHILLER: 'chiller',
+
+      // Value options
+      STATS: 'stats',
+      DOSESTATS: 'dosestats',
+    });
+
+    const _DeviceTypes = Object.freeze({
+      // Basic Controls
+      SWITCH: 'switch',
+
+      // Sensors & Data
+      BINARY_SENSOR: 'binary_sensor',
+      VALUE: 'value',
+      TEMPERATURE: 'temperature',
+      SENSOR: 'sensor',
+      AVERAGE: 'average', // Dynamically created from a Sensor device with Stats as attribute. 
+
+      // Setpoints.  ie heater, SWG, freeze, chiller etc.
+      CONTROLLER: 'controller',
+    });
+
+    const _DeviceStates = Object.freeze({
+      OFF: '0',
+      ON: '1',
+      ENABLED: '2',
+      DISABLED: '3',
+    });
+
+    //LOG(_isDarkMode ? "Dark mode is on" : "Light mode is on");
+
+    async function loadConfig() {
+      try {
+        // Fetch the configuration file
+        const response = await fetch('/config.json', { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        // Parse the JSON data
+        _config = await response.json();
+
+      } catch (error) {
+        //console.error("Loading config failed:", error);
+        console.log("Loading config failed:", error);
+        displayErrorMessagee("Error Loading web config!", 5);
+        //document.getElementById("header").classList.add("error");
+        //_targetClearErrorMsg = new Date(Date.now() + 5000);  // Set 5 sec from now.
+      }
+
+      // Set current theme
+      if (_config?.theme === "auto") {
+        _theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "-dark" : "-light";
+      } else if (_config?.theme) {
+        _theme = "-" + _config?.theme;
+      } else {
+        _theme = "";
+      }
+
+      // Check we have correct objects for theme.
+      if (_config?.background_image?.["url" + _theme]) {
+        // LOG("Found background image - "+_config?.background_image?.["url"+_theme]);
+      } else {
+        console.log("ERROR: No image background found for theme, json path \"background_image\": {\"url" + _theme + "\":.....}`");
+      }
+
+      if (_config?.["colors" + _theme]) {
+        //LOG("Found colors - colors"+_theme+"{..}");
+      } else {
+        if (_theme !== "") {
+          // Don't error on blank theme, as we use default colors.
+          console.log("ERROR: No colors found for theme '" + _theme + "', json path \"colors" + _theme + "\":{...}`");
+        }
+      }
+
+      // Set defaults.
+
+      if (typeof _config.background_image?.url === 'undefined') {
+        _config.background_image = {};
+        _config.background_image.url = "hk/background.jpg";
+        _config.background_image.url_reload = 0;
+      }
+
+      //if (_config?.colors?.tile_on_background) {
+      if (_config?.["colors" + _theme]?.tile_on_background) {
+        _switchOnUri = createSwitchIcon(_config["colors" + _theme].tile_on_background, false);
+        _sensorOnUri = createSensorIcon(_config["colors" + _theme].tile_on_background, false);
+      } else {
+        _switchOnUri = createSwitchIcon("rgb(255, 255, 255)", false);
+        _sensorOnUri = createSensorIcon("rgb(255, 255, 255)", false);
+      }
+
+      if (_config?.tile_settings?.disable_off_icon_background && !isConfigEnabled(_config.tile_settings.disable_off_icon_background)) {
+        _DisableOffIconCircle = false;
+      } else {
+        _DisableOffIconCircle = true;  // This is the default
+      }
+
+      if (_DisableOffIconCircle) {
+        //if (_config?.colors?.tile_icon_background_color_disabled) {
+        if (_config?.["colors" + _theme]?.tile_icon_background_color_disabled) {
+          _switchOffUri = createSwitchIcon(_config["colors" + _theme].tile_icon_background_color_disabled, _DisableOffIconCircle);
+          _sensorOffUri = createSensorIcon(_config["colors" + _theme].tile_icon_background_color_disabled, _DisableOffIconCircle);
+        } else {
+          _switchOffUri = createSwitchIcon("rgb(110, 110, 110)", _DisableOffIconCircle);
+          _sensorOffUri = createSensorIcon("rgb(110, 110, 110)", _DisableOffIconCircle);
+        }
+      } else {
+        //if (_config?.colors?.tile_background) {
+        if (_config?.["colors" + _theme]?.tile_background) {
+          _switchOffUri = createSwitchIcon(_config["colors" + _theme].tile_background, _DisableOffIconCircle);
+          _sensorOffUri = createSensorIcon(_config["colors" + _theme].tile_background, _DisableOffIconCircle);
+        } else {
+          _switchOffUri = createSwitchIcon("rgb(220, 220, 220)", _DisableOffIconCircle);
+          _sensorOffUri = createSensorIcon("rgb(220, 220, 220)", _DisableOffIconCircle);
+        }
+      }
+
+      if (_config?.devices) {
+        Object.entries(_config.devices).forEach(([deviceName, deviceObj]) => {
+          if (deviceObj?.display && isConfigEnabled(deviceObj.display)) {
+            _deviceOrder.push(deviceName);  // Un comment
+          } else {
+            //LOG(deviceName+" hide");
+          }
+        });
+      }
+
+      if (!_config?.swg_status) {
+        _config.swg_status = {
+          "0": "On",
+          "1": "No flow",
+          "2": "Low salt",
+          "4": "High salt",
+          "8": "Clean cell",
+          "9": "Turning off",
+          "16": "High current",
+          "32": "Low volts",
+          "64": "Low temp",
+          "128": "Check PCB",
+          "253": "General Fault",
+          "254": "Unknown",
+          "255": "Off"
+        };
+      }
+
+      if (!_config?.tile_thresholds) {
+        _config.tile_thresholds = {
+          "SWG/PPM": {
+            outofrange: { min: 2600, max: 3500 },
+            attention: { min: 2700, max: 3400 }
+          },
+          "CHEM/pH": {
+            outofrange: { min: 7, max: 8 },
+            attention: { min: 7.2, max: 7.8 }
+          },
+          "CHEM/ORP": {
+            outofrange: { min: 560, max: 900 },
+            attention: { min: 650, max: 850 }
+          }
+        };
+      }
+
+      if (!_config?.tile_settings) {
+        _config.tile_settings = {};
+      }
+
+      if (!_config?.tile_settings?.turn_off_sensortiles) {
+        _config.tile_settings.turn_off_sensortiles = "true";
+      }
+
+      if (!_config?.tile_settings?.show_vsp_gpm) {
+        _config.tile_settings.show_vsp_gpm = "true";
+      }
+
+      // NSF Not used at present
+      if (!_config?.tile_settings?.link_spa_and_spa_heater) {
+        _config.tile_settings.link_spa_and_spa_heater = "false";
+      }
+
+      if (isConfigEnabled(_config?.tile_settings?.light_program_use_dropdown)) {
+        _lightProgramDropdown = true;
+      }
+    }
+
+    function isConfigEnabled(value) {
+      if (value === null || typeof value === 'undefined') {
+        return false;
+      }
+      const lowerCaseValue = String(value).toLowerCase();
+      if (lowerCaseValue === "true" || lowerCaseValue === "yes") {
+        return true;
+      }
+      return false;
+    }
+
+    function createSwitchIcon(color, largeSize) {
+      var switchContent;
+      if (!largeSize) {
+        switchContent = `<svg xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 45 45"
+                          stroke="`+ color + `" fill="none"
+                          stroke-width="5.5" stroke-linecap="round">
+                          <line x1="22.05" y1="8" x2="22.05" y2="19" />
+                          <path d="M15.3 13.25 A11.25 11.25 0 1 0 28.8 13.25"/>
+                        </svg>`;
+      } else {
+        /* Circle is larger / Line is higher */
+        switchContent = `<svg xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 45 45"
+                          stroke="`+ color + `" fill="none"
+                          stroke-width="5.5" stroke-linecap="round">
+                          <line x1="22.05" y1="7" x2="22.05" y2="18" />
+                          <path d="M15.3 12.75 A11.75 11.75 0 1 0 28.8 12.75"/>
+                        </svg>`;
+      }
+      const encodedswitchContent = encodeURIComponent(switchContent);
+      return `url("data:image/svg+xml;charset=utf-8,${encodedswitchContent}")`;
+    }
+
+    function createSensorIcon(color, largeSize) {
+      var sensorContent;
+      if (!largeSize) {
+        /* Standard Size: Centered probe with side pulse lines */
+        sensorContent = `<svg xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 45 45"
+                          stroke="`+ color + `" fill="none"
+                          stroke-width="3.5" stroke-linecap="round">
+                          <path d="M22.5 10 V30" />
+                          <circle cx="22.5" cy="30" fill="`+ color + `" r="3" />
+                          <line x1="8" y1="20" x2="16" y2="20" />
+                          <line x1="29" y1="20" x2="37" y2="20" />
+                        </svg>`;
+      } else {
+        /* Large Size: Expanded probe body and wider pulse lines */
+        sensorContent = `<svg xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 45 45"
+                      stroke="`+ color + `" fill="none"
+                      stroke-width="4.5" stroke-linecap="round">
+                      <path d="M22.5 7 V28" />
+                      <circle cx="22.5" cy="32" fill="`+ color + `" r="4" />
+                      <line x1="5" y1="18" x2="15" y2="18" />
+                      <line x1="30" y1="18" x2="40" y2="18" />
+                    </svg>`;
+      }
+      const encodedSensorContent = encodeURIComponent(sensorContent);
+      return `url("data:image/svg+xml;charset=utf-8,${encodedSensorContent}")`;
+    }
+
+
+    async function init() {
+      await loadConfig();
+
+      setSizeSpecifics();
+
+      setColors();
+      load_background();
+      //showTileOptions(false);
+      startWebsockets();
+      resetBackgroundSize();
+
+      // Test for mobile-app mode
+
+      if (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches) {
+        //LOG("Running in standalone mode");
+        //alert("Standalone");
+        // in webapp mode, remove the aqmanager link
+        try {
+          document.getElementById('td_cog').classList.add("hide");
+        } catch (e) { }
+      } else {
+        //LOG("Not running in standalone mode");
+        //alert("NOT Standalone");
+      }
+
+      if (_config?.external_script) {
+        loadScriptIfAvailable(_config.external_script);
+      }
+
+      // Test for iframe
+      if (window.self !== window.top) {
+        //LOG("The code is running inside an iframe.");
+        // Change the link under the cog/hamburger icon
+        const ele = document.getElementById('cog_link');
+        if (ele) {
+          ele.setAttribute("href", "/");
+          ele.setAttribute("target", "_parent");
+        }
+      } else {
+        //LOG("The code is not running inside an iframe.");
+      }
+
+      //LOG("Tile width "+window.getComputedStyle(document.documentElement).getPropertyValue('--tile-width'));
+    }
+
+
+
+    // Simply loop over each key/value in color jason array and set that property adding -- to the beginning of key
+    function setColors() {
+      if (_config?.["colors" + _theme]) {
+        const rootElement = document.documentElement;
+
+        Object.entries(_config["colors" + _theme]).forEach(([key, value]) => {
+          //LOG(`Key (Color Variable): ${key}, Value (Color Code): ${value}`);
+          //LOG(key+ " " +document.documentElement.style.getPropertyValue('--' + key)+" | "+window.getComputedStyle(document.documentElement).getPropertyValue('--' + key));
+          if (window.getComputedStyle(rootElement).getPropertyValue('--' + key) && _config?.["colors" + _theme][key]) {
+            document.documentElement.style.setProperty('--' + key, value);
+          } else {
+            console.log(`Invalid config (Color Variable): ${key}, Value : ${value}`);
+          }
+        });
+      }
+    }
+    // The above replaces the below.  Below is safer, but needs modification every time we add a property.
+    /*
+    function setProp(name) {
+      //if ( _config?.colors[name] !== undefined ) {
+      if ( _config?.colors && _config?.colors[name] ) {
+        //LOG("Color "+name+" = "+_config.colors[name]);
+        document.documentElement.style.setProperty('--' + name, _config.colors[name]);
+      } else {
+        //LOG("Missing Color "+name);
+      }
+    }
+    function setColors() {
+      setProp("body_background");
+      setProp("body_text");
+      setProp("options_pane_background");
+      setProp("options_pane_bordercolor");
+      setProp("options_slider_highlight");
+      setProp("options_slider_lowlight");
+      setProp("head_background");
+      setProp("head_text");
+      setProp("error_background");
+
+      setProp("value_tile_normal_color");
+      setProp("value_tile_outofrange_color");
+      setProp("value_tile_attention_color");
+      
+      setProp("tile_on_text");
+      setProp("tile_status_text");
+      setProp("tile_text");
+      setProp("tile_background");
+      setProp("tile_on_background");
+
+      setProp("tile_icon_background_color_heat");
+      setProp("tile_icon_background_color_cool");
+      setProp("tile_icon_background_color_enabled");
+      setProp("tile_icon_background_color_disabled");
+    }
+*/
+    function setSizeSpecifics() {
+      var w = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+      var h = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+      //alert(w+"x"+h+" = "+(w*h));
+
+      // 375x724 = 271500
+      if ((w * h) > 370000) { // 370000 is kind-a just guess
+        _aq_display_tile_size = "large";
+        document.documentElement.style.setProperty('--tile-width', '125px');
+        document.documentElement.style.setProperty('--tile_icon-height', '45px');
+        document.documentElement.style.setProperty('--tile_name-height', '42px');
+        document.documentElement.style.setProperty('--tile_name-height1line', '27px');
+        document.documentElement.style.setProperty('--tile_name-charlimit', '15');
+        document.documentElement.style.setProperty('--tile_status-height', '15px');
+        document.documentElement.style.setProperty('--tile_grid-gap', '20px');
+        document.documentElement.style.setProperty('--tile_name-lineheight', '1.4');
+      } else {
+        _aq_display_tile_size = "small";
+      }
+
+      if (w > h)
+        _landscape = true;
+      else
+        _landscape = false;
+      setOrientation(_landscape);
+      /*
+        Future change element sizes here if needed
+      */
+      _tile_line_char_limit = getComputedStyle(document.documentElement).getPropertyValue('--tile_name-charlimit');
+
+      if (_lightProgramDropdown == false && h < 570) {
+        _lightProgramDropdown = true;
+      }
+
+      window.addEventListener("orientationchange", function () {
+        var w = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+        var h = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+        // Have no idea why this is reversed, but w is less then h in landscape when captured here.
+        if (w < h)
+          _landscape = true;
+        else
+          _landscape = false;
+        setOrientation(_landscape);
+        // Need to finish rendering before calling this, so wait a small time
+        setTimeout(resetBackgroundSize, 100);
+      }, false);
+    }
+
+    function setOrientation(isLandscape) {
+      if (isLandscape) {
+        //alert('lll')
+        document.getElementById("td_name").width = '72px';
+        document.getElementById("td_timedate").width = '72px';
+      } else {
+        document.getElementById("td_name").width = '72px';
+        document.getElementById("td_timedate").width = '102px';
+      }
+    }
+
+    function load_background() {
+      // check for undefined AND defined but empty
+      //if (typeof background_url === 'undefined' || background_url === undefined)
+      if (!_config.background_image?.["url" + _theme]) {
+        return;
+      }
+      //alert("load");
+      // call the notify_complete function when the image has loaded
+
+      var image = new Image();
+      image.onload = function () {
+        document.getElementById("body_wrap").style.backgroundImage = "url('" + this.src + "')";
+      };
+      image.onerror = function () {
+        image.src = "hk/background.jpg"; // Use default if image fails.
+      };
+      //if (typeof background_reload !== 'undefined' && background_reload > 0) {
+      if (_config.background_image?.url_reload > 0) {
+        if (_config.background_image.url.indexOf('?') > 0)
+          image.src = _config.background_image["url" + _theme] + '&aqrnd=' + new Date().getTime();
+        else
+          image.src = _config.background_image["url" + _theme] + '?' + new Date().getTime();
+
+        setTimeout(load_background, (_config.background_image.url_reload * 1000));
+      } else {
+        image.src = _config.background_image["url" + _theme];
+      }
+    }
+    // If the grid continer is larger than the page container, increase page so background looks nice
+    // also reduce size if needed on page rotate.
+    function resetBackgroundSize() {
+      if (!_config.background_image?.url) {
+        return;
+      }
+
+      try {
+        //inside = document.getElementById('wrapper');
+        outside = document.getElementById('body_wrap');
+        insideH = parseInt(window.getComputedStyle(document.getElementById('wrapper')).height);
+        outsideH = parseInt(window.getComputedStyle(outside).height);
+        var w = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+        var h = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+        if (insideH > outsideH || outsideH > h) {
+          //outside.style.height = ((insideH > h)?(insideH + 40)+'px':(h + 40)+'px');
+          outside.style.height = ((insideH > h) ? (insideH + 40) + 'px' : h + 'px');
+          //alert("w:"+w+" h:"+h+" inH:"+insideH+" outH:"+outsideH+"\nUsed:"+outside.style.height);
+        }
+      } catch (e) { }
+    }
+
+    function endPress(id) {
+      showTileOptions(true, id);
+    }
+
+    function add_clickEvent(tile, id) {
+      // --- TOUCH EVENTS (Tablet/Phone) ---
+      tile.addEventListener('touchstart', function (e) {
+        //LOG("Touch start on tile " + id);
+        // 1. EARLY EXIT: If the dialog is open, do absolutely nothing.
+        //if (isTileOptionsOpen()) return;
+
+        if (e.cancelable) e.preventDefault();
+        _ignoreMouseEvent = true;
+
+        _pressEvent = window.setTimeout(function () {
+          _pressEvent = 0;
+          endPress(id);
+        }, 1000);
+      }, { passive: false });
+
+      tile.addEventListener('touchend', function (e) {
+        //LOG("Touch end on tile " + id);
+        if (e.cancelable) e.preventDefault();
+
+        if (_pressEvent != 0) {
+          clearTimeout(_pressEvent);
+          switchTileState(id, false);
+        }
+      }, { passive: false });
+
+      // --- MOUSE EVENTS (Desktop) ---
+      tile.addEventListener("mousedown", function () {
+        //LOG("Mouse down on tile " + id);
+        // 1. EARLY EXIT: Ignore clicks if options are open
+        // 2. OR EXIT: Ignore if we just handled a touch event
+        //if (isTileOptionsOpen() || _ignoreMouseEvent) return;
+
+        _pressEvent = window.setTimeout(function () {
+          _pressEvent = 0;
+          endPress(id);
+        }, 1000);
+      });
+
+      tile.addEventListener("mouseup", function () {
+        LOG("Mouse up on tile " + id);
+        if (_pressEvent != 0 && !isTileOptionsOpen()) {
+          clearTimeout(_pressEvent);
+          switchTileState(id, false);
+        }
+        // Reset the flag after the full mouse cycle finishes
+        _ignoreMouseEvent = false;
+      });
+    }
+
+
+
+    // ***** NSF Need to change subtype to an attributes array below ******
+    function add_tile(id, name, status, type, attributes, off_imgurl, on_imgurl) {
+      //function add_tile(id, name, status, type, subtype) {
+      var height = getComputedStyle(document.documentElement).getPropertyValue('--tile_icon-height');
+
+      var div = document.createElement('div');
+      div.setAttribute('class', 'tile');
+      div.setAttribute('id', id);
+      div.setAttribute('type', type);
+      //div.setAttribute('onclick', "switchTileState('" + id + "')");
+      var subdiv = document.createElement('div');
+      subdiv.setAttribute('class', 'tile_icon');
+      subdiv.setAttribute('id', id + '_icon');
+
+      //LOG(name+" = "+type+" "+subtype);
+
+      // Tile has an icon.
+      if (type == _DeviceTypes.SWITCH || type == _DeviceTypes.BINARY_SENSOR) { // Use default SVG for icon images
+        if (off_imgurl == null) {
+          var valdiv = document.createElement('div');
+          if (_DisableOffIconCircle) {
+            valdiv.setAttribute('class', 'switch-off tile_icon_value');
+          } else {
+            valdiv.setAttribute('class', 'switch-off tile_icon_value disabled');
+          }
+          valdiv.setAttribute('id', id + '_tile_icon_value');
+          subdiv.appendChild(valdiv);
+          div.appendChild(subdiv);
+        } else {     // Use URL for icon image
+          var imgdiv = document.createElement('img');
+          imgdiv.setAttribute('height', height + 'px');
+          imgdiv.setAttribute('src', off_imgurl);
+          subdiv.appendChild(imgdiv);
+          div.appendChild(subdiv);
+          if (on_imgurl != null) {
+            subdiv = document.createElement('div');
+            subdiv.setAttribute('class', 'tile_icon');
+            subdiv.setAttribute('id', id + '_icon_on');
+            imgdiv = document.createElement('img');
+            imgdiv.setAttribute('height', height + 'px');
+            imgdiv.setAttribute('src', on_imgurl);
+            subdiv.style.display = 'none';
+            subdiv.appendChild(imgdiv);
+            div.appendChild(subdiv);
+          }
+        }
+      } else { // Tile with no icon, but value
+        var valdiv = document.createElement('div');
+        valdiv.setAttribute('class', 'tile_icon_value disabled');
+        valdiv.setAttribute('id', id + '_tile_icon_value');
+        valdiv.textContent = '--';
+        subdiv.appendChild(valdiv);
+        div.appendChild(subdiv);
+      }
+
+
+      var title_subdiv = document.createElement('div');
+      title_subdiv.setAttribute('class', 'tile_name');
+      title_subdiv.setAttribute('id', id + '_name');
+      title_subdiv.textContent = cutContentTextLength(name, 2);
+      div.appendChild(title_subdiv);
+      // Value and Thermostat are the same, but value is read only and no state
+      //if (type != "value") {
+      {
+        // Add extra status line to VSP or Stats tile if we can
+        LOG("Create id " + id);
+        if (attributes?.includes(_DeviceAttributes.VSP) || _devices.devices[id]?.type == _DeviceTypes.AVERAGE) {
+          //if (attributes?.includes(_DeviceAttributes.VSP) || id.endsWith("_stats") ) {
+          //var title1linechatlimit = getComputedStyle(document.documentElement).getPropertyValue('--tile_name-charlimit');
+          if (name.length <= _tile_line_char_limit) {
+            LOG("Create 2nd line");
+            subdiv = document.createElement('div');
+            subdiv.setAttribute('class', 'tile_status');
+            subdiv.setAttribute('id', id + '_status_line2');
+            div.appendChild(subdiv);
+            title_subdiv.classList.add("tile_name_1line");
+            title_subdiv.classList.remove("tile_name");
+          } else {
+            LOG("NAME TOO LONG");
+          }
+        }
+        subdiv = document.createElement('div');
+        subdiv.setAttribute('class', 'tile_status');
+        subdiv.setAttribute('id', id + '_status');
+        if (type != 'value') {
+          subdiv.textContent = formatSatus(status);
+        }
+        div.appendChild(subdiv);
+        switch (type) {
+          case _DeviceTypes.SWITCH:
+          case _DeviceTypes.CONTROLLER:
+            add_clickEvent(div, id);
+            break;
+          case _DeviceTypes.BINARY_SENSOR:
+          case _DeviceTypes.SENSOR:
+          case _DeviceTypes.VALUE:
+          case _DeviceTypes.TEMPERATURE:
+          default:
+            // Don;t add click event since not changable.
+            break;
+        }
+      }
+      document.getElementById('wrapper').appendChild(div);
+    }
+
+    function cutContentTextLength(text, lines) {
+      //var title1linechatlimit = getComputedStyle(document.documentElement).getPropertyValue('--tile_name-charlimit');
+      // 12 or 15.
+      if (countLines(text, _tile_line_char_limit - 1) > lines) {
+        //LOG ("Text '"+text+"' will take 3+ lines");
+        text = text.replace(/\bChemistry\b/, "Chem");
+        //LOG ("new Text '"+text+"'");
+      }
+      return text
+    }
+
+    function countLines(text, limit = 15) {
+      const words = text.split(/\s+/);  // split on spaces (multiple OK)
+      let lines = 1;
+      let currentLen = 0;
+
+      for (const word of words) {
+        if (word.length === 0) continue; // skip empty strings
+
+        if (currentLen === 0) {
+          // first word on the line
+          currentLen = word.length;
+        } else if (currentLen + 1 + word.length <= limit) {
+          // add word + 1 space
+          currentLen += 1 + word.length;
+        } else {
+          // new line
+          lines++;
+          currentLen = word.length;
+        }
+      }
+      return lines;
+    }
+
+    function switchTileState(id, details) {
+      if (details) {
+        LOG("TILE DETAILS WHY ARE WE HERE??? '" + id + "'");
+      } else {
+        setTileState(id, (document.getElementById(id).getAttribute('status') == 'off'))
+      }
+    }
+
+    function setTileState(id, state) {
+      try {
+        if (state == (document.getElementById(id).getAttribute('status') == 'off')) {
+          send_command(id, (state == true ? 1 : 0));
+        } else {
+          //LOG("state "+id+" to "+(state)?"on":"off")
+        }
+
+        setTileOn(id, ((state) ? "on" : "off"));
+      } catch (exception) {
+        console.error("setTileState() :-" + exception);
+      }
+    }
+
+    /*
+    function setThermostatSetpoint(id, sp_value) {
+      var tile;
+      if ((tile = document.getElementById(id)) == null) {
+        return;
+      }
+      tile.setAttribute('setpoint', sp_value);
+      send_setpoint(id);
+    }
+    */
+
+
+
+    // Reduce the number of decimal places if a float is longer than a
+    // a set number of digits.  Leave any int / string alone, and ONLY reduce the decimal part of a float.
+
+    function reduct(value) {
+
+      const str = String(value);
+      const parts = str.split('.');
+
+      const integerDigits = parts[0].length;
+
+      let fractionalDigits = 0;
+      // If the array has more than one part, a decimal point was found.
+      if (parts.length > 1) {
+        fractionalDigits = parts[1].length;
+      } else {
+        // No decimal places, return.
+        return value;
+      }
+
+      // Large tiles vs small tiles.
+      let total_digits = 3;
+      if (_aq_display_tile_size == "large") {
+        total_digits = 5;
+      }
+
+      if (integerDigits + fractionalDigits <= total_digits) {
+        // Total length is less so no change
+        return value;
+      } else if (integerDigits >= total_digits) {
+        // Simply return the intiger and not decimal places.
+        return parts[0].toString();
+      } else {
+        let numFractionalDigits = total_digits - integerDigits;
+        return parts[0].toString() + "." + parts[1].substring(0, numFractionalDigits);
+      }
+      return value;
+    }
+
+    /*
+      Set any UOM that's not deg to smaller font
+    */
+    function formatUOM(uom) {
+      if (uom == "&deg;" || uom == "°") {
+        return uom;
+      }
+      return '<span class="uom_text">' + uom + '</span>';
+    }
+
+    function isActuallyNumeric(val) {
+      // This handles strings that look like numbers ("123") and actual numbers
+      // It returns false for NaN, Infinity, and empty strings
+      return !isNaN(parseFloat(val)) && isFinite(val);
+    }
+
+    function formatTileValue(id, value) {
+      var ext = '';
+      var type = null;
+
+      if (value == undefined || value == -999) {
+        value = '--';
+      } else {
+        let uom;
+        if ((uom = document.getElementById(id).getAttribute('UOM')) != null) {
+          ext = uom;
+          //ext = '<span class="uom_text">'+uom+'</span>';
+        } else if ((type = document.getElementById(id).getAttribute('type')) != null) {
+          if (type == _DeviceTypes.TEMPERATURE ||
+            _devices.devices[id]?.attributes?.includes(_DeviceAttributes.HEATER) ||
+            _devices.devices[id]?.attributes?.includes(_DeviceAttributes.FREEZE) ||
+            _devices.devices[id]?.attributes?.includes(_DeviceAttributes.CHILLER)) {
+            ext = '&deg;';
+          } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.SWG)) {
+            ext = '%';
+          } else if ((type == 'value' && id == 'CHEM/ORP') || ((type == 'sensor' || type == 'average') && id.startsWith('ORP_'))) {
+            ext = "mV";
+          } else {
+            //LOG("*** No UOM for "+id+" and type "+type);
+          }
+        }
+      }
+
+      if (_config?.tile_settings?.disply_temp_in_f) {
+        LOG("UOM for " + id + " is " + ext);
+        if (ext.toLowerCase() == "°c" || ext.toLowerCase() == "&deg;c") {
+          value = (value * 9 / 5) + 32;
+          ext = "°f";
+        }
+      }
+
+      if (_config.devices[id]?.precision !== undefined && isActuallyNumeric(value)) {
+        value = value.toFixed(_config.devices[id]?.precision);
+      } else if (isActuallyNumeric(value) && (type == 'sensor' || type == 'average') && id.startsWith('ORP_')) {
+        // Default ORP precision to 0 if not set and value is numeric
+        value = parseFloat(value).toFixed(0);
+      } else if (isActuallyNumeric(value) && (type == 'sensor' || type == 'average') && id.startsWith('PH_')) {
+        // Default PH precision to 2 if not set and value is numeric
+        value = parseFloat(value).toFixed(2);
+      }
+      value = reduct(value) + formatUOM(ext);
+
+      return value;
+    }
+
+    function setTileValue(id, value, status = 'on') {
+
+      if (status != 'off' && status != 'disabled') {
+        setTileThresholds(id, value, status);
+      }
+
+      var tile;
+      if ((tile = document.getElementById(id + '_tile_icon_value')) != null) {
+        tile.innerHTML = formatTileValue(id, value)
+      }
+    }
+
+    function OLD_setTileValue_OLD(id, value, status = 'on') {
+      var ext = '';
+      var type = null;
+      //LOG("setTileValue "+id+" "+value);
+      try {
+
+        if (value == undefined || value == -999) {
+          value = '--';
+        } else {
+          let uom;
+          if ((uom = document.getElementById(id).getAttribute('UOM')) != null) {
+            ext = uom;
+            //ext = '<span class="uom_text">'+uom+'</span>';
+          } else if ((type = document.getElementById(id).getAttribute('type')) != null) {
+            if (type == _DeviceTypes.TEMPERATURE ||
+              _devices.devices[id]?.attributes?.includes(_DeviceAttributes.HEATER) ||
+              _devices.devices[id]?.attributes?.includes(_DeviceAttributes.FREEZE) ||
+              _devices.devices[id]?.attributes?.includes(_DeviceAttributes.CHILLER)) {
+              ext = '&deg;';
+            } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.SWG)) {
+              ext = '%';
+            } else if ((type == 'value' && id == 'CHEM/ORP') || (type == 'sensor' && id.startsWith('ORP_'))) {
+              ext = "mV";
+            } else {
+              //LOG("*** No UOM for "+id+" and type "+type);
+            }
+          }
+        }
+      } catch (e) {
+        // Devices that are hidden are not found
+        console.log('ERROR id=' + id + ' Line ' + new Error().lineNumber + ' | element = ' + document.getElementById(id) + "\n" + e);
+      }
+
+      if (status != 'off' && status != 'disabled') {
+        setTileThresholds(id, value, status);
+      }
+
+      if (_config?.tile_settings?.disply_temp_in_f) {
+        LOG("UOM for " + id + " is " + ext);
+        if (ext.toLowerCase() == "°c" || ext.toLowerCase() == "&deg;c") {
+          value = (value * 9 / 5) + 32;
+          ext = "°f";
+        }
+      }
+
+      var tile;
+      if ((tile = document.getElementById(id + '_tile_icon_value')) != null) {
+        if (_config.devices[id]?.precision !== undefined && isActuallyNumeric(value)) {
+          value = value.toFixed(_config.devices[id]?.precision);
+        }
+        tile.innerHTML = reduct(value) + formatUOM(ext);
+      }
+    }
+
+    function setTileThresholds(id, value, status = 'on') {
+
+      //let status = 'on';
+      let text = '';
+
+      //const thresholds = _config?.tile_thresholds?.[id] ?? null;
+      // Check 2 paths for thresholds, in the future only _config?.devices?.[id]?.thresholds will be valid.
+      const thresholds = _config?.tile_thresholds?.[id] ?? _config?.devices[id]?.thresholds ?? null;
+
+      if (thresholds != null && thresholds) {
+        if (value <= thresholds?.outofrange?.min || value >= thresholds?.outofrange?.max) {
+          status = 'rangecritical';
+          if (value <= thresholds.outofrange.min && thresholds.outofrange.mintext != null)
+            text = thresholds.outofrange.mintext;
+          else if (value >= thresholds.outofrange.max && thresholds.outofrange.maxtext != null)
+            text = thresholds.outofrange.maxtext;
+          else
+            text = 'Out of range';
+        } else if (value <= thresholds?.attention?.min || value >= thresholds?.attention?.max) {
+          status = 'rangewarning';
+          if (value <= thresholds.attention.min && thresholds.attention.mintext != null)
+            text = thresholds.attention.mintext;
+          else if (value >= thresholds.attention.max && thresholds.attention.maxtext != null)
+            text = thresholds.attention.maxtext;
+          else if (_tile_line_char_limit < 15)
+            text = 'Attention';
+          else
+            text = 'Needs attention';
+        }
+      } else {
+        //LOG("No thresholds for "+id);
+      }
+
+      //LOG("Status for "+id+" = "+status);
+      setTileOn(id, status);
+      if (text != '') {
+        //LOG("setting tile text "+id+" to "+text);
+        setTileOnText(id, text);
+      }
+    }
+
+    function setTileUOM(id, uom) {
+      try {
+        type = document.getElementById(id).setAttribute('UOM', uom);
+        //LOG("Set UOM to "+uom+" for "+id);
+      } catch (e) { }
+    }
+
+    /*
+    function setTilePrecision(id, precision) {
+      try {
+        type = document.getElementById(id).setAttribute('precision', precision);
+        //LOG("Set UOM to "+uom+" for "+id);
+      } catch (e) {}
+    }
+    */
+
+    function setTileOnText(id, text) {
+      //LOG("setTileOnText() "+id+" "+text);
+      if (id == "PMP_1") {
+        console.trace("Debugging the trace");
+      }
+
+      try {
+        var tile = document.getElementById(id);
+        if (tile.getAttribute('status') == 'on' || tile.getAttribute('status') == 'enabled') {
+          //document.getElementById(id + '_status').innerHTML = text;
+          setElementHTML(id + '_status', text);
+        } else if (tile.getAttribute('status') == 'rangeoptimal' || tile.getAttribute('status') == 'rangewarning' || tile.getAttribute('status') == 'rangecritical') {
+          //document.getElementById(id + '_status').innerHTML = text;
+          setElementHTML(id + '_status', text);
+        } else {
+          //document.getElementById(id + '_status').innerHTML = text;
+          //LOG("Tile "+id+" status is '"+document.getElementById(id).getAttribute('status')+"' not setting text to '"+text+"'");
+        }
+      } catch (exception) { }
+    }
+
+    function setTileOnTextLine2(id, text) {
+      // UNUSED: Second status line for tiles not used in AquachemD.
+      try {
+        if (document.getElementById(id).getAttribute('status') == 'on') {
+          setElementHTML(id + '_status_line2', text);
+          return true;
+        }
+      } catch (exception) { console.log(exception); }
+      return false;
+    }
+
+    /*
+    function getTileOnText(id) {
+      // UNUSED: Tile text getter not used in current implementation.
+      try {
+        var tile = document.getElementById(id);
+        if (tile.getAttribute('status') == 'on' || tile.getAttribute('status') == 'enabled') {
+          return document.getElementById(id + '_status').innerHTML;
+        }
+      } catch(exception) {}
+      return "";
+    }
+    */
+    /*
+    function getTileSPvalue(id) {
+      // UNUSED: Setpoint value retrieval not used in current implementation.
+      try {
+        return parseInt(document.getElementById(id).getAttribute('spvalue'));
+      } catch(exception) {}
+      return -1;
+    }
+    */
+
+    /*
+    function setThermostatTile(id, value, sp_value) {
+      // UNUSED: Thermostat functionality not used in AquachemD.
+      // Only called from update_status_OLD() which is deprecated.
+    }
+    */
+
+    function setTileAttribute(id, attribute, value) {
+      var tile;
+      if ((tile = document.getElementById(id)) != null) {
+        //LOG("Set Attribute "+attribute+ " to "+value+" for "+id);
+        tile.setAttribute(attribute, value);
+      }
+    }
+
+    /*
+    function getTileAttribute(id, attribute) {
+      // UNUSED: Not called anywhere in the code.
+      var tile;
+      if ((tile = document.getElementById(id)) != null) {
+        return tile.getAttribute(attribute);
+      }
+      return null;
+    }
+    */
+
+    /*
+    function capitalizeFirstLetter(str) {
+      // UNUSED: Not called anywhere in the code.
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+    */
+    function formatSatus(status) {
+      return status.charAt(0).toUpperCase() + status.substr(1).toLowerCase();
+    }
+
+    function setTileIcon(id, isOff) {
+      const tile = document.getElementById(id);
+      const type = tile?.getAttribute('type');
+
+      if (!type) return;
+
+      const uriMap = {
+        "switch": { on: _switchOnUri, off: _switchOffUri },
+        "light": { on: _switchOnUri, off: _switchOffUri },
+        "binary_sensor": { on: _sensorOnUri, off: _sensorOffUri }
+        //"binary_sensor": { on: _switchOnUri, off: _switchOffUri }
+      };
+
+      const config = Object.keys(uriMap).find(key => type.startsWith(key));
+      if (!config) return;
+      const { on: onUri, off: offUri } = uriMap[config];
+
+      try {
+        var el = document.getElementById(id + '_tile_icon_value');
+        if (el) { // standard SVG icon
+          el.classList.add(isOff ? 'switch-off' : 'switch-on');
+          el.classList.remove(isOff ? 'switch-on' : 'switch-off');
+          el.style.backgroundImage = isOff ? offUri : onUri
+        } else { // URL Icon
+          var offimg;
+          var onimg;
+          if ((offimg = document.getElementById(id + '_icon')) != null &&
+            (onimg = document.getElementById(id + '_icon_on')) != null) {
+            isOff ? offimg.style.display = 'none' : onimg.style.display = 'none';
+            isOff ? onimg.style.display = 'table' : offimg.style.display = 'table';
+          }
+        }
+      } catch (e) { console.log(e) }
+
+    }
+
+
+    function isDeviceOff(id) {
+      // 1 = on, 2 = enabled
+      //if (_devices.devices[id].int_status != 1 && _devices.devices[id].int_status != 2) {
+      //  return true;
+      //}
+      // If the device doesn't exist, its status safely defaults to 0
+      const status = _devices.devices[id]?.int_status ?? 0;
+
+      if (status !== 1 && status !== 2) {
+        return true;
+      }
+
+      return false;
+    }
+
+    function getTileExtraStatusText(id) {
+
+      if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.TIMER)) {
+        if (_devices.devices[id].timer_active == 'ON') {
+          if (_devices.devices[id].timer_duration) {
+            //return 'Timer ' + toHoursAndMinutes(_devices.devices[id].timer_duration);
+            return 'Timer ' + formatDuration(_devices.devices[id].timer_duration);
+          } else {
+            return 'On (timer)';
+          }
+        } else {
+          //LOG("ID="+id+" Has Timer OFF");
+        }
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.PROGRAM)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.DIMMER)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.VSP)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.SWG)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.FREEZE)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.CHILLER)) {
+      } else if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.ALT_LABEL)) {
+      }
+
+      return null;
+    }
+
+    function setTileOn(id, status) {
+      //LOG("setTileOn "+id+ " "+status);
+      var tile;
+      var text;
+      if ((tile = document.getElementById(id)) == null) {
+        //LOG("Error unknown ID '"+id+"' can't set to '"+status+"'");
+        return;
+      }
+
+      //const isOff = status?.toLowerCase() === 'off' || status?.toLowerCase() === 'disabled' || status?.toLowerCase() === 'unsafe';
+      const isOff = isDeviceOff(id);
+      LOG("Device " + id + " isOff=" + isOff);
+
+      // Display is a special status to "brighten up" sensor values. 
+      if (status != "on" && status != "off" && status != "enabled" && status != "disabled" && status != "flash"
+        && status != "rangecritical" && status != "rangewarning" && status != "rangeoptimal" && status != "safe" && status != "unsafe") {
+        if (status == "unknown") {
+          status = "Off"; // Just set it off for the moment
+        } else {
+          console.log("Error unknown status '" + status + "' for '" + id + "'");
+          return;
+        }
+      }
+      tile.setAttribute('status', status);
+
+      let status_text = _config?.devices?.[id]?.[`${status}_text`] ?? formatSatus(status);
+
+      if (isOff) {
+        tile.classList.remove("on");
+        tile.classList.remove("flash");
+        //if (status_text == status){status_text = formatSatus(status);}
+      } else {
+        if (status == 'flash') {
+          tile.classList.add("flash");
+          tile.classList.remove("on");
+          text = "Delay";
+          if (status_text == status) { status_text = "Delay"; }
+        } else { // On or Enabled
+          tile.classList.add("on");
+          tile.classList.remove("flash");
+          if (status_text == status) {
+            if (status == "enabled") {
+              status_text = "Enabled";
+            } else {
+              status_text = "On";
+            }
+          }
+        }
+      }
+
+      //if (tile.getAttribute('type').startsWith("switch") || tile.getAttribute('type').startsWith("light")) {
+      setTileIcon(id, isOff);
+      //}
+
+      //if (type != "value" && type != "temperature") {
+      //setElementHTML(id + '_status', status_text);
+      //LOG ("Final Status text = "+(getTileExtraStatusText(id) ?? status_text));
+      setElementHTML(id + '_status', getTileExtraStatusText(id) ?? status_text);
+
+      var type;
+      if ((type = tile.getAttribute('type')) != null) {
+        if (status != null) {
+          if (status == 'enabled' || status == 'flash') {
+            setTileIconClassList(id, "enabled");
+          } else if (status == 'off' || status == 'disabled' || status == 'unsafe') {
+            setTileIconClassList(id, "disabled");
+          } else if (status == 'on' && _devices.devices[id]?.attributes?.includes(_DeviceAttributes.HEATER)) {
+            setTileIconClassList(id, "heat");
+          } else if (status == 'on' && _devices.devices[id]?.attributes?.includes(_DeviceAttributes.CHILLER)) {
+            var tile_icon = document.getElementById(id + '_tile_icon_value');
+            if (tile_icon.parentElement.parentElement.getAttribute("mode") == "heat") {
+              setTileIconClassList(id, "heat");
+            } else {
+              setTileIconClassList(id, "cool");
+            }
+          } else if (status == 'on' || status == 'safe') {
+            if (type == _DeviceTypes.VALUE || type == _DeviceTypes.SENSOR) {
+              setTileIconClassList(id, "rangeoptimal");
+            } else {
+              setTileIconClassList(id, "cool");
+            }
+          } else if (status == 'rangecritical') {
+            setTileIconClassList(id, "rangecritical");
+          } else if (status == 'rangewarning') {
+            setTileIconClassList(id, "rangewarning");
+          }
+        }
+      }
+    }
+
+
+
+    function setTileIconClassList(id, ...classes) {
+      const tile_icon_classes = [
+        "enabled",
+        //"flash",
+        //"flash-icon",
+        "disabled",
+        "cool",
+        "heat",
+        "rangeoptimal",
+        "rangewarning",
+        "rangecritical"
+      ];
+
+      const tile_icon = document.getElementById(id + "_tile_icon_value");
+      if (!tile_icon) return; // exit early if element not found
+
+      const allowed = new Set(classes.filter(Boolean)); // keep only non-null/undefined
+
+      // If type is a switch, remove the class disabled as we don;t want the round background icon
+
+      if (_DisableOffIconCircle) {
+        try {
+          if (document.getElementById(id).getAttribute('type').startsWith("switch") ||
+            document.getElementById(id).getAttribute('type').startsWith("light") ||
+            document.getElementById(id).getAttribute('type').startsWith("binary_sensor")) {
+            allowed.delete("disabled");
+          }
+        } catch (e) { console.log(e) }
+      }
+
+      for (const cls of tile_icon_classes) {
+        if (allowed.has(cls)) {
+          tile_icon.classList.add(cls);
+        } else {
+          tile_icon.classList.remove(cls);
+        }
+      }
+    }
+    /*
+        function toHoursAndMinutes(totalMinutes) {
+          const hours = Math.floor(totalMinutes / 60);
+          const minutes = totalMinutes % 60;
+          return `${padToTwoDigits(hours)}:${padToTwoDigits(minutes)}`;
+        }
+    */
+    /*
+/**
+ * Formats seconds into a human-readable string.
+ * Returns HH:MM if duration is 1 minute or more.
+ * Returns MM:SS if duration is less than 1 minute.
+ */
+    function formatDuration(totalSeconds) {
+      // UNUSED: Only called from update_status_OLD() which is deprecated.
+      if (totalSeconds < 0) totalSeconds = 0;
+
+      if (totalSeconds >= 60) {
+        const roundedSeconds = Math.round(totalSeconds / 60) * 60;
+        const h = Math.floor(roundedSeconds / 3600);
+        const m = Math.floor((roundedSeconds % 3600) / 60);
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+      }
+
+      const s = Math.floor(totalSeconds % 60);
+      return `00:${s.toString().padStart(2, '0')}s`;
+    }
+
+
+
+    function padToTwoDigits(num) {
+      return num.toString().padStart(2, "0");
+    }
+
+    function caseInsensitiveIndexOf(array, searchString) {
+      const lowerCaseArray = array.map(element => String(element).toLowerCase());
+      return lowerCaseArray.indexOf(searchString.toLowerCase());
+    }
+
+    function createTile(object) {
+      //LOG("Create tile "+object.id);
+      if (object.label == 'NONE') {
+        //LOG("Create tile <exclude name> "+object);
+        return;
+      }
+
+      // See if disply is off or missing.
+      var deviceConfig = _config.devices[object.id];
+      if (deviceConfig === undefined) {
+        //LOG("Device "+object.id+" does not exist in config.json, creating tile");
+      } else if (deviceConfig.display === false) {
+        //LOG("Device "+object.id+" exists but display is disabled.");
+        return;
+      } else {
+        //LOG("Device "+object.id+" exists and display is enabled.");
+      }
+
+      switch (object.type) {
+        case _DeviceTypes.SWITCH:
+        case _DeviceTypes.BINARY_SENSOR:
+          var img = object.id.replace('/', '_');
+          ext_type = object.type;
+
+          if (_config?.devices && _config?.devices[object.id] && _config?.devices[object.id]?.on_icon && _config?.devices[object.id]?.off_icon) {
+            add_tile(object.id, object.label, object.status, object.type, object.attributes, _config?.devices[object.id]?.off_icon, _config?.devices[object.id]?.on_icon);
+          } else {
+            add_tile(object.id, object.label, object.status, object.type, object.attributes);
+          }
+          break;
+        case _DeviceTypes.VALUE:
+        case _DeviceTypes.TEMPERATURE:
+        case _DeviceTypes.SENSOR:
+        case _DeviceTypes.AVERAGE:
+          add_tile(object.id, object.label, object.status, object.type, object.attributes);
+          if (object.uom !== undefined) {
+            setTileUOM(object.id, object.uom);
+          } else {
+            if (_config.devices[object.id]?.uom) {
+              //LOG("From config UOM for "+object.id+" is set to: " + _config.devices[object.id].uom);
+              setTileUOM(object.id, _config.devices[object.id].uom);
+            }
+          }
+          break;
+        case _DeviceTypes.CONTROLLER:
+          add_tile(object.id, object.label, object.status, object.type, object.attributes);
+          document.getElementById(object.id).setAttribute('setpoint', object.spvalue);
+          break;
+        default:
+          LOG("Unknown type '" + object.type + "' for Device " + object.label);
+          break;
+      }
+
+    }
+
+
+    function updateTile(device) {
+
+      //LOG("updateTile ID: " + device.id);
+
+      if (device.type == _DeviceTypes.SENSOR) {
+        setTileOn(device.id, device.status);
+        // setTileValue has to be called after since it will change the On color for outofrange 
+        setTileValue(device.id, device.value, device.status);
+      } else if (device.type == _DeviceTypes.SWITCH || device.type == _DeviceTypes.BINARY_SENSOR) {
+        setTileOn(device.id, device.status);
+      } else if (device.type == _DeviceTypes.AVERAGE) {
+        setTileOn(device.id, device.status);
+        setTileValue(device.id, device.value, device.status);
+        setTileOnText(device.id, "Max : " + formatTileValue(device.id, device.max));
+        setTileOnTextLine2(device.id, "Min : " + formatTileValue(device.id, device.min));
+      }
+
+    }
+
+    function isTileOptionsOpen() {
+      const tile_options = document.getElementById('tile_options');
+
+      // Wrap the ternary in ( ) to ensure the logic runs first
+      LOG("Tile Options = " + (!(tile_options?.classList.contains("hide") || tile_options?.style.display === 'none') ? "Open" : "Closed"));
+
+      // Returns true if conditions are met, otherwise returns false
+      return !(
+        tile_options?.classList.contains("hide") ||
+        tile_options?.style.display === 'none'
+      ) ?? false; // Fallback to false if elements don't exist
+    }
+
+    function useMinutesForRuntime(id) {
+      return id.startsWith("PMP") &&
+        _devices.devices[id].attributes?.includes("orp_pump") &&
+        _config?.tile_settings?.orp_runtime_in_minutes;
+    }
+
+    function SyncTileOptions(context = null) {
+
+
+      const tile_options = document.getElementById('tile_options');
+      let id = tile_options.getAttribute('device_id');
+
+      const time_slider = document.getElementById('timer_slider_range');
+      const time_slider_output = document.getElementById('timer_slider_text_value');
+      const onoff_switch = document.getElementById('onoff_switch');
+      const onoff_switch_text = document.getElementById('onoff_switch_text_value');
+
+      let tm_ext = ' runtime (seconds)';
+      if (useMinutesForRuntime(id)) {
+        tm_ext = ' runtime (minutes)';
+      }
+
+      //LOG("tileOptionsSync context="+context);
+
+      if (context === null) {
+        //LOG("tileOptionsSync SETUP");
+        context = document.getElementById('onoff_switch');
+        if (context == null) {
+          //LOG("tileOptionsSync No onoff_switch element found, skipping setup");
+          return;
+        }
+        // Setup the initial state of the switch based on the current device status
+        if (_devices.devices[id].status.toLowerCase() === 'on') {
+          context.checked = true;
+        } else {
+          context.checked = false;
+        }
+        // Now let everything run as if the switch has just changed state.
+      }
+
+      if (context.id == 'onoff_switch') {
+        if (onoff_switch_text) {
+          onoff_switch_text.innerHTML = ((context.checked) ? "On" : "Off");
+        }
+        if (context.checked == false && time_slider) {
+          time_slider.value = 0;
+        } else if (time_slider) {
+          //time_slider.value = _devices.devices[id].timer_default_runtime ?? 0;
+        }
+        if (time_slider_output) {
+          time_slider_output.innerHTML = time_slider?.value + tm_ext;
+        }
+      } else if (context.id == 'timer_slider_range') {
+        if (time_slider_output) {
+          time_slider_output.innerHTML = context?.value + tm_ext;
+        }
+        if (context.value == 0 && onoff_switch && onoff_switch) {
+          onoff_switch.checked = false;
+          onoff_switch_text.innerHTML = ((onoff_switch?.checked) ? "On" : "Off");
+        } else if (onoff_switch && onoff_switch) {
+          onoff_switch.checked = true;
+          onoff_switch_text.innerHTML = ((onoff_switch?.checked) ? "On" : "Off");
+        };
+      } else {
+        LOG("tileOptionsSync unknown context " + context.id);
+      }
+    }
+
+    function closeTileOptions(context = null) {
+      const tile_options = document.getElementById('tile_options');
+      const id = tile_options.getAttribute('device_id');
+      const device = _devices.devices[id];
+      const isOn = document.getElementById('onoff_switch')?.checked;
+      let onTime = document.getElementById('timer_slider_range')?.value ?? 0;
+
+      if (useMinutesForRuntime(id)) {
+        onTime = onTime * 60; // Convert minutes back to seconds for the backend
+      }
+
+      LOG("closeTileOptions for '" + device.label + "' type '" + device.type + "' isOn=" + isOn + " onTime=" + onTime);
+
+      switch (device.type) {
+        case _DeviceTypes.SWITCH:
+          if (device.status.toLowerCase() === 'on') {
+            if (!isOn) {
+              send_command(id, _DeviceStates.OFF);
+            }
+          } else if (device.status.toLowerCase() === 'disabled') {
+            if (isOn) {
+              send_command(id, _DeviceStates.ON);
+            }
+          } else if (device.status.toLowerCase() === 'enabled' && isOn) {
+            if (onTime > 0) {
+              send_switch_timer(id, onTime);
+            } else {
+              send_command(id, _DeviceStates.ON);
+            }
+          }
+        case _DeviceTypes.CONTROLLER:
+          // Handle controller options here when added
+          break;
+        default:
+          LOG("Unknown device type for tile options: " + device.type);
+      }
+
+      showTileOptions(false);
+    }
+
+    const timerSlider = `
+  <tr class='dynamic-option-row'>
+    <td colspan='2' align='center'><span class="option_text" id="timer_slider_text_value"></span></td>
+  </tr>
+  <tr class='dynamic-option-row'>
+    <td colspan='2'>
+      <div class="slidecontainer">
+        <input type="range" class="option_slider" id="timer_slider_range" oninput="SyncTileOptions(this);">
+      </div>
+    </td>
+  </tr>
+`;
+
+    const onoffSwitch = `
+  <tr class='dynamic-option-row'>
+    <td align='right' width='50%'><span class="option_text" id='onoff_switch_text_value'></span></td>
+    <td align='left' width='50%'>
+      <label class="option_switch">
+        <input type="checkbox" id='onoff_switch' onclick="SyncTileOptions(this);">
+        <span class="option_switch_slide"></span>
+      </label>
+    </td>
+  </tr>
+`;
+
+    function showTileOptions(show, id, context) {
+
+      LOG("****** showTileOptions_new " + show + " id=" + id + " context=" + context + " ******");
+
+      const tile_option = document.getElementById('tile_options');
+      const scheduler_option = document.getElementById('scheduler_options');
+
+      if (show != true) {
+        // Remove all dynamic rows first
+        let rows = document.querySelectorAll('.dynamic-option-row');
+        rows.forEach(row => row.remove());
+        // Hide the options panel
+        tile_option.style.display = 'none';
+        tile_option.classList.add("hide");
+
+        scheduler_option.style.display = 'none';
+        scheduler_option.classList.add("hide");
+
+        document.getElementById('wrapper').classList.remove("opaque");
+        return;
+      }
+
+      // Show scheduler
+      if (id == 'datetime') {
+        scheduler_option.style.display = 'flex';
+        scheduler_option.classList.remove("hide");
+
+        const title = document.getElementById("scheduler_options_title");
+        if (title) title.innerHTML = "Scheduler";
+
+        cs_clearSchedules();
+        setElementHTML("crontext", "");
+        setElementHTML("cronhelp", "");
+        get_schedules();
+
+        document.getElementById('wrapper').classList.add("opaque");
+
+        return;
+      }
+      // Tile options are shoring.
+
+      tile_option.style.display = 'flex';
+      tile_option.classList.remove("hide");
+      document.getElementById('wrapper').classList.add("opaque");
+
+      title = document.getElementById("tile_option_title");
+      title.innerHTML = document.getElementById(id + '_name').innerHTML;
+
+      var onoff_switch;
+      var onoff_switch_text;
+      var tile = document.getElementById(id);
+      var tile_state = (tile.getAttribute('status').toLowerCase() === 'on');
+
+      const footer = document.getElementById('tile_options_table_footer');
+
+      const tile_options = document.getElementById('tile_options');
+      tile_options.setAttribute('device_id', id);
+
+      switch (_devices.devices[id]?.type) {
+        case _DeviceTypes.SWITCH:
+          footer.insertAdjacentHTML('beforebegin', onoffSwitch);
+          break;
+        case _DeviceTypes.CONTROLLER:
+          break;
+        default:
+          // Don;t add click event since not changable.
+          break;
+      }
+
+      if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.TIMER)) {
+        footer.insertAdjacentHTML('beforebegin', timerSlider);
+        tm_slider = document.getElementById("timer_slider_range");
+        tm_slider_output = document.getElementById("timer_slider_text_value");
+        tm_slider.min = ((_config?.slider_range?.timer_slider_min) ? _config.slider_range.timer_slider_min : 0);
+        tm_slider.max = ((_config?.slider_range?.timer_slider_max) ? _config.slider_range.timer_slider_max : 60);
+        tm_slider.step = ((_config?.slider_range?.timer_slider_step) ? _config.slider_range.timer_slider_step : 1);
+      }
+
+      console.log(_devices.devices[id].attributes);
+      if (_devices.devices[id].attributes?.includes(_DeviceAttributes.DOSESTATS)) {
+        get_dosestats();
+      }
+
+      SyncTileOptions();
+
+    }
+
+
+    /**
+ * Shortens a standard timestamp string to "Month Day HH:MM"
+ * @param {string} timestampStr - Example: "Wed Jun 10 22:25:06 2026"
+ * @returns {string} Formatted string - Example: "Jun 10 22:25"
+ */
+function shortenTimestamp(timestampStr) {
+  if (!timestampStr) return "N/A";
+
+  const dateObj = new Date(timestampStr);
+
+  if (isNaN(dateObj.getTime())) {
+    return "Invalid Date";
+  }
+
+  const options = { 
+    month: 'short',   // "Jun"
+    day: 'numeric',   // "10"
+    hour: '2-digit',  // "22"
+    minute: '2-digit',// "25"
+    hour12: false     // Keeps 24-hour mode
+  };
+
+  return dateObj.toLocaleDateString('en-US', options).replace(/,/g, '');
+}
+
+    function showDoseHistory(data) {
+
+      const tile_option = document.getElementById('tile_options');
+
+      // popup is closed, do nothing.
+      if (tile_option.style.display === 'none' || tile_option.classList.contains("hide")) {
+        return;
+      }
+
+      const footer = document.getElementById('tile_options_table_footer');
+
+      // Filter for the specific pump_id first
+      const filteredHistory = data.history.filter(item => item.pump_id === "PMP_1");
+
+      footer.insertAdjacentHTML('beforebegin', '<tr class="dynamic-option-row"><td colspan="2" align="center">History</td></tr>');
+
+      // Get the last 5 from the filtered list
+      const start = Math.max(0, filteredHistory.length - 5);
+
+      msg = "";
+      for (let i = start; i < filteredHistory.length; i++) {
+        msg += `${shortenTimestamp(filteredHistory[i].timestamp)} Reading:${filteredHistory[i].reading.toFixed(2)} |Ran:${filteredHistory[i].seconds}s |Dosed:${filteredHistory[i].ml.toFixed(2)} ml<br>`;
+        console.log(msg);
+        //footer.insertAdjacentHTML('beforebegin', '<tr><td colspan="2"><font size="-1">'+msg+'</font></td></tr>');
+      }
+      footer.insertAdjacentHTML('beforebegin', '<tr class="dynamic-option-row"><td colspan="2" style="font-size:0.8rem; font-weight: 400; padding: 0;">'+msg+'</td></tr>');
+    }
+
+
+
+
+    var _displayMsgTimer = 0;
+    var _displayMsgTimeout = 0;
+
+    function displayErrorMessagee(message, timeout) {
+      document.getElementById("header").classList.add("error");
+      displayMessage(message, timeout);
+    }
+
+    function setElementHTML(element, html) {
+
+      const elmnt = document.getElementById(element);
+      if (elmnt) {
+        elmnt.innerHTML = html;
+        //LOG("Call in "+element+ " "+html);
+      } else {
+        //LOG("fail in "+element+ " "+html);
+      }
+    }
+
+
+    function displayMessage(message, timeoutSeconds) {
+      // Check to see if we can display message
+      if (_displayMsgTimeout > 0) {
+        if (_displayMsgTimer + (_displayMsgTimeout * 1000) > Date.now()) {
+          // Can't diaply message, still on timer
+          //LOG("Can't display message '"+message+"'");
+          return;
+        }
+        _displayMsgTimer = 0;
+        _displayMsgTimeout = 0;
+      }
+
+      // Set the timer if needed
+      if (timeoutSeconds !== undefined && timeoutSeconds > 0) {
+        _displayMsgTimer = Date.now();
+        _displayMsgTimeout = timeoutSeconds;
+      }
+
+      //document.getElementById("message").innerHTML = message;
+      setElementHTML("message", message);
+    }
+    /*********************************************************************
+     *  
+     *   SCHEDULER FUNCTIONS
+     * 
+     *********************************************************************/
+
+    // NSF change this import to dynamic config in future.
+    //import("./cronstrue.min.js");
+
+    //var CS_ROW_INDEX = 2;
+    var CS_ROW_INDEX = 0;
+    var V_OFF = 0;
+    var V_ON = 1;
+    var V_SETPOINT = 3;
+    var V_PERCENT = 4;
+    var V_RPM = 5;
+    var V_GPM = 6;
+    var V_TIMER = 7;
+    var V_RESET_STATS = 8;
+
+    function showScheduler(caller) {
+
+      var height = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+      //LOG("height = "+height+" - "+caller.id);
+      //LOG("Height="+height+", computedwidth="+getComputedStyle(document.querySelector('.scheduler_pane')).width+", clientWidth="+document.documentElement.clientWidth+", innerWidth="+window.innerWidth);
+
+      if (typeof _enable_schedules === "undefined" || _enable_schedules != false) {
+        //if ( parseInt(getComputedStyle(document.querySelector('.scheduler_pane')).width) > Math.max(document.documentElement.clientWidth, window.innerWidth) || height < 300 ) {
+        // Really bad check, but works.  Should probably setup CSS variables for this.
+        if (Math.max(document.documentElement.clientWidth, window.innerWidth) < 600 || height < 300) {
+          //alert("Sorry, Scheduler won't fit on screen\nPlease use a different device");
+          displayMessage("Scheduler won't fit on screen", 3);
+          return;
+        }
+        import("./cronstrue.min.js");
+        caller.setAttribute('type', 'scheduler');
+        showTileOptions(true, caller.id);
+
+        //h=400;
+        document.getElementById("scheduler_options_pane").style.maxHeight = (height - 40) + 'px';
+        document.getElementById("scheduler_scrollabletable").style.maxHeight = (height - 280) + 'px';
+
+        const cs_table = document.getElementById('cronschedules');
+        if (cs_table) {
+          const tableObserver = new ResizeObserver(cs_synchronizeTableWidths);
+          tableObserver.observe(cs_table);
+        }
+
+      }
+    }
+
+    /*
+    function showSimulator(caller){
+      // UNUSED: Simulator functionality not used in AquachemD.
+      caller.setAttribute('type', 'simulator');
+      showTileOptions(true, caller.id);
+    }
+
+    function startSimulator() {
+      // UNUSED: Simulator functionality not used in AquachemD.
+      LOG("Starting ifram sim init");
+      document.getElementById('onetouch_iframe').display = 'block';
+    }
+    */
+
+
+    function device2english(device, name) {
+      LOG("device2english " + device + " name=" + name);
+
+
+      const deviceArray = Object.values(_devices.devices);
+
+      for (const obj of deviceArray) {
+        if (device == obj.label) {
+          if (name == true) {
+            return obj.label;
+          } else {
+            switch (obj.type) {
+              case _DeviceTypes.CONTROLLER:
+                if (obj.attributes?.includes(_DeviceAttributes.HEATER) ||
+                  obj.attributes?.includes(_DeviceAttributes.CHILLER) ||
+                  obj.attributes?.includes(_DeviceAttributes.FREEZE)) {
+                  return "temperature";
+                } else if (obj.attributes?.includes(_DeviceAttributes.SWG)) {
+                  return "percent";
+                }
+                break;
+              case _DeviceTypes.SWITCH:
+                if (obj.attributes?.includes(_DeviceAttributes.VSP)) {
+                  if (obj.Pump_Type == "vfPump" && _config.tile_settings.show_vsp_gpm.toLowerCase() === "true") {
+                    return "GPM";
+                  } else if (commandID == V_RPM) {
+                    return "RPM";
+                  }
+                } else if (obj.attributes?.includes(_DeviceAttributes.TIMER)) {
+                  return "timer";
+                  /*} else if (obj.attributes?.includes(_DeviceAttributes.STATS)) {
+                    return "stats";*/
+                }
+                break;
+            }
+          }
+        }
+      }
+
+      if (name == true) {
+        return device;
+      } else {
+        return "";
+      }
+    }
+
+    function cs_crontext(caller) {
+
+      for (let cell of caller.parentNode.parentNode.cells) {
+
+        switch (cell.firstChild.id) {
+          case "min":
+            min = cell.firstChild.value;
+            break;
+          case "hour":
+            hour = cell.firstChild.value;
+            break;
+          case "daym":
+            daym = cell.firstChild.value;
+            break;
+          case "month":
+            month = cell.firstChild.value;
+            break;
+          case "dayw":
+            dayw = cell.firstChild.value;
+            break;
+          case "device":
+            device = cell.firstChild.value;
+            break;
+          case "command":
+            command = cell.firstChild.value;
+            break;
+          case "value":
+            value = cell.firstChild.value;
+            break;
+        }
+      }
+      var extra = "";
+
+      if (command >= 2) {
+        //command=cs_getExtraCommand(device);
+        extra = " set " + device2english(device, true) + " " + device2english(device, false) + " to " + value
+      } else {
+        extra = " turn " + device2english(device, true) + " " + ((command == 1) ? 'on' : 'off')
+      }
+
+      var cron = min + " " + hour + " " + daym + " " + month + " " + dayw
+      try {
+        //document.getElementById("crontext").innerHTML = "<span class='cs_crontext'>&nbsp;" + cronstrue.toString(cron) + "<font size='-1'>" + extra + "</font>&nbsp;</span>";
+        setElementHTML("crontext", "<span class='cs_crontext'>&nbsp;" + cronstrue.toString(cron) + "<font size='-1'>" + extra + "</font>&nbsp;</span>");
+      } catch (error) { }
+
+      var html = ""
+
+      switch (caller.id) {
+        case "min":
+          html = html + "<tr><td class='cs_helpleft'>0-59</td><td class='cs_helpright'>allowed values</td></tr>";
+          break;
+        case "hour":
+          html = html + "<tr><td class='cs_helpleft'>0-23</td><td class='cs_helpright'>allowed values</td></tr>";
+          break;
+        case "daym":
+          html = html + "<tr><td class='cs_helpleft'>1-31</td><td class='cs_helpright'>allowed values</td></tr>";
+          break;
+        case "month":
+          html = html + "<tr><td class='cs_helpleft'>1-12</td><td class='cs_helpright'>allowed values</td></tr>" +
+            "<tr><td class='cs_helpleft'>JAN-DEC</td><td class='cs_helpright'>alternative single values</td></tr>";
+          break;
+        case "dayw":
+          html = html + "<tr><td class='cs_helpleft'>0-6</td><td class='cs_helpright'>allowed values</td></tr>" +
+            "<tr><td class='cs_helpleft'>SAT-SUN</td><td class='cs_helpright'>alternative single values</td></tr>";
+          break;
+      }
+
+      if (html != "") {
+        html = "<table align='center'>" +
+          html +
+          "<tr><td class='cs_helpleft'>*</td><td class='cs_helpright'>any vaue</td></tr>" +
+          "<tr><td class='cs_helpleft'>,</td><td class='cs_helpright'>value list seperator</td></tr>" +
+          "<tr><td class='cs_helpleft'>-</td><td class='cs_helpright'>range values</td></tr>" +
+          "<tr><td class='cs_helpleft'>/</td><td class='cs_helpright'>setp values</td></tr>" +
+          "</table>";
+      }
+
+      //document.getElementById("cronhelp").innerHTML = html;
+      setElementHTML("cronhelp", html);
+    }
+
+    function cs_clearSchedules() {
+      var table = document.getElementById("cronschedules");
+      while (table.rows.length > 1) {
+        table.deleteRow(CS_ROW_INDEX + 1);
+      }
+    }
+
+    function cs_addschedule(enabled, min, hour, daym, month, dayw, device, subdev, value) {
+
+      var table = document.getElementById("cronschedules");
+      //index = table.rows.length-ROW_INDEX;
+
+      var option = "";
+      var subOption = "";
+      //var value_type = "number";
+      //LOG("device'"+device+"'");
+      if (device === "") {
+        option = '<option selected value=""></option>';
+        //value_type="hidden";
+      }
+
+      var deviceArray = Object.values(_devices.devices);
+      deviceArray.forEach(obj => {
+        if (obj.type == _DeviceTypes.SWITCH) {
+          if (device == obj.id) {
+            option = option + '<option selected value="' + obj.id + '">' + obj.label + '</option>';
+            subOption = cs_getDeviceOptions(obj, subdev, value)
+          } else {
+            option = option + '<option value="' + obj.id + '">' + obj.label + '</option>';
+          }
+        }
+      });
+
+      var checked;
+
+      if (enabled == 1) { checked = "checked"; } else { ehecked = ""; }
+      var html = '<tr> \
+        <td><input type="checkbox" class="cs_inputcell" id="enabled" onkeyup="cs_crontext(this);" onclick="cs_crontext(this);" '+ checked + '></td> \
+        <td><input type="text" class="cs_inputcell" id="min" value="'+ min + '" onkeyup="cs_crontext(this);" onclick="cs_crontext(this);"></td> \
+        <td><input type="text" class="cs_inputcell" id="hour" value="'+ hour + '" onkeyup="cs_crontext(this);" onclick="cs_crontext(this);"></td> \
+        <td><input type="text" class="cs_inputcell" id="daym" value="'+ daym + '" onkeyup="cs_crontext(this);" onclick="cs_crontext(this);"></td> \
+        <td><input type="text" class="cs_inputcell" id="month" value="'+ month + '" onkeyup="cs_crontext(this);" onclick="cs_crontext(this);"></td> \
+        <td><input type="text" class="cs_inputcell" id="dayw" value="'+ dayw + '" onkeyup="cs_crontext(this);" onclick="cs_crontext(this);"></td> \
+        <td><select name="device" class="cs_inputcell cs_devicecell" id="device" onclick="cs_crontext(this);" onchange="cs_deviceChange(this);">'+ option + '<select></td> \
+        <td><select name="command" class="cs_inputcell cs_commandcell" id="command" onclick="cs_crontext(this);" onchange="cs_commandChange(this);">'+ subOption + '<select></td> \
+        <td><input type="text" class="cs_inputcell cs_valuecell" onclick="cs_crontext(this);" id="value" pattern="[0-9]+" value="'+ value + '"></td> \
+        <td><input type="button" class="cs_deletebutton sc_button" id="delete" value="X" onclick="cs_deleteschedule(this);"></td> \
+        </tr>';
+
+      //<td><input type="number" class="cs_inputcell cs_valuecell" onclick="cs_crontext(this);" min="0" max="9999" id="value" value="'+value+'"></td>
+
+      var row = table.insertRow(table.rows.length - CS_ROW_INDEX);
+      row.innerHTML = html;
+      //LOG("add row "+index)
+
+      // dummy an onchange event to the value input so they get hidded if needed.
+      var element = row.querySelector('#command')
+      var event = new Event('change');
+      element.dispatchEvent(event);
+
+      // cs_synchronizeTableWidths();
+    }
+
+    function cs_isSelected(option, val1, val2) {
+      var rtn = "";
+      if (val1 == "set") {
+        if (option == val2) { rtn = "selected" }
+      } else {
+        if (option == val1) { rtn = "selected" }
+      }
+
+      return rtn;
+    }
+
+
+    function cs_getDeviceOptions(deviceobj, val1, val2) {
+      //setpoint = Temp
+      LOG("cs_getDeviceOptions for device " + deviceobj.label + " type " + deviceobj.type + " val1=" + val1 + " val2=" + val2);
+      LOG(deviceobj.attributes);
+      var html = '<option value="' + V_ON + '" ' + cs_isSelected(V_ON, val1, val2) + '>On</option><option value="' + V_OFF + '" ' + cs_isSelected(V_OFF, val1, val2) + '>Off</option>';
+
+      switch (deviceobj.type) {
+        case _DeviceTypes.SWITCH:
+          if (deviceobj.attributes?.includes(_DeviceAttributes.VSP)) {
+            if (deviceobj.Pump_Type == "vfPump") {
+              html = html + '<option value="' + V_GPM + '" ' + cs_isSelected("GPM", val1, val2) + '>GPM</option>';
+            } else {
+              html = html + '<option value="' + V_RPM + '" ' + cs_isSelected("RPM", val1, val2) + '>RPM</option>';
+            }
+          } else if (deviceobj.attributes?.includes(_DeviceAttributes.TIMER)) {
+            html = html + '<option value="' + V_TIMER + '" ' + cs_isSelected("timer", val1, val2) + '>Timer</option>';
+          } else if (deviceobj.attributes?.includes(_DeviceAttributes.RESET_STATS)) {
+            LOG("ADD RESET");
+            html = html + '<option value="' + V_RESET_STATS + '" ' + cs_isSelected("reset_stats", val1, val2) + '>Stats</option>';
+          }
+          break;
+        case _DeviceTypes.CONTROLLER:
+          if (deviceobj.attributes?.includes(_DeviceAttributes.HEATER) ||
+            deviceobj.attributes?.includes(_DeviceAttributes.CHILLER)) {
+            html = html + '<option value="' + V_SETPOINT + '" ' + cs_isSelected("setpoint", val1, val2) + '>Temp</option>'
+          } else if (deviceobj.attributes?.includes(_DeviceAttributes.SWG)) {
+            html = '<option value="' + V_PERCENT + '">Percent</option>'
+          } else if (deviceobj.attributes?.includes(_DeviceAttributes.FREEZE)) {
+            html = '<option value="' + V_SETPOINT + '">Temp</option>'
+          }
+          break;
+      }
+      return html;
+
+    }
+
+    function cs_deviceChange(caller) {
+
+      const deviceArray = Object.values(_devices.devices);
+
+      for (const obj of deviceArray) {
+        if (caller.value == obj.id) {
+          var element = caller.parentNode.parentNode.querySelector('#command')
+          element.innerHTML = cs_getDeviceOptions(obj);
+          var event = new Event('change');
+          element.dispatchEvent(event);
+          return;
+        }
+      }
+
+    }
+
+    function cs_commandChange(caller) {
+      //LOG("Called "+caller.value);
+      value = caller.parentNode.parentNode.querySelector('#value')
+      if (caller.value >= 2) {
+        value.type = "text";
+      } else {
+        value.type = "hidden";
+      }
+    }
+
+    function cs_deleteschedule(caller) {
+      var index = caller.parentNode.parentNode.rowIndex;
+      document.getElementById("cronschedules").deleteRow(index);
+    }
+
+    function cs_schedules(json) {
+      if (typeof json.schedules === "undefined") {
+        return
+      }
+      for (let i = 0; i < json.schedules.length; i++) {
+        let obj = json.schedules[i];
+        //LOG("Sched "+obj.url);
+        var f = 0;
+        var subdev = "";
+        var device = "";
+        for (var j = 0; j < obj.url.length; j++) {
+          if (obj.url[j] == "/") {
+            f++;
+          } else if (f == 2) {
+            device = device + obj.url[j];
+          } else if (f == 3) {
+            subdev = subdev + obj.url[j];
+          }
+        }
+        // If in release we add device, use obj.id rather than device in below and remove device from above.
+        cs_addschedule(obj.enabled, obj.min, obj.hour, obj.daym, obj.month, obj.dayw, device, subdev, obj.value);
+      }
+    }
+
+    function cs_getExtraCommand(device, commandID) {
+      LOG("cs_getExtraCommand for device " + device + " commandID=" + commandID);
+      const deviceArray = Object.values(_devices.devices);
+
+      for (const obj of deviceArray) {
+        if (device == obj.id) {
+          switch (obj.type) {
+            case _DeviceTypes.CONTROLLER:
+              if (obj.attributes?.includes(_DeviceAttributes.HEATER) ||
+                obj.attributes?.includes(_DeviceAttributes.CHILLER) ||
+                obj.attributes?.includes(_DeviceAttributes.FREEZE)) {
+                return "/setpoint";
+              } else if (obj.attributes?.includes(_DeviceAttributes.SWG)) {
+                return "/percent";
+              }
+              break;
+            case _DeviceTypes.SWITCH:
+              if (obj.attributes?.includes(_DeviceAttributes.VSP)) {
+                if (commandID == V_GPM) {
+                  return "/GPM";
+                } else if (commandID == V_RPM) {
+                  return "/RPM";
+                }
+              } else if (obj.attributes?.includes(_DeviceAttributes.TIMER)) {
+                if (commandID == V_TIMER) {
+                  return "/timer";
+                }
+              } else if (obj.attributes?.includes(_DeviceAttributes.RESET_STATS)) {
+                if (commandID == V_RESET_STATS) {
+                  return "/reset_stats";
+                }
+              }
+              break;
+          }
+        }
+      }
+      return "/"; // Some Error if we get here, but better than nothing.
+    }
+
+    function cs_createJSON() {
+
+      var json = {
+        uri: "schedules/set",
+        devices: []
+      };
+      var table = document.getElementById("cronschedules");
+      //LOG("ROWS = "+table.rows.length);
+      for (var r = CS_ROW_INDEX, row; row < table.rows.length - 2, row = table.rows[r]; r++) {
+        enabled = Number(row.querySelector('#enabled')?.checked).toString();
+        min = row.querySelector('#min')?.value;
+        hour = row.querySelector('#hour')?.value;
+        daym = row.querySelector('#daym')?.value;
+        month = row.querySelector('#month')?.value;
+        dayw = row.querySelector('#dayw')?.value;
+        device = row.querySelector('#device')?.value;
+        command = row.querySelector('#command')?.value;
+        value = row.querySelector('#value')?.value;
+        if (min && hour && daym && month && dayw && device && command) {
+          if (command >= 2) {
+            command = cs_getExtraCommand(device, command);
+            /*. This needs to check 1d 25h 1w etc */
+            if (isNaN(value)) {
+              row.querySelector('#value').classList.add("cs_error");
+              document.getElementById("crontext").innerHTML = "<span class='cs_crontext'>&nbsp;<font color='red'>FIX ERROR</font>&nbsp;</span>";
+              return false;
+            }
+          } else {
+            value = command;
+            command = "";
+          }
+          json.devices.push({
+            "enabled": enabled,
+            "min": min,
+            "hour": hour,
+            "daym": daym,
+            "month": month,
+            "dayw": dayw,
+            "url": "/api/" + device + command + "/set",
+            "value": value
+          })
+        }
+      }
+      //LOG(JSON.stringify(json));
+      set_schedules(json);
+      return true;
+    }
+
+    /*********************************************************************
+     *  
+     *   LOAD / INIT FUNCTIONS
+     * 
+     *********************************************************************/
+    /*
+        function update_dynamicconfig(data) {
+          _dynamicconfig = data;
+          _enable_schedules = isConfigEnabled(_dynamicconfig.enable_schedules);
+        }
+    */
+
+    /*
+    function update_status_OLD(data) {
+      // DEPRECATED: Old update function for AqualinkD. Not used with current device structure.
+      // Kept for reference only.
+    }
+    */
+
+    /*
+    function updatePumpTile(tileid, status, type, rpm, gpm, watts) {
+      // UNUSED: Pump monitoring not used in AquachemD device structure.
+      // Related to AqualinkD pump data that is not present.
+    }
+    */
+
+    function deviceSort(a, b) {
+      try {
+        let pa = caseInsensitiveIndexOf(_deviceOrder, a.id);
+        let pb = caseInsensitiveIndexOf(_deviceOrder, b.id);
+
+        // Convert -1 (not found) to a high number to move to the end
+        var sortA = (pa === -1) ? Infinity : pa;
+        var sortB = (pb === -1) ? Infinity : pb;
+
+        if (sortA > sortB) return 1;
+        if (sortA < sortB) return -1;
+
+      } catch (e) {
+        console.log("sort exception " + e);
+      }
+      return 0; // If both are Infinity, they stay in their original JSON order
+    }
+
+    function check_devices(data) {
+      if (data.display_message)
+        displayMessage(formatSatus(data.display_message));
+      else
+        displayMessage("");
+
+      if (data.time && data.date) {
+        var el = document.getElementById("datetime");
+        if (_landscape) {
+          el.innerHTML = data.time.toLowerCase().replace(" ", "&nbsp;") + ((_landscape) ? "&nbsp;" : "<br>") + data.date.toLowerCase().replace(" ", "&nbsp;");
+        } else {
+          el.innerHTML = data.time.toLowerCase().replace(" ", "&nbsp;");
+        }
+      }
+
+      // --- STEP 1: MUTATE DATA POOL ---
+      const physicalDeviceIds = Object.keys(data.devices);
+
+      physicalDeviceIds.forEach(id => {
+        const device = data.devices[id];
+        device.status = device.status.toLowerCase();
+
+        if (device.attributes?.includes("stats")) {
+          const statsId = `${id}_stats`;
+
+          if (!data.devices[statsId]) {
+            data.devices[statsId] = {
+              id: statsId,
+              //label: `Average ${device.label} ${device.stats?.duration}`,
+              //label: `Average ${device.label}${device.stats?.duration ? ` (${device.stats.duration})` : ''}`,
+              label: `Avg ${device.label}${device.stats?.duration ? `/${device.stats.duration}` : ''}`,
+              status: device.status,
+              int_status: device.int_status, // Fixed typo: was device.status
+              type: _DeviceTypes.AVERAGE,
+              attributes: device.attributes,
+              value: device.stats?.avg || 0, // Protected against missing stats object
+              avg: device.stats?.avg || 0,
+              max: device.stats?.max || 0,
+              min: device.stats?.min || 0,
+              duration: device.stats?.duration || 0,
+            };
+          }
+        }
+      });
+
+      _devices = data;
+
+      // --- STEP 3: RENDER LAYER ---
+      var deviceArray = Object.values(data.devices);
+      deviceArray.sort(deviceSort);
+
+      deviceArray.forEach(device => {
+        device.status = device.status.toLowerCase();
+
+        if (document.getElementById(device.id) == null) {
+          createTile(device);
+        }
+        updateTile(device);
+      });
+
+      return data;
+    }
+
+    function OLD_check_devices_OLD(data) {
+      //_temperature_units = data['temp_units'];
+      //_scheduler_devices_json = [];
+      //data['devices'].sort(deviceSort);
+      //data['devices'].sort(deviceSort);
+
+      if (data.display_message)
+        displayMessage(formatSatus(data.display_message));
+      else
+        displayMessage("");
+
+      if (data.time && data.date) {
+        var el = document.getElementById("datetime");
+        if (_landscape) {
+          el.innerHTML = data.time.toLowerCase().replace(" ", "&nbsp;") + ((_landscape) ? "&nbsp;" : "<br>") + data.date.toLowerCase().replace(" ", "&nbsp;");
+        } else {
+          el.innerHTML = data.time.toLowerCase().replace(" ", "&nbsp;")
+        }
+      }
+
+      /*
+      if (object?.attributes?.includes(_DeviceAttributes.STATS)){
+            // Create a second tile for the stats.
+            add_tile(object.id+"_stats", "Average "+object.label, object.status, object.type, object.attributes);
+          }
+      */
+      /*
+       let deviceArray = [];
+       Object.values(data.devices).forEach(device => {
+         deviceArray.push(device);
+     
+         // Inject the virtual stats device right next to its parent data
+         if (device.attributes?.includes("stats")) {
+           deviceArray.push({
+             id: `${device.id}_stats`,
+             label: `${device.label} Stats`,
+             status: device.status,
+             type: "stats",
+             parent_id: device.id
+           });
+         }
+       });
+ */
+      var deviceArray = Object.values(data.devices);
+      deviceArray.sort(deviceSort);
+      deviceArray.forEach(device => {
+
+        device.status = device.status.toLowerCase();
+
+        if (document.getElementById(device.id) == null) {
+          createTile(device);
+        }
+
+        updateTile(device);
+
+      });
+
+    }
+
+
+    function get_appropriate_ws_url() {
+      var pcol;
+      var u = document.URL;
+      /*
+       * We open the websocket encrypted if this page came on an
+       * https:// url itself, otherwise unencrypted
+       */
+      if (u.substring(0, 5) == "https") {
+        pcol = "wss://";
+        u = u.substr(8);
+      } else {
+        pcol = "ws://";
+        if (u.substring(0, 4) == "http")
+          u = u.substr(7);
+      }
+      u = u.split('/');
+      //alert (pcol + u[0] + ":6500");
+      return pcol + u[0];
+    }
+
+    function startWebsockets() {
+      // Cleanup: Always close existing socket and clear intervals before starting a new one
+      if (_socket_di) {
+        _socket_di.onopen = _socket_di.onmessage = _socket_di.onclose = null;
+        _socket_di.close();
+      }
+      if (window.devicesInterval) {
+        clearInterval(window.devicesInterval);
+        window.devicesInterval = null;
+      }
+
+      _socket_di = new WebSocket(get_appropriate_ws_url());
+
+      // Connection Timeout: If it doesn't open in 5s, kill it and retry
+      const connTimeout = setTimeout(() => {
+        if (_socket_di.readyState !== WebSocket.OPEN) {
+          LOG("Connection handshake timed out. Retrying...");
+          _socket_di.close(); // This will trigger onclose logic
+        }
+      }, 5000);
+
+      _socket_di.onopen = function () {
+        clearTimeout(connTimeout); // Handshake succeeded
+        LOG("WebSocket Connected");
+        get_devices();
+
+        if (!window.devicesInterval) {
+          window.devicesInterval = setInterval(() => { get_devices(); }, 60000);
+        }
+      };
+
+      _socket_di.onmessage = function (msg) {
+        document.getElementById("header").classList.remove("error");
+        try {
+          const data = JSON.parse(msg.data);
+          if (data.type === 'devices') {
+            _devices = check_devices(data);
+            resetBackgroundSize();
+          }
+          else if (data.type === 'schedules') cs_schedules(data);
+          else if (data.type == 'dose_history') showDoseHistory(data);
+
+        } catch (e) {
+          LOG("JSON Parse Error: " + e);
+        }
+      };
+
+      _socket_di.onclose = function (event) { // Pass 'event' here!
+        clearTimeout(connTimeout);
+
+        // Cleanup interval so we don't stack them
+        if (window.devicesInterval) {
+          clearInterval(window.devicesInterval);
+          window.devicesInterval = null;
+        }
+
+        LOG(`WebSocket Closed. Code: ${event.code}, Reason: ${event.reason}`);
+
+        setElementHTML("message", ' Connection error! ');
+        document.getElementById("header").classList.add("error");
+
+        // Prevent Rapid Reconnection: 
+        // If browser is throttling, a 5s delay is good, but 
+        // make sure we don't have multiple timers running.
+        if (window.reconnectTimer) clearTimeout(window.reconnectTimer);
+        window.reconnectTimer = setTimeout(() => {
+          startWebsockets();
+        }, 5000);
+      };
+
+      _socket_di.onerror = function (err) {
+        LOG("WebSocket Error observed");
+        // Don't call startWebsockets here, onclose will handle it.
+      };
+    }
+
+    /*
+    
+        function startWebsockets() {
+    
+          _socket_di = new WebSocket(get_appropriate_ws_url());
+          try {
+           
+            _socket_di.onopen = function () {
+              // success!
+              get_devices();
+    
+              // Set recurring fetch every 1 minute
+              if (!window.devicesInterval) {
+                window.devicesInterval = setInterval(() => { get_devices(); }, 60 * 1000);
+              }
+            }
+            _socket_di.onmessage = function got_packet(msg) {
+              document.getElementById("header").classList.remove("error");
+              var data = JSON.parse(msg.data);
+              if (data.type == 'devices') {
+                _devices = data;
+                check_devices(_devices);
+                resetBackgroundSize();
+              } else if (data.type == 'schedules') {
+                cs_schedules(data);
+              }
+            }
+            _socket_di.onclose = function () {
+              // something went wrong
+              LOG("WebSocket Closed:");
+              LOG("Code:   " + event.code);    // Numeric code (e.g., 1000, 1006)
+              LOG("Reason: " + event.reason);  // Text explanation from server
+              LOG("Clean:  " + event.wasClean); // Boolean: did the TCP handshake close properly?
+    
+              setElementHTML("message", '  Connection error!  ');
+              document.getElementById("header").classList.add("error");
+              // Try to reconnect every 5 seconds.
+              setTimeout(function () {
+                startWebsockets()
+              }, 5000);
+            }
+          } catch (exception) {
+            alert('<p>Error' + exception);
+          }
+        }
+    */
+    function get_devices() {
+      var msg = {
+        uri: "devices"
+      };
+      _socket_di.send(JSON.stringify(msg));
+    }
+
+    function get_dosestats() {
+      var msg = {
+        uri: "dosestats"
+      };
+      _socket_di.send(JSON.stringify(msg));
+    }
+
+    /*
+    function get_dynamicconfig() {
+      // UNUSED: Dynamic config retrieval handled via message listener.
+      var msg = {
+        uri: "dynamicconfig"
+      };
+      _socket_di.send(JSON.stringify(msg));
+    }
+    */
+    function get_schedules() {
+      var msg = {
+        uri: "schedules"
+      };
+      _socket_di.send(JSON.stringify(msg));
+    }
+
+    function set_schedules(msg) {
+      msg.uri = "schedules/set";
+      //LOG(JSON.stringify(msg));
+      _socket_di.send(JSON.stringify(msg));
+      //_socket_di.send(msg);
+    }
+
+    function send_command(cmd, value = null) {
+      var _cmd = {};
+      _cmd.command = cmd;
+      _cmd.uri = cmd + "/set";
+      if (value != null) {
+        _cmd.value = value;
+      }
+      //LOG("Send cmd  "+JSON.stringify(_cmd));
+      //console.trace("Tracing");
+      _socket_di.send(JSON.stringify(_cmd));
+
+      if (_config.tile_settings.link_spa_and_spa_heater && cmd == "Spa_Mode") {
+        var ncmd = {};
+        ncmd.command = "Spa_Heater";
+        ncmd.uri = "Spa_Heater/set";
+        if (value != null) {
+          ncmd.value = value;
+        }
+        //LOG("Send spa cmd  "+JSON.stringify(ncmd));
+        _socket_di.send(JSON.stringify(ncmd));
+      }
+    }
+
+    /*
+    function send_setpoint(id) {
+      // UNUSED: Setpoint sending not used in AquachemD.
+      // Setpoint functionality is for AqualinkD controllers, not supported here.
+      var message = {};
+      var tile;
+      if ((tile = document.getElementById(id)) == null) {
+        return;
+      }
+      var type = tile.getAttribute('type');
+      message.parameter = tile.getAttribute('id');
+      message.value = tile.getAttribute('setpoint');
+
+      if (type == "setpoint_swg")
+        message.uri = id+"/percent/set";
+      else if (type == "switch_vsp")
+        message.uri = id+"/RPM/set";
+      else if (type == "light_dimmer")
+        message.uri = id+"/brightness/set";
+      else
+        message.uri = id+"/setpoint/set";
+
+      _socket_di.send(JSON.stringify(message));
+    }
+    */
+
+    /*
+    function send_light_mode(value, id, textvalue) {
+      // UNUSED: Light mode control not used in AquachemD.
+      // Light program functionality is for AqualinkD, not supported here.
+      var mode = {};
+      mode.value = value;
+      mode.button = id;
+      mode.uri = id+"/program/set";
+      mode.text_value = textvalue;
+      _socket_di.send(JSON.stringify(mode));  
+    }
+    */
+
+    function send_switch_timer(id, value) {
+      var message = {};
+      message.uri = id + "/timer/set";
+      message.value = value;
+      _socket_di.send(JSON.stringify(message));
+    }
+
+    /*
+    function reset() {
+      // UNUSED: Reset functionality not used in AquachemD.
+      _socket_di.send("reset\n");
+    }
+    */
+
+    function showBackground() {
+      wrapper = document.getElementById("wrapper");
+      if (wrapper.classList.contains("vopaque")) {
+        wrapper.classList.remove("vopaque");
+      } else {
+        wrapper.classList.add("vopaque");
+      }
+    }
+
+
+    function showVersion(source) {
+      displayMessage("AquachemD : " + _devices.AquachemD, 5);
+    }
+
+
+    /*
+    function updatePwsitchOptions(source, light_type) {
+      // UNUSED: Power switch and light program options not used in AquachemD.
+      if (source.type == 'radio') {
+        var modename = _dynamicconfig?.light_programs[light_type][source.value-1]; 
+        if (modename.endsWith(" - Show"))
+          modename = modename.substr(0, (modename.length - 7));
+        document.getElementById('pswitch_option_switch_text_value').innerHTML = modename;
+        document.getElementById('pswitch_option_switch').checked = true;
+      } else if (source.type == 'checkbox') {
+        var x;
+        if (document.getElementById('pswitch_option_switch').checked == false) {
+          var radio = document.getElementsByName("light_program");
+          for (x = 0; x < radio.length; x++) {
+            radio[x].checked = false
+          }
+          document.getElementById('pswitch_option_switch_text_value').innerHTML = 'Off';
+        }
+      }
+    }
+    */
+
+    function loadScriptIfAvailable(url) {
+      const script = document.createElement('script');
+      script.src = url;
+
+      script.onload = function () {
+        //LOG(`Script from ${url} loaded and executed.`);
+      };
+
+      script.onerror = function () {
+        //console.error(`Script from ${url} could not be loaded.`);
+      };
+
+      document.head.appendChild(script);
+    }
+
+    function cs_synchronizeTableWidths() {
+
+
+      //LOG("SET table");
+
+      const sourceTable = document.getElementById('cronschedules');
+      const destinationTable = document.getElementById('cronschedules-main');
+
+      if (!sourceTable || !destinationTable) {
+        console.error("Source or destination table not found.");
+        return;
+      }
+
+      // Optional: Force tables to obey set widths for consistency
+      //sourceTable.style.tableLayout = 'fixed';
+      //destinationTable.style.tableLayout = 'fixed';
+
+      const sourceCells = sourceTable.rows[0]?.cells;
+      const destinationCells = destinationTable.rows[0]?.cells;
+
+      if (!sourceCells || !destinationCells) {
+        console.error("Could not find the first row/cells in one of the tables.");
+        return;
+      }
+
+      //if (sourceCells.length !== destinationCells.length) {
+      if (sourceCells.length > destinationCells.length) {
+        console.error(`Width sync failed: Source has ${sourceCells.length} cells in the first row, Destination has ${destinationCells.length}.`);
+        return;
+      }
+
+      //let total=0;
+      // Iterate over the columns and apply the width
+      for (let i = 0; i < sourceCells.length; i++) {
+        // Get the computed width of the source cell
+        //const width = sourceCells[i].offsetWidth + 'px';
+        //total += sourceCells[i].getBoundingClientRect().width;
+        const width = sourceCells[i].getBoundingClientRect().width + 'px';
+
+        // Apply the exact width to the destination cell's style
+        // Setting min/max width helps ensure the browser obeys the instruction
+        destinationCells[i].style.minWidth = width;
+        destinationCells[i].style.maxWidth = width;
+        destinationCells[i].style.width = width;
+      }
+    }
+
+
+
+
+
+  </script>
+</head>
+
+<!--<body onload='showTileOptions(false); test_harness();startWebsockets();'> -->
+
+<body onload='init();'>
+  <div id='body_wrap' class='body_wrap'>
+    <!-- <div id='body_wrap' class='body_wrap' onmousedown='showTileOptions(false);'> -->
+    <div id='wrapper' class="wrapper">
+      <div id="header" class="head" /*onclick="showBackground();*/">
+        <table border='0' width='100%' cellpadding='0' cellspacing='0'>
+          <tr>
+            <td width="25px" align='left' id='td_cog' style="vertical-align:middle">
+              <a id="cog_link" href="/manager.html">
+                <svg viewBox='0 0 10 8' width='18' height='18'>
+                  <path d='M1 1h8M1 4h 8M1 7h8' stroke='#FFF' stroke-width='1.2' stroke-linecap='round' />
+                </svg>
+              </a>
+            </td>
+            </td>
+            <td width="70px" align='left' id='td_name'><span class='title' id='name'
+                onclick="showVersion(this);event.stopPropagation();">AquachemD</span>
+            </td>
+            <td align='center'><span class='title' id='message'></span>
+            </td>
+            <td width="70px" align='right' id='td_timedate'><span class='timedate' id='datetime'
+                onclick="event.stopPropagation();showScheduler(this);">--</class>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!--
+  .tile_options_close_button_contaner 
+  .tile_options_close_button 
+  -->
+
+    <div id='tile_options' class='options hide' style='display: none;'>
+      <div id='tile_options_pane' class='options_pane' onclick='event.stopPropagation();'>
+        <div class="pane_close_button_contaner">
+          <input class="pane_close_button" type="button" onclick="showTileOptions(false);" value="x"></input>
+        </div>
+        <table border='0' cellpadding='10px' id='tile_options_table'>
+          <tr class='options_title'>
+            <th colspan='2'><span id="tile_option_title"></span>
+            </th>
+          </tr>
+          <!-- Will be populated by js based on device type -->
+          <tr id="tile_options_table_footer">
+            <td colspan='2' align='center'>
+              <input type="button" value="close" id='tile_options_close' class='options_button'
+                onclick="closeTileOptions();">
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div id='scheduler_options' class='options hide' style='display: none;'>
+      <div id='scheduler_options_pane' class='scheduler_pane' onclick='event.stopPropagation();'>
+        <div class="pane_close_button_contaner">
+          <input class="pane_close_button options_button" type="button" id="scheduler"
+            onclick="showTileOptions(false, this.id);;" value="x"></input>
+        </div>
+        <table id="cronschedules-main" class="sc_table">
+          <tr class="sc_tablehead sc_tablerowhidden">
+            <!-- Below is hidden, but used for computed table column widths -->
+            <td>Enable</td>
+            <td>Minute</td>
+            <td>Hour</td>
+            <td>Day</td>
+            <td>Month</td>
+            <td>Day</td>
+            <td>Device</td>
+            <td>Cmd</td>
+            <td>Value</td>
+            <td>Del</td>
+            <td>&nbsp;&nbsp;&nbsp;</td>
+          </tr>
+          <tr>
+            <th colspan='11'><span id="scheduler_options_title"></span></th>
+          </tr>
+          <tr>
+            <td colspan="11" align="center" id="crontext" style="height: 22px">&nbsp;</td>
+          </tr>
+          <tr class="sc_tablehead">
+            <td>Enable</td>
+            <td>Minute</td>
+            <td>Hour</td>
+            <td>Day<br>
+              <font size="-2">Month</font>
+            </td>
+            <td>Month</td>
+            <td>Day<br>
+              <font size="-2">Week</font>
+            </td>
+            <td>Device</td>
+            <td>Cmd</td>
+            <td>Value</td>
+            <td>Del</td>
+            <td></td> <!-- scroll bar lands in this space -->
+          </tr>
+          <tr>
+            <td colspan="11">
+              <div class="scheduler_table" id="scheduler_scrollabletable">
+                <table id="cronschedules" class="sc_table">
+                  <tr class="sc_tablehead sc_tablerowhidden">
+                    <!-- Below is hidden, but used for computed table column widths -->
+                    <td>Enable</td>
+                    <td>Minute</td>
+                    <td>Hour</td>
+                    <td>Day</td>
+                    <td>Month</td>
+                    <td>Day</td>
+                    <td>Device</td>
+                    <td>Cmd</td>
+                    <td>Value</td>
+                    <td>Del</td>
+                  </tr>
+                </table>
+              </div>
+            </td>
+            <!-- HTML will be added here -->
+          </tr>
+          <tr class="sc_tablehead">
+            <td colspan="11">
+              <input type="button" class="options_button" id="Add" value="Add"
+                onclick="cs_addschedule(1,0,0,'*','*','*','','','');">
+              &nbsp;&nbsp;&nbsp;&nbsp;
+              <input type="button" class="options_button" id="scheduler_options_close" value="Save"
+                onclick="cs_createJSON();showTileOptions(false);">
+            </td>
+          </tr>
+          <tr>
+            <td colspan="11" id="cronhelp"></td>
+          </tr>
+          <table>
+      </div>
+    </div>
+
+
+
+  </div>
+
+</body>
+
+</html>

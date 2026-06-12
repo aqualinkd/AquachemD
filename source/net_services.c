@@ -119,6 +119,7 @@ static void mg_logger(char ch, void *param) {
 
 //  helper functions
 
+/*
 static int is_websocket(const struct mg_connection *nc) {
   return IS_WEBSOCKET(nc);
 }
@@ -134,6 +135,28 @@ static inline int is_websocket_acdmanager(const struct mg_connection *nc) {
 static inline int is_mqtt(const struct mg_connection *nc) {
   return GET_AQD_FLAGS(nc) & (AQD_MG_CON_MQTT | AQD_MG_CON_MQTT_CONNECTING);
 }
+*/
+
+static bool is_websocket(const struct mg_connection *nc) {
+  return IS_WEBSOCKET(nc);
+}
+
+static bool is_mqttconnecting(const struct mg_connection *nc) {
+  // The macro returns 8, but assigning/returning it as a bool casts it to true (1)
+  return IS_MQTT_CONNECTING(nc); 
+}
+
+static inline bool is_websocket_acdmanager(const struct mg_connection *nc) {
+  return (GET_AQD_FLAGS(nc) & AQD_MG_CON_WS_AQM) != 0;
+}
+
+static inline bool is_mqtt(const struct mg_connection *nc) {
+  return (GET_AQD_FLAGS(nc) & (AQD_MG_CON_MQTT | AQD_MG_CON_MQTT_CONNECTING)) != 0;
+}
+
+
+
+
 
 static inline void set_mqttconnecting(struct mg_connection *nc) {
   uintptr_t f = GET_AQD_FLAGS(nc);
@@ -704,6 +727,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
     break;
   
   case MG_EV_CLOSE: 
+    //LOG(LOG_WARNING, "Connection closed is_websocket( %d ) is_mqtt( %d ) is_mqttconnecting( %d )\n", is_websocket(nc), is_mqtt(nc), is_mqttconnecting(nc));
     if (is_websocket(nc)) {
       _aquachemd_data->open_websockets--;
       LOG(LOG_INFO, "-- Websocket left\n");
@@ -727,12 +751,16 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
     else if (is_mqtt(nc) || is_mqttconnecting(nc))
     {
       LOG(LOG_WARNING, "MQTT Connection closed\n");
+      nc->is_closing = 1;
       _mqtt_exit_flag = true;
     }
 
     break;
   
-  case MG_EV_ACCEPT: 
+  case MG_EV_ACCEPT:
+    // IMPORTANT: Clean the flags since mongoose reuses memory.
+    nc->fn_data = NULL;
+
     if (is_mqtt(nc)) {
       return;
     }
@@ -950,8 +978,6 @@ void send_mqtt_temp_msg(struct mg_connection *nc, char *ID, float value)
 }
 
 
-
-
 void mqtt_broadcast_aquachemdstate(struct mg_connection *nc, bool force_all)
 {
 
@@ -990,26 +1016,31 @@ void mqtt_broadcast_aquachemdstate(struct mg_connection *nc, bool force_all)
   }
 
   {
-   static float last_ph = 0;
-   static float last_orp = 0;
-   // Post to aqualinkd if enabled (only pH & ORP)
-   if (_acdconfig_.mqtt_aqualinkd_topic != NULL) {
-    for (acd_key_t *curr = _aquachemd_data->keys->next; curr != NULL; curr = curr->next) {
-      if (curr->type == ACD_TYPE_EZO_PH && curr->index == MASTER_ID && curr->state == ACD_LED_ON && curr->value != last_ph) {
-        sprintf(msg, "%.2f", curr->value);
-        sprintf(topic, "%s/CHEM/pH/set", _acdconfig_.mqtt_aqualinkd_topic);
-        send_mqtt(nc, topic, msg);
-        last_ph = curr->value;
-        LOG(LOG_DEBUG, "MQTT: Broadcasted pump pH %s to Aqualinkd\n", msg);
-      } else if (curr->type == ACD_TYPE_EZO_ORP && curr->index == MASTER_ID && curr->state == ACD_LED_ON && curr->value != last_orp) {
-        sprintf(msg, "%.2f", curr->value);
-        sprintf(topic, "%s/CHEM/ORP/set", _acdconfig_.mqtt_aqualinkd_topic);
-        send_mqtt(nc, topic, msg);
-        last_orp = curr->value;
-        LOG(LOG_DEBUG, "MQTT: Broadcasted pump ORP %s to Aqualinkd\n", msg);
+    static float last_ph = 0;
+    static float last_orp = 0;
+    // Post to aqualinkd if enabled (only pH & ORP)
+    if (_acdconfig_.mqtt_aqualinkd_topic != NULL)
+    {
+      for (acd_key_t *curr = _aquachemd_data->keys->next; curr != NULL; curr = curr->next)
+      {
+        if (curr->type == ACD_TYPE_EZO_PH && curr->index == MASTER_ID && curr->state == ACD_LED_ON && curr->value != last_ph)
+        {
+          sprintf(msg, "%.2f", curr->value);
+          sprintf(topic, "%s/CHEM/pH/set", _acdconfig_.mqtt_aqualinkd_topic);
+          send_mqtt(nc, topic, msg);
+          last_ph = curr->value;
+          LOG(LOG_DEBUG, "MQTT: Broadcasted pump pH %s to Aqualinkd\n", msg);
+        }
+        else if (curr->type == ACD_TYPE_EZO_ORP && curr->index == MASTER_ID && curr->state == ACD_LED_ON && curr->value != last_orp)
+        {
+          sprintf(msg, "%.2f", curr->value);
+          sprintf(topic, "%s/CHEM/ORP/set", _acdconfig_.mqtt_aqualinkd_topic);
+          send_mqtt(nc, topic, msg);
+          last_orp = curr->value;
+          LOG(LOG_DEBUG, "MQTT: Broadcasted pump ORP %s to Aqualinkd\n", msg);
+        }
       }
     }
-   }
   }
 }
 
@@ -1166,10 +1197,12 @@ bool network_service(struct mg_mgr *mgr, struct aquachemdata *acdata) {
 #define HEARTBEAT_TICKS_TARGET ((HEARTBEAT_INTERVAL_SEC * 1000) / POLL_TIMEOUT_MS)
 
 
+
 void *net_services_thread( void *ptr )
 {
   _aquachemd_data = (struct aquachemdata *) ptr;
-  bool mqtt_started = false;
+  //bool mqtt_started = false;
+  static uint32_t heartbeat_ticks = 0;
 
   reset_dose_event();
 
@@ -1182,17 +1215,20 @@ void *net_services_thread( void *ptr )
     goto f_end;
   }
 
+  start_mqtt(&_mgr);
+
   while (_keepNetServicesRunning == true)
   {
-    static uint32_t heartbeat_ticks = 0;
+    
     bool force_all = false;
     int journald_fail = 0;
 
     // Start MQTT on first iteration after HTTP server is ready
+    /*
     if (!mqtt_started) {
       start_mqtt(&_mgr);
       mqtt_started = true;
-    }
+    }*/
     
     mg_mgr_poll(&_mgr, POLL_TIMEOUT_MS);
 

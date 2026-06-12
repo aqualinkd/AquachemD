@@ -345,6 +345,9 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     _staging.char_value = strdup(value);
                     _staging.pending_type = ACD_TYPE_MQTT_COND;
                 }
+                else if (strstr(param, "condition_met_delay")) {
+                    _staging.value = strtof(value, NULL);
+                }
                 else if (strncasecmp(param, "sysfs_sensor_regex", 18) == 0) {
                     if (_staging.char_value) free(_staging.char_value);
                     _staging.char_value = strdup(value);
@@ -450,7 +453,8 @@ bool write_config_file(struct aquachemdata *acdata) {
 
     char *lastName = NULL;
     for (int i = 0; i < CFG_PARAM_COUNT; i++) {
-        if (_cfgParams[i].config_mask & (CFG_HIDE | CFG_MULTIPLE)) continue;
+        //if (_cfgParams[i].config_mask & (CFG_HIDE | CFG_MULTIPLE)) continue;
+        if (_cfgParams[i].config_mask & CFG_MULTIPLE) continue;
 
         if (lastName != NULL && lastName[0] != _cfgParams[i].name[0]) {
             fprintf(fp, "\n");
@@ -1093,6 +1097,10 @@ void check_print_config (struct aquachemdata *acdata)
                 curr->data.gpio.pin, 
                 gpio_active_to_str(curr->data.gpio.active), 
                 gpio_req_to_str(curr->data.gpio.required));
+    } 
+    if (IS_CONDITION(curr->type ) /*&& curr->delay_on > 0*/) {
+      int len = strlen(buffer);
+      snprintf(&buffer[len], sizeof(buffer)-len, "(delay=%ds)", curr->delay_on);
     }
 
     LOG(LOG_NOTICE, "%-*s = %-8.8s| %s %s\n", MAX_PRINTLEN, type_str, curr->ID, curr->label,buffer);
@@ -1279,7 +1287,7 @@ void add_condition_mqtt(const acd_staging_t *st) {
     new_node->met = false; // Initial state, not met.
     new_node->scope = st->is_global ? ACD_ACTION_BLOCK : ACD_ACTION_LIMIT;
 
-    new_node->delay_on = 0;
+    new_node->delay_on = st->value; 
     
     generate_condition_id(new_node);
     append_to_key_list(new_node);
@@ -1299,7 +1307,7 @@ void add_condition_gpio(const acd_staging_t *st) {
     new_node->met = false; // Initial state, not met.
     new_node->scope = st->is_global ? ACD_ACTION_BLOCK : ACD_ACTION_LIMIT;
     
-    new_node->delay_on = 0;
+    new_node->delay_on = st->value; 
     
     generate_condition_id(new_node);
     append_to_key_list(new_node);

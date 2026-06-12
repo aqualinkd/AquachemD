@@ -145,7 +145,7 @@ typedef struct runtime_range_t{
 
 
 
-#define MAX_DOSING_RANGES 5
+#define MAX_DOSING_RANGES 8
 
 // For special_mask in acd_key
 #define TIMER_ACTIVE           (1 << 0)
@@ -158,6 +158,8 @@ typedef struct runtime_range_t{
 
 #define CALC_AVERAGE           (1 << 6)
 
+#define CONDITION_NOTIFIED     (1 << 7)
+// CAN'T ADD ANY MORE wuthout changeing uint8_t to uint16_t 
 //#define CONDITION_SCOPE_GLOBAL (1 << 3) // For conditions Set if global interlock, clear if local restriction
 //#define CONDITION_SCOPE_LOCAL  (1 << 4) // ONLY for master key, if on and this is set, then re can read sensors but not dose.
 

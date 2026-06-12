@@ -140,8 +140,7 @@
       margin-bottom: 10px;
       border-bottom: 1px solid var(--options_pane_bordercolor);
     }
-
-    /*
+/*
     .scheduler_footer {
       flex: none;
       text-align: center;
@@ -150,14 +149,13 @@
 */
     /* reduce button size */
     .scheduler_footer {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 20px;
-      padding: 15px;
-      flex: none;
-      /* Prevents stretching */
-    }
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  padding: 15px;
+  flex: none; /* Prevents stretching */
+}
 
     .options {
       top: 10px;
@@ -560,39 +558,19 @@
     let LOG = _DEBUG ? _log : _nothing;
 
     const _DeviceAttributes = Object.freeze({
-      ON: 'set_on',
-      OFF: 'set_off',
-      ENABLED: 'set_enabled',
-      DISABLED: 'set_disabled',
-      TIMER: 'timer',
-      PROGRAM: 'program',
-      DIMMER: 'dimmer',
-      VSP: 'vsp',
-      ALT_LABEL: 'alt_label',
-      RESET_STATS: 'reset_stats',
-      HEATER: 'heater',
-      SWG: 'swg',
-      FREEZE: 'freeze', CHILLER: 'chiller',
-      STATS: 'stats',
-      DOSESTATS: 'dosestats'
+      ON: 'set_on', OFF: 'set_off', ENABLED: 'set_enabled', DISABLED: 'set_disabled',
+      TIMER: 'timer', PROGRAM: 'program', DIMMER: 'dimmer', VSP: 'vsp', ALT_LABEL: 'alt_label',
+      RESET_STATS: 'reset_stats', HEATER: 'heater', SWG: 'swg', FREEZE: 'freeze', CHILLER: 'chiller',
+      STATS: 'stats', DOSESTATS: 'dosestats'
     });
 
     const _DeviceTypes = Object.freeze({
-      SWITCH: 'switch',
-      BINARY_SENSOR: 'binary_sensor',
-      VALUE: 'value',
-      TEMPERATURE: 'temperature',
-      SENSOR: 'sensor',
-      AVERAGE: 'average',
-      CONTROLLER: 'controller'
+      SWITCH: 'switch', BINARY_SENSOR: 'binary_sensor', VALUE: 'value',
+      TEMPERATURE: 'temperature', SENSOR: 'sensor', AVERAGE: 'average', CONTROLLER: 'controller'
     });
 
     const _DeviceStates = Object.freeze({
-      OFF: 0,
-      ON: 1,
-      ENABLED: 2,
-      DISABLED: 3,
-      DELAY: 4
+      OFF: 0, ON: 1, ENABLED: 2, DISABLED: 3
     });
 
     async function loadConfig() {
@@ -1024,7 +1002,7 @@
 
     function isDeviceOff(id) {
       const status = _devices.devices[id]?.int_status ?? 0;
-      return (status !== 1 && status !== 2 && status !== 4);
+      return (status !== 1 && status !== 2);
     }
 
     function getTileExtraStatusText(id) {
@@ -1041,7 +1019,7 @@
       if ((tile = document.getElementById(id)) == null) return;
       const isOff = isDeviceOff(id);
 
-      if (!["on", "off", "enabled", "disabled", "flash", "delay", "rangecritical", "rangewarning", "rangeoptimal", "safe", "unsafe"].includes(status)) {
+      if (!["on", "off", "enabled", "disabled", "flash", "rangecritical", "rangewarning", "rangeoptimal", "safe", "unsafe"].includes(status)) {
         if (status == "unknown") status = "Off"; else return;
       }
       tile.setAttribute('status', status);
@@ -1050,14 +1028,9 @@
       if (isOff) {
         tile.classList.remove("on", "flash");
       } else {
-        if (status == 'flash' || status == 'delay') {
+        if (status == 'flash') {
           tile.classList.add("flash"); tile.classList.remove("on"); text = "Delay";
           if (status_text == status) status_text = "Delay";
-          // If we have the duration, print it.
-          let duration = _devices?.devices?.[id]?.delay_duration;
-          if (duration > 0) {
-            status_text += ' ' + formatDuration(duration);
-          }
         } else {
           tile.classList.add("on"); tile.classList.remove("flash");
           if (status_text == status) status_text = status == "enabled" ? "Enabled" : "On";
@@ -1069,7 +1042,7 @@
 
       var type = tile.getAttribute('type');
       if (type && status) {
-        if (status == 'enabled' || status == 'flash' || status == 'delay') setTileIconClassList(id, "enabled");
+        if (status == 'enabled' || status == 'flash') setTileIconClassList(id, "enabled");
         else if (status == 'off' || status == 'disabled' || status == 'unsafe') setTileIconClassList(id, "disabled");
         else if (status == 'on' && _devices.devices[id]?.attributes?.includes(_DeviceAttributes.HEATER)) setTileIconClassList(id, "heat");
         else if (status == 'on' && _devices.devices[id]?.attributes?.includes(_DeviceAttributes.CHILLER)) {
@@ -1345,27 +1318,6 @@
       const options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false };
       return dateObj.toLocaleDateString('en-US', options).replace(/,/g, '');
     }
-    /*
-        function showDoseHistory_OLD(data) {
-          const tile_option = document.getElementById('tile_options');
-          if (tile_option.style.display === 'none' || tile_option.classList.contains("hide")) return;
-    
-          const targetDeviceId = tile_option.getAttribute('device_id');
-          const footer = document.getElementById('tile_options_table_footer');
-          const filteredHistory = data.history.filter(item => item.pump_id === targetDeviceId);
-    
-          footer.insertAdjacentHTML('beforebegin', '<tr class="dynamic-option-row"><td colspan="2" align="center">History</td></tr>');
-    
-          const start = Math.max(0, filteredHistory.length - 5);
-          let msg = "";
-          for (let i = start; i < filteredHistory.length; i++) {
-            msg += `${shortenTimestamp(filteredHistory[i].timestamp)} Reading:${filteredHistory[i].reading.toFixed(2)} |Ran:${filteredHistory[i].seconds}s |Dosed:${filteredHistory[i].ml.toFixed(2)} ml<br>`;
-          }
-          if (msg === "") msg = "No history available.";
-    
-          footer.insertAdjacentHTML('beforebegin', `<tr class="dynamic-option-row"><td colspan="2" style="font-size:0.8rem; font-weight: 400; padding: 0;">${msg}</td></tr>`);
-        }
-    */
 
     function showDoseHistory(data) {
       const tile_option = document.getElementById('tile_options');
@@ -1375,43 +1327,17 @@
       const footer = document.getElementById('tile_options_table_footer');
       const filteredHistory = data.history.filter(item => item.pump_id === targetDeviceId);
 
-      // Header row
-      footer.insertAdjacentHTML('beforebegin', '<tr class="dynamic-option-row"><td colspan="2" align="center"><b>Recent Dosing</b></td></tr>');
+      footer.insertAdjacentHTML('beforebegin', '<tr class="dynamic-option-row"><td colspan="2" align="center">History</td></tr>');
 
-      if (filteredHistory.length === 0) {
-        footer.insertAdjacentHTML('beforebegin', '<tr class="dynamic-option-row"><td colspan="2" align="center">No history available.</td></tr>');
-        return;
-      }
-
-      // Create table header
-      let tableHtml = `
-    <tr class="dynamic-option-row">
-      <td colspan="2" style="padding: 5px 0;">
-        <table style="width: 100%; font-size: 0.75rem; border-collapse: collapse; text-align: center;">
-          <tr style="border-bottom: 1px solid #ccc; font-weight: bold;">
-            <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc;">Time</td>
-            <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc; text-align: right;">Sensor</td>
-            <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc; text-align: right;">Runtime</td>
-            <td style="padding: 0 2px 0 2px; text-align: right;">Dose</td>
-          </tr>`;
-
-      // Get last 5 items
       const start = Math.max(0, filteredHistory.length - 5);
+      let msg = "";
       for (let i = start; i < filteredHistory.length; i++) {
-        const item = filteredHistory[i];
-        tableHtml += `
-      <tr style="border-bottom: 1px solid #eee;">
-        <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc;">${shortenTimestamp(item.timestamp)}</td>
-        <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc; text-align: right;">${item.reading.toFixed(1)}</td>
-        <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc; text-align: right;">${item.seconds}s</td>
-        <td style="padding: 0 2px 0 2px; text-align: right;">${item.ml.toFixed(1)}ml</td>
-      </tr>`;
+        msg += `${shortenTimestamp(filteredHistory[i].timestamp)} Reading:${filteredHistory[i].reading.toFixed(2)} |Ran:${filteredHistory[i].seconds}s |Dosed:${filteredHistory[i].ml.toFixed(2)} ml<br>`;
       }
+      if (msg === "") msg = "No history available.";
 
-      tableHtml += `</table></td></tr>`;
-      footer.insertAdjacentHTML('beforebegin', tableHtml);
+      footer.insertAdjacentHTML('beforebegin', `<tr class="dynamic-option-row"><td colspan="2" style="font-size:0.8rem; font-weight: 400; padding: 0;">${msg}</td></tr>`);
     }
-
 
     var _displayMsgTimer = 0;
     var _displayMsgTimeout = 0;

@@ -452,9 +452,15 @@ int main(int argc, char *argv[])
           }
         }
         if (!curr->met) {
-          LOG(LOG_WARNING,"Condition not met: %s\n", curr->label);
-          update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, curr->label);
+          if ( !isMASKSET(curr->flags, CONDITION_NOTIFIED)) {
+            LOG(LOG_WARNING,"Condition not met: %s\n", curr->label);
+            update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, curr->label);
+            setMASK(curr->flags, CONDITION_NOTIFIED);
+          }
           all_conditions_met = false;
+        } else if (curr->met && isMASKSET(curr->flags, CONDITION_NOTIFIED)) {
+          removeMASK(curr->flags, CONDITION_NOTIFIED);
+          LOG(LOG_NOTICE,"Condition satisfied: %s\n", curr->label);
         }
       } else if (curr->type == ACD_TYPE_GPIO_PMP) {
         check_pump_state(&acddata, curr);

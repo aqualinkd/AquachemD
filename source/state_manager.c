@@ -220,7 +220,12 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
   // last condition met ( Update master to on and turn everything to enabled, only if master is enabled)
   //  master off (turn sensors to disabled)
 
+  LOG(LOG_DEBUG, "Request to set %s to %s (current state: %s)", key->label, acd_state_to_str(state), acd_state_to_str(key->state));
 
+  if (state == key->state) {
+    LOG(LOG_DEBUG, "%s is already %s, no state change needed", key->label, acd_state_to_str(state));
+    return true;
+  }
 
   // Bunch of logic for different key states.
   switch(key->type) {
@@ -245,12 +250,21 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
         LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
         return false;
       }
+
+      // Master is blocking any enable or on states
+      if (acdata->keys->scope != ACD_ACTION_ALLOW && (state == ACD_LED_ON || state == ACD_LED_ENABLED )) {
+        LOG(LOG_WARNING, "Master is in %s but with scope %s, can't turn %s to %s, setting to %s", acd_state_to_str(acdata->keys->state), acd_scope_to_str(acdata->keys->scope), key->label, acd_state_to_str(state), acd_state_to_str(ACD_LED_DISABLED));
+        // We can turn to disable though.
+        ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty); 
+        return false;
+      }
+
       //if we are off, use the on state as enabled.
       if (key->state == ACD_LED_OFF && (state == ACD_LED_ON || state == ACD_LED_ENABLED)) {
         if (acdata->keys->state == ACD_LED_OFF) {
           ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty); // Master is off, can only set to disabled.
         } else {
-          ASSIGN_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty); // Master is on, can only set enabled.
+          ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty); // Master is has ACD_ACTION_BLOCK | ACD_ACTION_LIMIT, can only set disabled.
         }
       } else if (state == ACD_LED_ON) {
         if (key->state == ACD_LED_ENABLED ) {
@@ -269,6 +283,14 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
         //SET_IF_CHANGED(key->state , state, acdata->is_dirty);
         LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
         return false;
+      }
+      break;
+    case ACD_TYPE_MQTT_COND:
+    case ACD_TYPE_GPIO_COND:
+      // The only time we "request" a state change on a condition is if it's from DELAY to ON.
+      if (state == ACD_LED_DELAY || isMASKSET(key->flags, DELAY_ACTIVE)) {
+        // Make sure the condition is still met.
+        set_cond_state(acdata, key, key->met?ACD_LED_ON:ACD_LED_OFF);
       }
       break;
     default:
@@ -396,7 +418,8 @@ void check_master(struct aquachemdata *acdata) {
   acdata->keys->scope = ACD_ACTION_ALLOW; // Reset to good, below will set to bad.
   for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
     if (IS_CONDITION(curr->type)) {LOG(LOG_INFO, "State Manager - Condition %s, scope %s, %s",curr->label, acd_scope_to_str(curr->scope), curr->met?"Safe":"Not Safe");}
-    if (IS_CONDITION(curr->type) && curr->met == false) {
+    //if (IS_CONDITION(curr->type) && curr->met == false) {
+    if (IS_CONDITION(curr->type) && (curr->met == false || curr->state == ACD_LED_DELAY)) {
       if (curr->scope == ACD_ACTION_BLOCK) {
         failed_condition = curr;
         acdata->keys->scope = ACD_ACTION_BLOCK;
@@ -408,7 +431,7 @@ void check_master(struct aquachemdata *acdata) {
     }
   }
 
-  LOG(LOG_INFO, "State Manager - Master actions = %s",acdata->keys->scope==ACD_ACTION_ALLOW?"Allow":(acdata->keys->scope==ACD_ACTION_LIMIT?"Limit":"Block") );
+  LOG(LOG_INFO, "State Manager - Master actions = %s",acd_scope_to_str(acdata->keys->scope) );
 
   // failed condition LOCAL scope blocks outputs but not inputs. Master set to limit.
   // failed condition GLOBAL scope blocks everything inputs & outputs except input/sensor scope of local.
@@ -442,12 +465,14 @@ void check_master(struct aquachemdata *acdata) {
       }
     } else if (IS_INPUT(curr->type)) {
       if (acdata->keys->scope == ACD_ACTION_ALLOW || acdata->keys->scope == ACD_ACTION_LIMIT) {
-        set_key_state(acdata, curr, ACD_LED_ENABLED);
+        // wrapping the set_key_state with the IF so the device doesn;t flash to enabled then on, if was previously on
+        if (curr->state != ACD_LED_ON) {set_key_state(acdata, curr, ACD_LED_ENABLED);}
       } else { // ACD_ACTION_BLOCK
        if (curr->scope == ACD_SCOPE_GLOBAL) {
           set_key_state(acdata, curr, ACD_LED_DISABLED);
         } else {
-          set_key_state(acdata, curr, ACD_LED_ENABLED);
+          // wrapping the set_key_state with the IF so the device doesn;t flash to enabled then on, if was previously on
+          if (curr->state != ACD_LED_ON) {set_key_state(acdata, curr, ACD_LED_ENABLED);}
         }
       } 
     }
@@ -507,6 +532,10 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
   }
 
   if (!goodState) {
+    // If we set to delay, we return false, but don;t print the error.
+    if (isMASKSET(key->flags, DELAY_ACTIVE) || key->state == ACD_LED_DELAY) {
+      return false;
+    }
     LOG(LOG_ERR, "Device %s can't be set to %s", key->label, acd_state_to_str(state));
     return false;
   }
@@ -536,9 +565,10 @@ bool set_cond_state(struct aquachemdata *acdata, acd_key_t *cond, acd_state_t st
   // If condition set to on, but it has a delay, then start the timer.
   if (state == ACD_LED_ON && cond->delay_on > 0) {
     if (cond->state == ACD_LED_OFF) {
+      LOG(LOG_NOTICE, "Condition '%s' met, delaying activation %d seconds!",cond->label, cond->delay_on);
       ASSIGN_IF_CHANGED(cond->state , ACD_LED_DELAY, acdata->is_dirty, cond->is_dirty);
       start_delay(acdata, cond, 0, cond->delay_on);
-      return true;
+      return false;
     } else if (cond->state == ACD_LED_DELAY || isMASKSET(cond->flags, DELAY_ACTIVE)) {
       if ( get_timer_left_sec(cond) > 0 ) {
         LOG(LOG_WARNING, "State Manager - Request to set '%s' on, but still in delay, ignored!",cond->label);

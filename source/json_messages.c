@@ -171,6 +171,14 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
       cJSON_AddStringToObject(device, "status", acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
       cJSON_AddNumberToObject(device, "int_status", curr->met);
       cJSON_AddStringToObject(device, "type", "binary_sensor");
+      if (curr->delay_on > 0) {
+        cJSON *attributes = cJSON_CreateArray();
+        cJSON_AddItemToArray(attributes, cJSON_CreateString("delay"));
+        cJSON_AddItemToObject(device, "attributes", attributes);
+        uint32_t remaining_sec = get_timer_left_sec(curr);
+        cJSON_AddStringToObject(device, "delay_active", acd_state_to_str(remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF));
+        cJSON_AddNumberToObject(device, "delay_duration", remaining_sec);
+      }
     } else {
       cJSON_AddStringToObject(device, "status", acd_state_to_str(curr->state));
       cJSON_AddNumberToObject(device, "int_status", curr->state);
@@ -182,6 +190,10 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
         cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ON)));
         cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_OFF)));
         cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ENABLED)));
+        
+        if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP)) {
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("dosestats"));
+        }
         
         uint32_t remaining_sec = get_timer_left_sec(curr);
         cJSON_AddStringToObject(device, "timer_active", acd_state_to_str(remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF));
@@ -241,8 +253,19 @@ const char* get_devices_json(struct aquachemdata *acddata) {
 
       if (IS_CONDITION(curr->type)) {
         //cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
-        cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_condition_met_to_str(curr->met));
-        cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), curr->met);
+        if (isMASKSET(curr->flags, DELAY_ACTIVE) || curr->state == ACD_LED_DELAY) {
+          cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(ACD_LED_DELAY));
+          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), ACD_LED_DELAY);
+        } else {
+          cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_condition_met_to_str(curr->met));
+          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), curr->met);
+        }
+        
+        if (curr->delay_on > 0) {
+          uint32_t remaining_sec = get_timer_left_sec(curr);
+          cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "delay_active"), acd_state_to_str(remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF));
+          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "delay_duration"), remaining_sec);
+        }
       } else {
         cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), curr->value);
         cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->state));

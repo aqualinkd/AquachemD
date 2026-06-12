@@ -117,8 +117,11 @@ void clear_timer(struct aquachemdata *acddata, acd_key_t *key)
     t_ptr->duration_sec = 0;
     pthread_cond_broadcast(&t_ptr->thread_cond);
     pthread_mutex_unlock(&t_ptr->thread_mutex);
+    // Timer thread will wake and stop/clear itself.
   }
   pthread_mutex_unlock(&_ll_mutex);
+
+
 }
 
 void _start_timer(struct aquachemdata *acddata, acd_key_t *key, int duration_min, uint32_t duration_sec, uint32_t mask_type);
@@ -146,6 +149,7 @@ void _start_timer(struct aquachemdata *acddata, acd_key_t *key, int duration_min
     pthread_mutex_unlock(&t_ptr->thread_mutex);
     
     pthread_mutex_unlock(&_ll_mutex);
+    
     return;
   }
 
@@ -206,7 +210,7 @@ void *timer_worker(void *ptr)
     precise_delay(WAIT_TIME_BEFORE_ON_CHECK);
     if (cnt++ == 5) {
        LOG(LOG_NOTICE, "turning on '%s'\n", tmthread->key->label);
-       state_change_request(tmthread->acddata, tmthread->key, ACD_LED_OFF);
+       state_change_request(tmthread->acddata, tmthread->key, ACD_LED_ON);
     } else if (cnt == 10) {
        LOG(LOG_ERR, "key state never turned on '%s'\n", tmthread->key->label);
        break;
@@ -270,6 +274,7 @@ void *timer_worker(void *ptr)
     }
   } else if (isMASKSET(tmthread->key->flags, DELAY_ACTIVE)) {
     if (tmthread->key->state == ACD_LED_DELAY) {
+      // Might be a better option to call set_key_state here???????????
       state_change_request(tmthread->acddata, tmthread->key, ACD_LED_ON);
     } else {
       LOG(LOG_INFO, "Timer waking '%s' is not in delay, not turning on\n", tmthread->key->label);
