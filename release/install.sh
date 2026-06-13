@@ -205,13 +205,11 @@ fi
 
 # Validation Matrix (Systemd and Active Cron Schedulers)
 command -v systemctl >/dev/null 2>&1 || { log "Error: systemctl missing. Systemd required." >&2; exit 1; }
-command -v systemd-run >/dev/null 2>&1 || { log "Error: systemd-run missing. Systemd required." >&2; exit 1; }
 
 SERVICE_EXISTS=1
 if [ "$_nosystemd" -eq $FALSE ]; then
   log "Stopping daemon $SERVICE"
-  #systemctl stop $SERVICE > /dev/null 2>&1
-  systemd-run --scope --description="AquaChemD-Stop" systemctl stop $SERVICE > /dev/null 2>&1
+  systemctl stop $SERVICE > /dev/null 2>&1
   SERVICE_EXISTS=$?
 fi
 
