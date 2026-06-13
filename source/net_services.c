@@ -1379,6 +1379,7 @@ sd_journal *open_journal(void)
   return j;
 }
 
+/*
 void find_aquachemd_startup_in_journal(sd_journal *journal, int fallbacklines)
 {
   // Try to find the specific startup ID
@@ -1405,6 +1406,10 @@ void find_aquachemd_startup_in_journal(sd_journal *journal, int fallbacklines)
   sd_journal_seek_tail(journal);
   sd_journal_previous_skip(journal, (uint64_t)fallbacklines);
 }
+*/
+
+
+
 
 static void _reset_journal_state(sd_journal **j, bool *active)
 {
@@ -1416,6 +1421,162 @@ static void _reset_journal_state(sd_journal **j, bool *active)
   *active = false;
 }
 
+#define SD_FALLBACK_LINES 10
+
+void find_aquachemd_lifecycle_start(sd_journal *journal)
+{
+  const int MAX_SEARCH_LINES = 200;
+  //const int FALLBACK_LINES = 10;
+  
+  sd_journal_flush_matches(journal);
+  
+  // 1. Set up the OR filter for the unique startup/upgrade message UUIDs
+  char match1[128], match2[128];
+  snprintf(match1, sizeof(match1), "MESSAGE_ID=%s", SD_MESSAGE_STARTUP_ID);
+  snprintf(match2, sizeof(match2), "MESSAGE_ID=%s", SD_MESSAGE_UPGRADE_ID);
+  sd_journal_add_match(journal, match1, 0);
+  sd_journal_add_disjunction(journal);
+  sd_journal_add_match(journal, match2, 0);
+
+  bool found = false;
+  if (sd_journal_seek_tail(journal) >= 0) {
+      // Walk back up to 200 steps to find the start of our current lifecycle
+      for (int i = 0; i < MAX_SEARCH_LINES; i++) {
+          int r = sd_journal_previous(journal);
+          if (r <= 0) break; // Reached end of log file or error
+          
+          found = true; 
+          break; 
+      }
+  }
+
+  // 2. Clear the UUID filters and cleanly bind to ONLY our daemon's logs
+  sd_journal_flush_matches(journal);
+  char filter[84];
+  snprintf(filter, sizeof(filter), "SYSLOG_IDENTIFIER=%s", _aquachemd_data->self);
+  sd_journal_add_match(journal, filter, 0);
+
+  // 3. Adjust the cursor position based on search results
+  if (found) {
+      // We are sitting exactly ON the startup message.
+      // Step back one line within our daemon's filter context so that 
+      // the main loop's first sd_journal_next() lands directly back ON it.
+      sd_journal_previous(journal);
+  }
+  else {
+      // Fallback: If no markers found, seek to the tail of our daemon's logs
+      // and back up by 11 lines so that the first next() returns line #10.
+      sd_journal_seek_tail(journal);
+      sd_journal_previous_skip(journal, (uint64_t)(SD_FALLBACK_LINES + 1));
+  }
+}
+
+bool broadcast_systemd_logmessages(bool acdMgrActive)
+{
+  static sd_journal *journal = NULL;
+  static bool active = false;
+  static char *cursor = NULL;
+  
+  // CRITICAL: Tracks if this is the very first UI connection since the binary launched
+  static bool first_connection_since_boot = true; 
+  char json_msg[WS_LOG_LENGTH];
+
+  // Handle Deactivation Request (All UI tabs closed / WS disconnected)
+  if (!acdMgrActive)
+  {
+    if (active)
+    {
+      _reset_journal_state(&journal, &active);
+
+      if (cursor)
+      {
+        free(cursor);
+        cursor = NULL;
+      }
+    }
+    return true;
+  }
+
+  // Initialization / Re-opening upon a new WebSocket connection
+  if (!active)
+  {
+    journal = open_journal();
+    if (!journal)
+    {
+      build_logmsg_json(json_msg, sizeof(json_msg), LOG_ERR, MSG_JOURNAL_OPEN_FAILED, strlen(MSG_JOURNAL_OPEN_FAILED));
+      ws_send_logmsg(_mgr.conns, json_msg);
+      return false;
+    }
+
+    if (cursor)
+    {
+      // Resuming mid-stream (e.g., transient network hiccup, cursor exists)
+      sd_journal_seek_cursor(journal, cursor);
+      sd_journal_next(journal);
+    }
+    else
+    {
+      // Fresh connection established (cursor is NULL)
+      if (first_connection_since_boot)
+      {
+        // SCENARIO 2: Daemon just booted or completed an upgrade.
+        // Trace back to the boot sequence origin and stream forward.
+        find_aquachemd_lifecycle_start(journal);
+        first_connection_since_boot = false; // Defuse so subsequent connections use Scenario 1
+      }
+      else
+      {
+        // SCENARIO 1: Standard operation/UI Refresh. 
+        // Just grab the last 10 lines of our daemon logs to confirm the stream is alive.
+        sd_journal_flush_matches(journal);
+        char filter[84];
+        snprintf(filter, sizeof(filter), "SYSLOG_IDENTIFIER=%s", _aquachemd_data->self);
+        sd_journal_add_match(journal, filter, 0);
+        
+        sd_journal_seek_tail(journal);
+        sd_journal_previous_skip(journal, SD_FALLBACK_LINES + 1);
+      }
+    }
+    active = true;
+  }
+
+  // Sync with disk for live changes BEFORE reading
+  int status = sd_journal_process(journal);
+  if (status == SD_JOURNAL_INVALIDATE)
+  {
+    _reset_journal_state(&journal, &active);
+    return true;
+  }
+
+  // Process and Stream Entries (handles both historical catches and live lines)
+  int rtn;
+  while ((rtn = sd_journal_next(journal)) > 0)
+  {
+    const void *log_data, *pri_data;
+    size_t log_len, pri_len;
+
+    if (sd_journal_get_data(journal, "MESSAGE", &log_data, &log_len) >= 0 &&
+        sd_journal_get_data(journal, "PRIORITY", &pri_data, &pri_len) >= 0)
+    {
+      build_logmsg_json(json_msg, sizeof(json_msg), atoi((const char *)pri_data + 9), (const char *)log_data + 8, (int)log_len - 8);
+      ws_send_logmsg(_mgr.conns, json_msg);
+
+      if (cursor)
+        free(cursor);
+      sd_journal_get_cursor(journal, &cursor);
+    }
+  }
+
+  if (rtn < 0)
+  {
+    _reset_journal_state(&journal, &active);
+    return false;
+  }
+
+  return true;
+}
+
+/*
 bool broadcast_systemd_logmessages(bool acdMgrActive)
 {
   static sd_journal *journal = NULL;
@@ -1462,7 +1623,8 @@ bool broadcast_systemd_logmessages(bool acdMgrActive)
     else
     {
       sd_journal_seek_tail(journal);
-      find_aquachemd_startup_in_journal(journal, 10);
+      //find_aquachemd_startup_in_journal(journal, 10);
+      find_aquachemd_lifecycle_start(journal);
     }
     active = true;
   }
@@ -1512,5 +1674,5 @@ bool broadcast_systemd_logmessages(bool acdMgrActive)
 
   return true;
 }
-
+*/
 #endif // USE_SYSTEMD
