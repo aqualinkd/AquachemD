@@ -164,6 +164,7 @@ check_can_upgrade() {
   if ! command -v curl &>/dev/null; then output+="Command 'curl' not found\n"; fi
   if ! command -v dpkg &>/dev/null; then output+="Command 'dpkg' not found\n"; fi
   if ! command -v systemctl &>/dev/null; then output+="Command 'systemctl' not found\n"; fi
+  if ! command -v systemd-run &>/dev/null; then output+="Command 'systemd-run' not found\n"; fi
   
   if mount | grep " / " | grep -q "(ro,"; then
     if mount / -o remount,rw &>/dev/null; then mount / -o remount,ro &>/dev/null; else output+="Root filesystem is readonly & failed to remount rw"; fi

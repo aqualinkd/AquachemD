@@ -71,6 +71,7 @@ void intHandler(int sig_num)
 {
 
   if (sig_num == SIGRUPGRADE) {
+    LOG(LOG_NOTICE, "Starting upgrade\n");
     if (! start_upgrade()) {
       LOG(LOG_ERR, "%s upgrade failed!\n",AQUACHEMD_SHORT_NAME);
     }
@@ -637,7 +638,7 @@ int main(int argc, char *argv[])
         case ACD_TYPE_GPIO_COND:
         case ACD_TYPE_MQTT_VALUE:
         break;
-        
+
         default:
           LOG(LOG_WARNING, "Unknown sensor type for sensor '%s'\n", key->label);
       }
@@ -685,8 +686,8 @@ char *_upgrade_version = NULL;
 
 void set_upgrade_version(char *version)
 {
-  _upgrade_version = malloc( (sizeof(char*) * strlen(version)) + 1);
-  snprintf(_upgrade_version, strlen(version), version);
+  _upgrade_version = malloc( (sizeof(char*) * strlen(version)) + 2);
+  snprintf(_upgrade_version, strlen(version)+1, version);
 }
 
 bool start_upgrade(const char *version)
@@ -695,6 +696,8 @@ bool start_upgrade(const char *version)
     pid_t pid_curl, pid_bash;
     int status_curl, status_bash;
     char url[256];
+
+    LOG(LOG_NOTICE, "Configuring upgrade pipeline!\n");
 
     // Format target GitHub API URL using our repo path configuration
     snprintf(url, sizeof(url), "https://api.github.com/repos/%s/contents/release/%s", AQUACHEMD_REPO,AQUACHEMD_REMOTE_INSTALL);

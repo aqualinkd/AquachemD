@@ -1161,7 +1161,8 @@ bool network_service(struct mg_mgr *mgr, struct aquachemdata *acdata) {
 
   signal(SIGTERM, net_signal_handler);
   signal(SIGINT, net_signal_handler);
-  //signal(SIGRESTART, net_signal_handler);
+  signal(SIGRESTART, net_signal_handler);
+  signal(SIGRUPGRADE, net_signal_handler);
   setvbuf(stdout, NULL, _IOLBF, 0);
   setvbuf(stderr, NULL, _IOLBF, 0);
   
