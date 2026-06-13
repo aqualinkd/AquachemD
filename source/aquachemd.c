@@ -69,15 +69,6 @@ bool start_upgrade();
 
 void intHandler(int sig_num)
 {
-
-  if (sig_num == SIGRUPGRADE) {
-    LOG(LOG_NOTICE, "Starting upgrade\n");
-    if (! start_upgrade()) {
-      LOG(LOG_ERR, "%s upgrade failed!\n",AQUACHEMD_SHORT_NAME);
-    }
-    return; // Let the upgrade process terminate us.
-  }
-
   /*******************
    * 
    * safety guard so the stop task can't be skipped if the process is killed mid-dose. 
@@ -92,6 +83,14 @@ void intHandler(int sig_num)
         LOG(LOG_ERR,"GPIO Failed, manually turn %s off\n", curr->label);
       }
     }
+  }
+
+  if (sig_num == SIGRUPGRADE) {
+    LOG(LOG_NOTICE, "Starting upgrade\n");
+    if (! start_upgrade()) {
+      LOG(LOG_ERR, "%s upgrade failed!\n",AQUACHEMD_SHORT_NAME);
+    }
+    return; // Let the upgrade process terminate us.
   }
 
   if (sig_num == SIGRESTART) {
@@ -354,6 +353,10 @@ int main(int argc, char *argv[])
   // Test if to use systemd/journal or not.
   init_logging_backend();
 
+  #ifdef USE_SYSTEMD
+  sd_notify(0, "READY=1");
+  #endif // USE_SYSTEMD
+
   LOG_STARTUP_EVENT();
   //FORCE_LOG(LOG_NOTICE, "Starting %s (%s) v%s\n", AQUACHEMD_NAME, AQUACHEMD_SHORT_NAME, AQUACHEMD_VERSION);
 
@@ -412,11 +415,6 @@ int main(int argc, char *argv[])
   }
 
   start_gpio_monitor(&acddata);
-
-  // --- EVERYTHING IS READY ---
-  #ifdef USE_SYSTEMD
-  sd_notify(0, "READY=1");
-  #endif // USE_SYSTEMD
 
   // ── Normal mode — loop reading sensors ──────────────────────────────────────
 
@@ -690,7 +688,54 @@ void set_upgrade_version(char *version)
   snprintf(_upgrade_version, strlen(version)+1, version);
 }
 
+
+
 bool start_upgrade(const char *version)
+{
+    pid_t pid;
+    char cmd[512];
+
+    LOG(LOG_NOTICE, "Configuring upgrade command!\n");
+
+    // 1. Build a self-contained shell command string
+    // This downloads the file to /tmp, closes the network connection, 
+    // runs it detached using nohup, redirects output, and sends it to the background.
+    snprintf(cmd, sizeof(cmd),
+             "curl -fsSl -H 'Accept: application/vnd.github.raw' "
+             "\"https://api.github.com/repos/%s/contents/release/%s\" -o /tmp/%s && "
+             "chmod +x /tmp/%s && "
+             "nohup /tmp/%s %s > /dev/null 2>&1 &",
+             AQUACHEMD_REPO, AQUACHEMD_REMOTE_INSTALL, AQUACHEMD_REMOTE_INSTALL,
+             AQUACHEMD_REMOTE_INSTALL, AQUACHEMD_REMOTE_INSTALL,
+             (_upgrade_version ? _upgrade_version : ""));
+
+    LOG(LOG_NOTICE, "Initiating daemon upgrade script (Target: %s)...", 
+        _upgrade_version ? _upgrade_version : "latest");
+
+    // 2. Single fork to hand execution off to the system shell
+    pid = fork();
+    if (pid == -1) {
+        LOG(LOG_ERR, "Upgrade error: fork failed");
+        return false;
+    }
+
+    if (pid == 0) { // Child
+        setsid(); // Escape the initial cgroup session completely
+        
+        // Execute via standard shell processor
+        char *args[] = {"/bin/sh", "-c", cmd, NULL};
+        execvp(args[0], args);
+        _exit(127);
+    }
+
+    // Parent clean return
+    LOG(LOG_NOTICE, "Upgrade pipeline completely detached. Handed over to system shell.");
+    return true;
+}
+
+
+
+bool OLD_start_upgrade_OLD(const char *version)
 {
     int pipe_curl_to_bash[2];
     pid_t pid_curl, pid_bash;
@@ -753,6 +798,8 @@ bool start_upgrade(const char *version)
 
     if (pid_bash == 0)
     { // Inside Child Process (bash)
+        setsid(); // CRITICAL: Escape the systemd cgroup so systemctl stop doesn't kill this script
+
         close(pipe_curl_to_bash[1]); // Close unused write end
         if (dup2(pipe_curl_to_bash[0], STDIN_FILENO) == -1) {
             _exit(EXIT_FAILURE);
@@ -775,12 +822,19 @@ bool start_upgrade(const char *version)
      * A SIGTERM will hit this daemon, stopping it cleanly so the installer can replace it.
      */
 
+    /*. Because we use setsid(); in the above IF, don;t wait
     // Wait for curl download phase to finalize
     if (waitpid(pid_curl, &status_curl, 0) == -1)
     {
         LOG(LOG_ERR, "Upgrade error: waitpid failed (curl)");
         return false;
     }
+    */
+    LOG(LOG_NOTICE, "Upgrade script detached and running in background.");
+    
+    // Return immediately to the main loop. 
+    // The bash script is now the captain.
+    return true;
 
     // If curl explicitly failed (e.g., 404, network drop), stop bash from hanging on empty stdin
     if (WIFEXITED(status_curl) && WEXITSTATUS(status_curl) != 0) {

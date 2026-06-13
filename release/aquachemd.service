@@ -11,8 +11,16 @@ ExecStart=/usr/local/bin/aquachemd -c /etc/aquachemd.conf
 WorkingDirectory=/usr/local/bin
 # ExecStopPost=/usr/bin/cleanup_gpio.sh /etc/aquachemd.conf
 
-# Needed for upgrade process
+# Logging: Forces early stdout into the journal 
+# before sd_notify() is called.
+StandardOutput=journal
+StandardError=journal
+
+# Set kill modes for upgrade and service restart
 KillMode=process
+KillSignal=SIGTERM
+
+TimeoutStopSec=15s
 
 # Automatically restart if the process crashes
 Restart=on-failure
