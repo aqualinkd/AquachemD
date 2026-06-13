@@ -1,4 +1,4 @@
-name: ** Publish Release **
+name: "   Publish Release" # spaces Pushes it to the top, but spaces hide in the UI
 
 on:
   workflow_dispatch:
