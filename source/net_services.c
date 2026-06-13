@@ -536,8 +536,8 @@ void action_websocket_request(struct mg_connection *nc, struct mg_ws_message *wm
   float val;
   char *msg = NULL;
   //char message[2048];
-  char message[8192];
-  //char message[10000];
+  //char message[8192];
+  char message[16384];
 
   log_mg_str(LOG_DEBUG, "WS: Websocket message", wm->data);
 
@@ -568,6 +568,10 @@ void action_websocket_request(struct mg_connection *nc, struct mg_ws_message *wm
       break;
     case uConfig:
       build_aquachem_config_json(message, sizeof(message));
+      ws_send(nc, message);
+      break;
+    case uSaveConfig:
+      save_aquachem_config_json((char *)wm->data.buf, wm->data.len, message, sizeof(message), _aquachemd_data);
       ws_send(nc, message);
       break;
     case uSaveWebConfig:
@@ -675,8 +679,13 @@ bool action_mqtt_sensor_message(acd_key_t *sensor, struct mg_mqtt_message *mqtt_
 {
   LOG(LOG_INFO, "MQTT: Received message for sensor '%s': %.*s\n", sensor->label, mqtt_msg->data.len, mqtt_msg->data.buf);
   
-  if (sensor->type == ACD_TYPE_MQTT_TEMP) {
-    float new_value = strtof(mqtt_msg->data.buf, NULL);
+  // Value could be string or int.  We can use target_value to store the string, since that's only used for a MQTT condition.
+  if (sensor->data.mqtt.target_value) free(sensor->data.mqtt.target_value);
+  sensor->data.mqtt.target_value = strndup(mqtt_msg->data.buf, mqtt_msg->data.len);
+
+  if (sensor->type == ACD_TYPE_MQTT_TEMP || sensor->type == ACD_TYPE_MQTT_VALUE) {
+    // Known float or int value.
+    float new_value = strtof(sensor->data.mqtt.target_value, NULL);
     LOG(LOG_INFO, "MQTT: Updating sensor '%s' value to %.2f\n", sensor->label, new_value);
     //sensor->state = ACD_LED_ON;
     ASSIGN_IF_CHANGED(sensor->value, new_value, _aquachemd_data->is_dirty, sensor->is_dirty); // Mark data as dirty so it gets sent to clients right away instead of waiting for next sensor read. 
@@ -834,7 +843,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
 
       // Any MQTT sensors we need to subscribe to?
       for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
-        if (curr->type == ACD_TYPE_MQTT_TEMP || curr->type == ACD_TYPE_MQTT_COND) {
+        if (curr->type == ACD_TYPE_MQTT_TEMP || curr->type == ACD_TYPE_MQTT_COND || curr->type == ACD_TYPE_MQTT_VALUE) {
           memset(&sub_opts, 0, sizeof(sub_opts));
           sub_opts.topic = mg_str(curr->data.mqtt.topic);
           sub_opts.qos = qos;
@@ -868,7 +877,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
     } else {
       //LOG(LOG_DEBUG, "MQTT: received, %.*s %.*s\n", mqtt_msg->topic.len, mqtt_msg->topic.buf, mqtt_msg->data.len, mqtt_msg->data.buf);
       for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
-        if (curr->type == ACD_TYPE_MQTT_TEMP || curr->type == ACD_TYPE_MQTT_COND) {
+        if (curr->type == ACD_TYPE_MQTT_TEMP || curr->type == ACD_TYPE_MQTT_COND || curr->type == ACD_TYPE_MQTT_VALUE) {
           if (strncasecmp(mqtt_msg->topic.buf, curr->data.mqtt.topic, mqtt_msg->topic.len) == 0) {
             LOG(LOG_DEBUG, "MQTT: received (msg_id: %d), %.*s checking\n", mqtt_msg->id, mqtt_msg->topic.len, mqtt_msg->topic.buf);
             if (IS_CONDITION(curr->type)) {

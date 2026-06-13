@@ -413,6 +413,20 @@ float temp_c_to_k(float celsius)
   return celsius + 273.15;
 }
 
+uint8_t parse_pump_type(char *str)
+{
+  str = cleanwhitespace(str);
+  if (strcasecmp(str, "ph") == 0 || strcasecmp(str, "acid") == 0) {
+    return PH_PUMP;
+  }
+  return ORP_PUMP;
+}
+
+const char *pump_type_to_str(uint8_t val)
+{
+  //return (val == PH_PUMP) ? "pH" : "ORP";
+  return (val & PH_PUMP) ? "pH" : "ORP";
+}
 
 /*
 uint8_t parse_statistics(const char *str)

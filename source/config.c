@@ -128,13 +128,15 @@ void clear_staging() {
     _staging.value = 0;
     _staging.value2 = 0;
     _staging.value3 = 0;
-    _staging.pending_type = ACD_TYPE_MASTER;
+    _staging.pending_type = ACD_TYPE_NONE;
     _staging.flags = 0;
     _staging.is_global = true;
 }
 
 void action_staging() {
     if (!_staging.label) return;
+
+    LOG(LOG_DEBUG,"Adding device type %d\n",_staging.pending_type);
 
     switch (_staging.pending_type) {
         case ACD_TYPE_EZO_PH:
@@ -160,6 +162,9 @@ void action_staging() {
             break;
         case ACD_TYPE_SYSFS_VALUE:
             add_sensor_sysfs(&_staging);
+            break;
+        case ACD_TYPE_MQTT_VALUE:
+            add_sensor_mqtt(&_staging);
             break;
         case ACD_TYPE_EZO_PMP:
             LOG(LOG_ERR, "EZO Pump not supported yet, Ignoring %s", _staging.label);
@@ -232,6 +237,8 @@ bool parse_dose_range(runtime_range_t *steps, uint8_t *count, const char *value,
 bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
     value = cleanwhitespace(value);
 
+    LOG(LOG_DEBUG,"Parsing config parm %s\n",param);
+
     for (int i = 0; i < CFG_PARAM_COUNT; i++) {
         if (strncasecmp(param, _cfgParams[i].name, strlen(_cfgParams[i].name)) == 0) {
             if (_cfgParams[i].metadata != NULL && strncasestr(_cfgParams[i].metadata, value, STR_FULL_LENGTH) == NULL) {
@@ -255,6 +262,7 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 if (strstr(param, "_label") != NULL) {
                     action_staging();
                     clear_staging();
+                    LOG(LOG_DEBUG,"Start new device %s\n",value);
                     _staging.label = strdup(value);
                 }
                 else if (strstr(param, "_type")) {
@@ -263,21 +271,23 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                         else if (strstr(param, "orp_sensor")) {_staging.pending_type = ACD_TYPE_EZO_ORP;  _staging.address = EZO_ORP_ADDR;}
                         else if (strstr(param, "temp_sensor")){_staging.pending_type = ACD_TYPE_EZO_TEMP; _staging.address = EZO_RTD_ADDR;}
                         else if (strstr(param, "prs_sensor")) {_staging.pending_type = ACD_TYPE_EZO_PRS;  _staging.address = EZO_PRS_ADDR;}
-                        else if (strstr(param, "doser")) {
+                        else if (strstr(param, "doser_type")) {
                             _staging.pending_type = ACD_TYPE_EZO_PMP;
                             _staging.address = EZO_PMP_ADDR;
-                            if (strncasecmp(param, "ph", 2) == 0) setMASK(_staging.flags, PH_PUMP);
-                            else if (strncasecmp(param, "orp", 2) == 0) setMASK(_staging.flags, ORP_PUMP);
+                            setMASK(_staging.flags, parse_pump_type(value));
+                            //if (strncasecmp(param, "ph", 2) == 0) setMASK(_staging.flags, PH_PUMP);
+                            //else if (strncasecmp(param, "orp", 2) == 0) setMASK(_staging.flags, ORP_PUMP);
                         }
                     } 
                     else if (strcasecmp(value, "d1w") == 0) _staging.pending_type = ACD_TYPE_D1W_TEMP;
                     else if (strcasecmp(value, "mqtt") == 0) _staging.pending_type = ACD_TYPE_MQTT_TEMP;
-                    else if (strcasecmp(value, "gpio") == 0) {
-                        if (strstr(param, "doser")) {
+                    else if (strcasecmp(value, "gpio") == 0) {}
+                    else if (strstr(param, "doser_type")) {
                             _staging.pending_type = ACD_TYPE_GPIO_PMP;
-                            if (strncasecmp(param, "ph", 2) == 0) setMASK(_staging.flags, PH_PUMP);
-                            else if (strncasecmp(param, "orp", 2) == 0) setMASK(_staging.flags, ORP_PUMP);
-                        }
+                            setMASK(_staging.flags, parse_pump_type(value));
+                            //if (strncasecmp(param, "ph", 2) == 0) setMASK(_staging.flags, PH_PUMP);
+                            //else if (strncasecmp(param, "orp", 2) == 0) setMASK(_staging.flags, ORP_PUMP);
+                        
                     }
                 }
                 else if (strncasecmp(param, "mqtt_condition_topic", 20) == 0) {
@@ -319,6 +329,11 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                          strstr(param, "_sensor_scope_global")) {
                     _staging.is_global = parse_bool(value);
                 }
+                else if (strncasecmp(param, "mqtt_sensor_topic", 17) == 0) {
+                    if (_staging.topic_path) free(_staging.topic_path);
+                    _staging.topic_path = strdup(value);
+                    _staging.pending_type = ACD_TYPE_MQTT_VALUE;
+                }
                 else if (strncasecmp(param, "gpio_condition_pin_mode", 23) == 0) {
                     _staging.pin_mode = parse_gpio_active(value);
                     _staging.pending_type = ACD_TYPE_GPIO_COND;
@@ -327,23 +342,26 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     _staging.pin_state = parse_gpio_req(value);
                     _staging.pending_type = ACD_TYPE_GPIO_COND;
                 }
-                else if (strstr(param, "doser_pin_mode")) {
-                    _staging.pin_mode = parse_gpio_active(value);
+                else if (strncasecmp(param, "gpio_condition_pin", 18) == 0) {
+                    _staging.pin = (int)strtoul(value, NULL, 10);
+                    _staging.pending_type = ACD_TYPE_GPIO_COND;
                 }
-                else if (strstr(param, "doser_required_state")) {
+                else if (strncasecmp(param, "gpio_doser_required_state", 25) == 0) {
                     _staging.pin_state = parse_gpio_req(value);
                 }
-                else if (strstr(param, "doser_ml_per_second")) {
-                    _staging.value = strtof(value, NULL);
+                else if (strncasecmp(param, "gpio_doser_pin_mode", 19) == 0) {
+                    _staging.pin_mode = parse_gpio_active(value);
                 }
-                else if (strncasecmp(param, "gpio_condition_pin", 18) == 0 || strstr(param, "doser_pin")) {
+                else if (strncasecmp(param, "gpio_doser_pin", 14) == 0) {
                     _staging.pin = (int)strtoul(value, NULL, 10);
-                    if (strncasecmp(param, "gpio_condition", 14) == 0) _staging.pending_type = ACD_TYPE_GPIO_COND;
                 }
                 else if (strncasecmp(param, "mqtt_condition_value", 20) == 0) {
                     if (_staging.char_value) free(_staging.char_value);
                     _staging.char_value = strdup(value);
                     _staging.pending_type = ACD_TYPE_MQTT_COND;
+                }   
+                else if (strncasecmp(param, "gpio_doser_ml_per_second", 24) == 0) {
+                    _staging.value = strtof(value, NULL);
                 }
                 else if (strstr(param, "condition_met_delay")) {
                     _staging.value = strtof(value, NULL);
@@ -439,21 +457,178 @@ void parse_config_file(struct aquachemdata *acdata) {
 }
 
 
-/*
 
-THIS WILL CORE DUMP / FAIL.   Need to check 
-if (_cfgParams[i].config_mask & CFG_MULTIPLE) {
-  continue / break / don;t evaluate
+/**
+ * Processes incoming JSON from the Web UI, updates internal memory safely, 
+ * rebuilds the hardware definitions, and saves to the config file.
+ * * @param inBuf   Incoming JSON string
+ * @param inSize  Length of incoming JSON string
+ * @param outBuf  Buffer to write the success/error JSON response
+ * @param outSize Max size of the output buffer
+ * @param acdata  Pointer to the main aquachemdata structure
+ * @return 0 on success, -1 on failure
+ */
+int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int outSize, struct aquachemdata *acdata) {
+    cJSON *root = cJSON_ParseWithLength(inBuf, inSize);
+    if (!root) {
+        LOG(LOG_ERR, "Failed to parse incoming config JSON.");
+        snprintf(outBuf, outSize, "{\"status\":\"error\",\"message\":\"Invalid JSON payload.\"}");
+        return -1;
+    }
+
+    // 1. FREE THE OLD HARDWARE LINKED LIST
+    // We must safely remove the existing custom blocks to prevent memory leaks.
+    acd_key_t *curr = _acdconfig_.keys;
+    while (curr != NULL) {
+        acd_key_t *next = curr->next;
+        if (curr->label) free(curr->label);
+        if (curr->ID) free(curr->ID);
+        
+        if (curr->type == ACD_TYPE_MQTT_COND || curr->type == ACD_TYPE_MQTT_TEMP) {
+            if (curr->data.mqtt.topic) free(curr->data.mqtt.topic);
+            if (curr->data.mqtt.target_value) free(curr->data.mqtt.target_value);
+        }
+        if (curr->type == ACD_TYPE_SYSFS_VALUE) {
+            if (curr->data.sysfs.regex_pattern) free(curr->data.sysfs.regex_pattern);
+        }
+        
+        free(curr);
+        curr = next;
+    }
+    _acdconfig_.keys = NULL;
+    
+    // Disconnect the daemon's pointer before we rebuild
+    if (acdata && acdata->keys) {
+        acdata->keys->next = NULL;
+    }
+
+    // 2. PROCESS STANDARD GLOBAL FIELDS
+    cJSON *fields = cJSON_GetObjectItem(root, "fields");
+    if (cJSON_IsArray(fields)) {
+        // Reset dynamic array counts before we repopulate them
+        _acdconfig_.ph_step_count = 0;
+        _acdconfig_.orp_step_count = 0;
+
+        cJSON *field;
+        cJSON_ArrayForEach(field, fields) {
+            cJSON *k = cJSON_GetObjectItem(field, "key");
+            cJSON *v = cJSON_GetObjectItem(field, "value");
+            cJSON *t = cJSON_GetObjectItem(field, "type");
+            
+            if (!k || !v || !cJSON_IsString(k)) continue;
+            
+            // Handle array_text (Dosing ranges)
+            if (t && cJSON_IsString(t) && strcmp(t->valuestring, "array_text") == 0) {
+                if (cJSON_IsArray(v)) {
+                    cJSON *arr_item;
+                    cJSON_ArrayForEach(arr_item, v) {
+                        if (cJSON_IsString(arr_item)) {
+                            setConfigValue(acdata, k->valuestring, arr_item->valuestring);
+                        }
+                    }
+                }
+            } 
+            // Handle all other standard types
+            else {
+                char val_str[256] = {0};
+                if (cJSON_IsString(v)) {
+                    snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
+                } else if (cJSON_IsNumber(v)) {
+                    if (v->valueint == v->valuedouble) {
+                        snprintf(val_str, sizeof(val_str), "%d", v->valueint);
+                    } else {
+                        snprintf(val_str, sizeof(val_str), "%.6g", v->valuedouble); // %g prevents trailing zeroes
+                    }
+                } else if (cJSON_IsBool(v)) {
+                    snprintf(val_str, sizeof(val_str), "%s", cJSON_IsTrue(v) ? "true" : "false");
+                }
+                
+                // Let the native parser handle allocations and assignments
+                setConfigValue(acdata, k->valuestring, val_str);
+            }
+        }
+    }
+
+    // 3. PROCESS CUSTOM HARDWARE BLOCKS
+    cJSON *blocks = cJSON_GetObjectItem(root, "custom_blocks");
+    if (cJSON_IsArray(blocks)) {
+        cJSON *block;
+        cJSON_ArrayForEach(block, blocks) {
+            cJSON *label = cJSON_GetObjectItem(block, "label");
+            cJSON *type_id = cJSON_GetObjectItem(block, "block_type_id");
+            cJSON *b_fields = cJSON_GetObjectItem(block, "fields");
+
+            // Prep the staging area
+            clear_staging();
+            if (label && cJSON_IsString(label) && strlen(label->valuestring) > 0) {
+                _staging.label = strdup(label->valuestring);
+            } else {
+                _staging.label = strdup("Unknown");
+            }
+            
+            if (type_id && cJSON_IsNumber(type_id)) {
+                _staging.pending_type = (acd_type_t)type_id->valueint;
+            } else {
+                _staging.pending_type = ACD_TYPE_NONE;
+            }
+
+            // Feed block fields through the parser
+            if (cJSON_IsArray(b_fields)) {
+                cJSON *fld;
+                cJSON_ArrayForEach(fld, b_fields) {
+                    cJSON *k = cJSON_GetObjectItem(fld, "key");
+                    cJSON *v = cJSON_GetObjectItem(fld, "value");
+                    if (!k || !v || !cJSON_IsString(k)) continue;
+
+                    char val_str[256] = {0};
+                    if (cJSON_IsString(v)) {
+                        snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
+                    } else if (cJSON_IsNumber(v)) {
+                        if (v->valueint == v->valuedouble) {
+                            snprintf(val_str, sizeof(val_str), "%d", v->valueint);
+                        } else {
+                            snprintf(val_str, sizeof(val_str), "%.6g", v->valuedouble);
+                        }
+                    } else if (cJSON_IsBool(v)) {
+                        snprintf(val_str, sizeof(val_str), "%s", cJSON_IsTrue(v) ? "true" : "false");
+                    }
+                    
+                    setConfigValue(acdata, k->valuestring, val_str);
+                }
+            }
+            
+            // Build and link the new node
+            action_staging();
+        }
+    }
+
+    // 4. RE-LINK TO MAIN STRUCT & SAVE
+    if (acdata && acdata->keys) {
+        acdata->keys->next = _acdconfig_.keys;
+    }
+
+    check_print_config (acdata);
+
+    if (write_config_file(acdata)) {
+        snprintf(outBuf, outSize, "{\"status\":\"success\",\"message\":\"Configuration saved successfully.\"}");
+        LOG(LOG_NOTICE, "Configuration updated via Web UI and saved to disk.");
+    } else {
+        snprintf(outBuf, outSize, "{\"status\":\"error\",\"message\":\"Failed to write config file to disk.\"}");
+        LOG(LOG_ERR, "Web UI config update failed during disk write.");
+    }
+
+    cJSON_Delete(root);
+    return 0;
 }
 
-*/
+
 bool write_config_file(struct aquachemdata *acdata) {
     FILE *fp = fopen(_acdconfig_.config_file, "w");
     if (fp == NULL) return false;
 
     char *lastName = NULL;
     for (int i = 0; i < CFG_PARAM_COUNT; i++) {
-        //if (_cfgParams[i].config_mask & (CFG_HIDE | CFG_MULTIPLE)) continue;
+        // Skip dynamic multiples (handled below)
         if (_cfgParams[i].config_mask & CFG_MULTIPLE) continue;
 
         if (lastName != NULL && lastName[0] != _cfgParams[i].name[0]) {
@@ -501,7 +676,8 @@ bool write_config_file(struct aquachemdata *acdata) {
         }
     }
 
-    /* --- Sensors Section --- */
+    /* --- Dynamic Sensors & Conditions Section --- */
+    char stat_buf[32];
     for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
         fprintf(fp, "\n");
         switch (curr->type) {
@@ -509,39 +685,82 @@ bool write_config_file(struct aquachemdata *acdata) {
                 fprintf(fp, "mqtt_condition_label=%s\n", curr->label);
                 fprintf(fp, "mqtt_condition_topic=%s\n", curr->data.mqtt.topic);
                 fprintf(fp, "mqtt_condition_value=%s\n", curr->data.mqtt.target_value);
+                fprintf(fp, "mqtt_condition_scope_global=%s\n", curr->scope == ACD_ACTION_BLOCK ? "true" : "false");
+                fprintf(fp, "mqtt_condition_met_delay=%d\n", curr->delay_on);
                 break;
             case ACD_TYPE_GPIO_COND:
                 fprintf(fp, "gpio_condition_label=%s\n", curr->label);
                 fprintf(fp, "gpio_condition_pin=%d\n", curr->data.gpio.pin);
                 fprintf(fp, "gpio_condition_pin_mode=%s\n", gpio_active_to_str(curr->data.gpio.active));
                 fprintf(fp, "gpio_condition_required_state=%s\n", gpio_req_to_str(curr->data.gpio.required));
+                fprintf(fp, "gpio_condition_scope_global=%s\n", curr->scope == ACD_ACTION_BLOCK ? "true" : "false");
+                fprintf(fp, "gpio_condition_met_delay=%d\n", curr->delay_on);
                 break;
             case ACD_TYPE_EZO_PH:
                 fprintf(fp, "ph_sensor_label=%s\nph_sensor_type=ezo\nph_sensor_address=0x%02x\n", curr->label, curr->data.ezo.address);
+                fprintf(fp, "ph_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
+                if (curr->stats.tau_seconds > 0) {
+                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
+                    fprintf(fp, "ph_sensor_statistics=%s\n", stat_buf);
+                }
                 break;
             case ACD_TYPE_EZO_ORP:
                 fprintf(fp, "orp_sensor_label=%s\norp_sensor_type=ezo\norp_sensor_address=0x%02x\n", curr->label, curr->data.ezo.address);
+                fprintf(fp, "orp_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
+                if (curr->stats.tau_seconds > 0) {
+                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
+                    fprintf(fp, "orp_sensor_statistics=%s\n", stat_buf);
+                }
+                break;
+            case ACD_TYPE_EZO_PRS:
+                fprintf(fp, "prs_sensor_label=%s\nprs_sensor_type=ezo\nprs_sensor_address=0x%02x\n", curr->label, curr->data.ezo.address);
+                fprintf(fp, "prs_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
+                if (curr->stats.tau_seconds > 0) {
+                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
+                    fprintf(fp, "prs_sensor_statistics=%s\n", stat_buf);
+                }
                 break;
             case ACD_TYPE_EZO_TEMP:
                 fprintf(fp, "temp_sensor_label=%s\ntemp_sensor_type=ezo\ntemp_sensor_address=0x%02x\n", curr->label, curr->data.ezo.address);
+                fprintf(fp, "temp_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
+                if (curr->stats.tau_seconds > 0) {
+                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
+                    fprintf(fp, "temp_sensor_statistics=%s\n", stat_buf);
+                }
                 break;
             case ACD_TYPE_MQTT_TEMP:
                 fprintf(fp, "temp_sensor_label=%s\ntemp_sensor_type=mqtt\ntemp_sensor_topic=%s\n", curr->label, curr->data.mqtt.topic);
+                fprintf(fp, "temp_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
+                if (curr->stats.tau_seconds > 0) {
+                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
+                    fprintf(fp, "temp_sensor_statistics=%s\n", stat_buf);
+                }
                 break;
             case ACD_TYPE_D1W_TEMP:
                 fprintf(fp, "temp_sensor_label=%s\ntemp_sensor_type=d1w\ntemp_sensor_path=%s\n", curr->label, curr->data.w1.path);
                 fprintf(fp, "temp_sensor_offset=%f\ntemp_sensor_scale=%.4f\n", curr->data.w1.offset, curr->data.w1.scale);
+                fprintf(fp, "temp_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
+                if (curr->stats.tau_seconds > 0) {
+                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
+                    fprintf(fp, "temp_sensor_statistics=%s\n", stat_buf);
+                }
+                break;
+            case ACD_TYPE_SYSFS_VALUE:
+                fprintf(fp, "sysfs_sensor_label=%s\n", curr->label);
+                fprintf(fp, "sysfs_sensor_path=%s\n", curr->data.sysfs.path);
+                fprintf(fp, "sysfs_sensor_offset=%.4f\n", curr->data.sysfs.offset);
+                fprintf(fp, "sysfs_sensor_scale=%.4f\n", curr->data.sysfs.multiplier);
+                if (curr->data.sysfs.regex_pattern) {
+                    fprintf(fp, "sysfs_sensor_regex=%s\n", curr->data.sysfs.regex_pattern);
+                }
                 break;
             case ACD_TYPE_GPIO_PMP:
-                if (curr->flags & PH_PUMP) {
-                    fprintf(fp, "ph_doser_label=%s\nph_doser_type=gpio\nph_doser_pin=%d\n", curr->label, curr->data.gpio.pin);
-                    fprintf(fp, "ph_doser_pin_mode=%s\nph_doser_required_state=%s\n", gpio_active_to_str(curr->data.gpio.active), gpio_req_to_str(curr->data.gpio.required));
-                    fprintf(fp, "ph_doser_ml_per_second=%f\n", curr->flow_rate);
-                } else {
-                    fprintf(fp, "orp_doser_label=%s\norp_doser_type=gpio\norp_doser_pin=%d\n", curr->label, curr->data.gpio.pin);
-                    fprintf(fp, "orp_doser_pin_mode=%s\norp_doser_required_state=%s\n", gpio_active_to_str(curr->data.gpio.active), gpio_req_to_str(curr->data.gpio.required));
-                    fprintf(fp, "orp_doser_ml_per_second=%f\n", curr->flow_rate);
-                }
+                fprintf(fp, "gpio_doser_label=%s\n", curr->label);
+                fprintf(fp, "gpio_doser_type=%s\n", pump_type_to_str(curr->flags));
+                fprintf(fp, "gpio_doser_pin=%d\n", curr->data.gpio.pin);
+                fprintf(fp, "gpio_doser_pin_mode=%s\n", gpio_active_to_str(curr->data.gpio.active));
+                fprintf(fp, "gpio_doser_required_state=%s\n", gpio_req_to_str(curr->data.gpio.required));
+                fprintf(fp, "gpio_doser_ml_per_second=%f\n", curr->flow_rate);
                 break;
             default: break;
         }
@@ -549,8 +768,6 @@ bool write_config_file(struct aquachemdata *acdata) {
     fclose(fp);
     return true;
 }
-
-
 
 
 
@@ -564,7 +781,6 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     // 1. GLOBAL SYSTEM PARAMETERS
     for (int i = 0; i < CFG_PARAM_COUNT; i++) {
         if (_cfgParams[i].config_mask & (CFG_HIDE | CFG_MULTIPLE)){
-          // We will allow ph_steps and orm_steps which are CFG_MULTIPLE to be handled in this block.
           if ( _cfgParams[i].value_ptr != &_acdconfig_.ph_steps &&
                _cfgParams[i].value_ptr != &_acdconfig_.orp_steps) {
             continue;
@@ -634,20 +850,17 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
         cJSON_AddItemToArray(fields, item);
     }
 
-    // 2. DYNAMIC CUSTOM HARDWARE BLOCKS (With Detailed Input Schemas)
+    // 2. DYNAMIC CUSTOM HARDWARE BLOCKS 
     cJSON *custom_blocks = cJSON_AddArrayToObject(root, "custom_blocks");
     acd_key_t *curr = _acdconfig_.keys;
     
     while (curr != NULL) {
         cJSON *block = cJSON_CreateObject();
         cJSON_AddStringToObject(block, "label", curr->label ? curr->label : "");
-        
-        // Add the primary identifiers the UI needs to group/categorize the block
         cJSON_AddNumberToObject(block, "block_type_id", (double)curr->type);
         
-        // Every block gets an internal array describing its configurable fields
         cJSON *block_fields = cJSON_AddArrayToObject(block, "fields");
-        cJSON *f_item; // Temporary object pointer for building field definitions
+        cJSON *f_item; 
         cJSON *s_item;
         char tmp_buf[32];
 
@@ -675,7 +888,13 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
                 cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_ACTION_BLOCK?true:false);
-                
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "mqtt_condition_met_delay");
+                cJSON_AddStringToObject(f_item, "type", "number");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddNumberToObject(f_item, "value", curr->delay_on);
                 cJSON_AddItemToArray(block_fields, f_item);
                 break;
 
@@ -712,6 +931,13 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
                 cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_ACTION_BLOCK?true:false);
                 cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "gpio_condition_met_delay");
+                cJSON_AddStringToObject(f_item, "type", "number");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddNumberToObject(f_item, "value", curr->delay_on);
+                cJSON_AddItemToArray(block_fields, f_item);
                 break;
 
             case ACD_TYPE_EZO_TEMP:
@@ -721,16 +947,13 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(block, "driver_type", "ezo_sensor");
                 
                 f_item = cJSON_CreateObject();
-                // Dynamically match key prefix based on sensor assignment type
                 cJSON_AddStringToObject(f_item, "key", (curr->type == ACD_TYPE_EZO_PH) ? "ph_sensor_address" : 
-                                                       (curr->type == ACD_TYPE_EZO_ORP) ? "orp_sensor_address" : "temp_sensor_address");
-                cJSON_AddStringToObject(f_item, "type", "text"); // hex addresses treated as bounded text strings
+                                                       (curr->type == ACD_TYPE_EZO_ORP) ? "orp_sensor_address" : 
+                                                       (curr->type == ACD_TYPE_EZO_PRS) ? "prs_sensor_address" : "temp_sensor_address");
+                cJSON_AddStringToObject(f_item, "type", "text"); 
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                {
-                    char addr[10];
-                    snprintf(addr, sizeof(addr), "0x%02x", curr->data.ezo.address);
-                    cJSON_AddStringToObject(f_item, "value", addr);
-                }
+                snprintf(tmp_buf, sizeof(tmp_buf), "0x%02x", curr->data.ezo.address);
+                cJSON_AddStringToObject(f_item, "value", tmp_buf);
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
@@ -758,20 +981,15 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
                 cJSON_AddItemToArray(block_fields, f_item);
 
-                //cJSON_AddStringToObject(s_item, "type", "select");
-                //cJSON_AddBoolToObject(s_item, "readonly", false);
-                //cJSON_AddItemToObject(s_item, "options", cJSON_Parse(CFG_O_STATS));
-                //cJSON_AddStringToObject(s_item, "value", statistics_to_str(curr->flags));
-                cJSON_AddStringToObject(f_item, "type", "text");
-                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(s_item, "type", "text");
+                cJSON_AddBoolToObject(s_item, "readonly", false);
                 duration_seconds_to_string(curr->stats.tau_seconds, tmp_buf, sizeof(tmp_buf));
-                cJSON_AddStringToObject(f_item, "value", tmp_buf);
+                cJSON_AddStringToObject(s_item, "value", curr->stats.tau_seconds > 0.0 ? tmp_buf : "");
                 cJSON_AddItemToArray(block_fields, s_item);
-
                 break;
 
             case ACD_TYPE_MQTT_TEMP:
-                cJSON_AddStringToObject(block, "driver_type", "mqtt_sensor");
+                cJSON_AddStringToObject(block, "driver_type", "mqtt_temp_sensor");
                 
                 f_item = cJSON_CreateObject();
                 cJSON_AddStringToObject(f_item, "key", "temp_sensor_topic");
@@ -779,6 +997,22 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", curr->data.mqtt.topic ? curr->data.mqtt.topic : "");
                 cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "temp_sensor_scope_global");
+                cJSON_AddStringToObject(f_item, "type", "boolean");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
+                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                s_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(s_item, "key", "temp_sensor_statistics");
+                cJSON_AddStringToObject(s_item, "type", "text");
+                cJSON_AddBoolToObject(s_item, "readonly", false);
+                duration_seconds_to_string(curr->stats.tau_seconds, tmp_buf, sizeof(tmp_buf));
+                cJSON_AddStringToObject(s_item, "value", curr->stats.tau_seconds > 0.0 ? tmp_buf : "");
+                cJSON_AddItemToArray(block_fields, s_item);
                 break;
 
             case ACD_TYPE_D1W_TEMP:
@@ -804,23 +1038,45 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddFloat(f_item, "value", curr->data.w1.scale);
                 cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "temp_sensor_scope_global");
+                cJSON_AddStringToObject(f_item, "type", "boolean");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
+                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                s_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(s_item, "key", "temp_sensor_statistics");
+                cJSON_AddStringToObject(s_item, "type", "text");
+                cJSON_AddBoolToObject(s_item, "readonly", false);
+                duration_seconds_to_string(curr->stats.tau_seconds, tmp_buf, sizeof(tmp_buf));
+                cJSON_AddStringToObject(s_item, "value", curr->stats.tau_seconds > 0.0 ? tmp_buf : "");
+                cJSON_AddItemToArray(block_fields, s_item);
                 break;
 
             case ACD_TYPE_GPIO_PMP:
                 cJSON_AddStringToObject(block, "driver_type", "gpio_doser");
                 
-                // Determine whether this is a pH or ORP tracking pump instance
-                bool is_ph = (curr->flags & PH_PUMP);
+                //bool is_ph = (curr->flags & PH_PUMP);
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "gpio_doser_type");
+                cJSON_AddStringToObject(f_item, "type", "select");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", pump_type_to_str(curr->flags));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_PMP_TYPE));
+                cJSON_AddItemToArray(block_fields, f_item);
                 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", is_ph ? "ph_doser_pin" : "orp_doser_pin");
+                cJSON_AddStringToObject(f_item, "key", "gpio_doser_pin");
                 cJSON_AddStringToObject(f_item, "type", "number");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddNumberToObject(f_item, "value", curr->data.gpio.pin);
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", is_ph ? "ph_doser_pin_mode" : "orp_doser_pin_mode");
+                cJSON_AddStringToObject(f_item, "key", "gpio_doser_pin_mode");
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", gpio_active_to_str(curr->data.gpio.active));
@@ -828,23 +1084,73 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", is_ph ? "ph_doser_required_state" : "orp_doser_required_state");
+                cJSON_AddStringToObject(f_item, "key", "gpio_doser_required_state");
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", gpio_req_to_str(curr->data.gpio.required));
-                //printf("***** %s required_state %s\n",curr->label, gpio_req_to_str(curr->data.gpio.required));
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_ONOFF));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", is_ph ? "ph_doser_ml_per_second" : "orp_doser_ml_per_second");
+                cJSON_AddStringToObject(f_item, "key", "gpio_doser_ml_per_second");
                 cJSON_AddStringToObject(f_item, "type", "number");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddFloat(f_item, "value", curr->flow_rate);
                 cJSON_AddItemToArray(block_fields, f_item);
                 break;
+            
+            case ACD_TYPE_SYSFS_VALUE:
+                cJSON_AddStringToObject(block, "driver_type", "sysfs_sensor");
+                
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sysfs_sensor_path");
+                cJSON_AddStringToObject(f_item, "type", "text");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", (curr->data.sysfs.path[0] != '\0') ? curr->data.sysfs.path : "");
+                cJSON_AddItemToArray(block_fields, f_item);
 
-            case ACD_TYPE_EZO_PMP: // not implimented yet
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sysfs_sensor_offset");
+                cJSON_AddStringToObject(f_item, "type", "number");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddFloat(f_item, "value", curr->data.sysfs.offset);
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sysfs_sensor_scale");
+                cJSON_AddStringToObject(f_item, "type", "number");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddFloat(f_item, "value", curr->data.sysfs.multiplier);
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sysfs_sensor_regex");
+                cJSON_AddStringToObject(f_item, "type", "text");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", (curr->data.sysfs.regex_pattern != NULL) ? curr->data.sysfs.regex_pattern : "");
+                cJSON_AddItemToArray(block_fields, f_item);         
+                break;
+
+            case ACD_TYPE_MQTT_VALUE:
+                cJSON_AddStringToObject(block, "driver_type", "mqtt_value_sensor");
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "mqgg_sensor_topic");
+                cJSON_AddStringToObject(f_item, "type", "text");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", curr->data.mqtt.topic ? curr->data.mqtt.topic : "");
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "mqtt_sensor_scope_global");
+                cJSON_AddStringToObject(f_item, "type", "boolean");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
+                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+                cJSON_AddItemToArray(block_fields, f_item);
+                break;
+
+            case ACD_TYPE_EZO_PMP: 
             case ACD_TYPE_NONE:
             case ACD_TYPE_MASTER:
                 break;
@@ -860,7 +1166,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
 
     // Define: MQTT Condition Template
     drv = cJSON_CreateObject();
-    cJSON_AddNumberToObject(drv, "block_type_id", 2);
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_MQTT_COND);
     cJSON_AddStringToObject(drv, "driver_type", "mqtt_condition");
     cJSON_AddStringToObject(drv, "default_label", "New MQTT Condition");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
@@ -872,11 +1178,32 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddItemToArray(df_arr, df_item);
     cJSON_AddItemToArray(available_drivers, drv);
 
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "mqtt_condition_value");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "mqtt_condition_scope_global");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "Yes");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "mqtt_condition_met_delay");
+    cJSON_AddStringToObject(df_item, "type", "number");
+    cJSON_AddNumberToObject(df_item, "value", 0);
+    cJSON_AddItemToArray(df_arr, df_item);
+
     // Define: GPIO Condition Template
     drv = cJSON_CreateObject();
-    cJSON_AddNumberToObject(drv, "block_type_id", 3);
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_GPIO_COND);
     cJSON_AddStringToObject(drv, "driver_type", "gpio_condition");
-    cJSON_AddStringToObject(drv, "default_label", "New Flow/Level Sensor");
+    cJSON_AddStringToObject(drv, "default_label", "New GPIO Condition");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
 
     df_item = cJSON_CreateObject();
@@ -889,20 +1216,36 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "gpio_condition_pin_mode");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddStringToObject(df_item, "value", "Active High");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"Active High\",\"Active Low\"]"));
+    //cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"Active High\",\"Active Low\"]"));
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ACTIVE));
     cJSON_AddItemToArray(df_arr, df_item);
 
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "gpio_condition_required_state");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddStringToObject(df_item, "value", "off");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"on\",\"off\"]"));
+    //cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"on\",\"off\"]"));
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ONOFF));
     cJSON_AddItemToArray(df_arr, df_item);
     cJSON_AddItemToArray(available_drivers, drv);
 
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "gpio_condition_scope_global");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "Yes");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "gpio_condition_met_delay");
+    cJSON_AddStringToObject(df_item, "type", "number");
+    cJSON_AddNumberToObject(df_item, "value", 0);
+    cJSON_AddItemToArray(df_arr, df_item);
+
     // Define: 1-Wire Temperature Template
     drv = cJSON_CreateObject();
-    cJSON_AddNumberToObject(drv, "block_type_id", 8);
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_D1W_TEMP);
     cJSON_AddStringToObject(drv, "driver_type", "d1w_sensor");
     cJSON_AddStringToObject(drv, "default_label", "New 1-Wire Sensor");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
@@ -926,28 +1269,122 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddItemToArray(df_arr, df_item);
     cJSON_AddItemToArray(available_drivers, drv);
 
-    // Define: GPIO Doser Template
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "temp_sensor_scope_global");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "No");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    // Define: MQTT Temp Sensor Template (Added)
     drv = cJSON_CreateObject();
-    cJSON_AddNumberToObject(drv, "block_type_id", 9);
-    cJSON_AddStringToObject(drv, "driver_type", "gpio_doser");
-    cJSON_AddStringToObject(drv, "default_label", "New Chemical Doser");
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_MQTT_TEMP);
+    cJSON_AddStringToObject(drv, "driver_type", "mqtt_temp_sensor");
+    cJSON_AddStringToObject(drv, "default_label", "New MQTT Temp Sensor");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
 
     df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "doser_pin");
+    cJSON_AddStringToObject(df_item, "key", "temp_sensor_topic");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "temp_sensor_scope_global");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "No");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    // Define: MQTT Value Sensor Template (Added)
+    drv = cJSON_CreateObject();
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_MQTT_VALUE);
+    cJSON_AddStringToObject(drv, "driver_type", "mqtt_value_sensor");
+    cJSON_AddStringToObject(drv, "default_label", "New MQTT Value Sensor");
+    df_arr = cJSON_AddArrayToObject(drv, "fields");
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "temp_sensor_topic");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    // Define: SYSFS Sensor Template (Added)
+    drv = cJSON_CreateObject();
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_SYSFS_VALUE);
+    cJSON_AddStringToObject(drv, "driver_type", "sysfs_sensor");
+    cJSON_AddStringToObject(drv, "default_label", "New SysFS Sensor");
+    df_arr = cJSON_AddArrayToObject(drv, "fields");
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "sysfs_sensor_path");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "sysfs_sensor_offset");
     cJSON_AddStringToObject(df_item, "type", "number");
     cJSON_AddNumberToObject(df_item, "value", 0);
     cJSON_AddItemToArray(df_arr, df_item);
 
     df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "doser_pin_mode");
+    cJSON_AddStringToObject(df_item, "key", "sysfs_sensor_scale");
+    cJSON_AddStringToObject(df_item, "type", "number");
+    cJSON_AddFloat(df_item, "value", 1.0);
+    cJSON_AddItemToArray(df_arr, df_item);
+    
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "sysfs_sensor_regex");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    // Define: GPIO Doser Template
+    drv = cJSON_CreateObject();
+    //cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_GPIO_PMP);
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_GPIO_PMP);
+    cJSON_AddStringToObject(drv, "driver_type", "gpio_doser");
+    cJSON_AddStringToObject(drv, "default_label", "New GPIO Chemical Doser");
+    df_arr = cJSON_AddArrayToObject(drv, "fields");
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "gpio_doser_type");
     cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "Active Low");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"Active High\",\"Active Low\"]"));
+    cJSON_AddStringToObject(df_item, "value", "gpio");
+    //cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"ph\",\"orp\"]"));
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ACTIVE));
     cJSON_AddItemToArray(df_arr, df_item);
 
     df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "doser_ml_per_second");
+    cJSON_AddStringToObject(df_item, "key", "gpio_doser_pin");
+    cJSON_AddStringToObject(df_item, "type", "number");
+    cJSON_AddNumberToObject(df_item, "value", 0);
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "gpio_doser_pin_mode");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "Active Low");
+    //cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"Active High\",\"Active Low\"]"));
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ACTIVE));
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "gpio_doser_required_state");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "on");
+    //cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"on\",\"off\"]"));
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ONOFF));
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "gpio_doser_ml_per_second");
     cJSON_AddStringToObject(df_item, "type", "number");
     cJSON_AddFloat(df_item, "value", 1.0);
     cJSON_AddItemToArray(df_arr, df_item);
@@ -962,8 +1399,6 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_Delete(root);
     return success;
 }
-
-
 
 
 
@@ -1067,15 +1502,16 @@ void check_print_config (struct aquachemdata *acdata)
     buffer[0] = '\0';
 
     switch (curr->type) {
-      case ACD_TYPE_MQTT_COND: type_str = "condition (MQTT)"; break;
-      case ACD_TYPE_GPIO_COND: type_str = "condition (GPIO)"; break;
-      case ACD_TYPE_EZO_TEMP:  type_str = "sensor (EZO Temp)"; break;
-      case ACD_TYPE_EZO_PH:    type_str = "sensor (EZO pH)"; break;
-      case ACD_TYPE_EZO_ORP:   type_str = "sensor (EZO ORP)"; break;
-      case ACD_TYPE_EZO_PRS:   type_str = "sensor (EZO PMP)"; break;
-      case ACD_TYPE_D1W_TEMP:  type_str = "sensor (1-Wire Temp)"; break;
-      case ACD_TYPE_MQTT_TEMP: type_str = "sensor (MQTT Temp)"; break;
+      case ACD_TYPE_MQTT_COND:   type_str = "condition (MQTT)"; break;
+      case ACD_TYPE_GPIO_COND:   type_str = "condition (GPIO)"; break;
+      case ACD_TYPE_EZO_TEMP:    type_str = "sensor (EZO Temp)"; break;
+      case ACD_TYPE_EZO_PH:      type_str = "sensor (EZO pH)"; break;
+      case ACD_TYPE_EZO_ORP:     type_str = "sensor (EZO ORP)"; break;
+      case ACD_TYPE_EZO_PRS:     type_str = "sensor (EZO PMP)"; break;
+      case ACD_TYPE_D1W_TEMP:    type_str = "sensor (1-Wire Temp)"; break;
+      case ACD_TYPE_MQTT_TEMP:   type_str = "sensor (MQTT Temp)"; break;
       case ACD_TYPE_SYSFS_VALUE: type_str = "sensor (System File)"; break;
+      case ACD_TYPE_MQTT_VALUE:  type_str = "sensor (MQTT Value)"; break;
       case ACD_TYPE_GPIO_PMP:
         type_str = "pump (GPIO)";
         snprintf(buffer, sizeof(buffer), "(%s)", role);
@@ -1158,6 +1594,7 @@ void generate_sensor_id(acd_key_t *node) {
     static int count_pmp = MASTER_ID;
     static int count_prs = MASTER_ID;
     static int count_sysfs = MASTER_ID;
+    static int count_mqtt = MASTER_ID;
 
     char buf[32]; 
     const char *prefix = "";
@@ -1189,6 +1626,10 @@ void generate_sensor_id(acd_key_t *node) {
         case ACD_TYPE_SYSFS_VALUE:
             prefix = "SYS";
             node->index = count_sysfs++;
+            break;
+         case ACD_TYPE_MQTT_VALUE:
+            prefix = "MQT";
+            node->index = count_mqtt++;
             break;
         default:
             prefix = "UNK";
@@ -1234,6 +1675,9 @@ char *generate_label(const char *base, acd_label_type_t type, const char *label)
     case ACD_LABEL_SYSFS:
       snprintf(buf, sizeof(buf), "SYS_%s", base);
       break;
+    //case ACD_LABEL_MQTT:
+    //  snprintf(buf, sizeof(buf), "MQT_%s", base);
+    //  break;
     default:
       snprintf(buf, sizeof(buf), "%s_UNKNOWN", base);
       break;
@@ -1280,15 +1724,15 @@ void add_condition_mqtt(const acd_staging_t *st) {
     if (!new_node) return;
 
     new_node->type = ACD_TYPE_MQTT_COND;
-    
+
     new_node->label = generate_label(st->topic_path, ACD_LABEL_MQTT, st->label);
     new_node->data.mqtt.topic = strdup(st->topic_path);
-    new_node->data.mqtt.target_value = strdup(st->char_value);
+    new_node->data.mqtt.target_value = strdup(st->char_value ? st->char_value : "");
     new_node->met = false; // Initial state, not met.
     new_node->scope = st->is_global ? ACD_ACTION_BLOCK : ACD_ACTION_LIMIT;
-
     new_node->delay_on = st->value; 
     
+
     generate_condition_id(new_node);
     append_to_key_list(new_node);
 }

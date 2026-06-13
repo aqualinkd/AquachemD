@@ -102,6 +102,10 @@ CFG_ENTRY( "prs_sensor_address",     keys,                   NULL,              
 CFG_ENTRY( "prs_sensor_scope_global",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_statistics",  keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
+CFG_ENTRY( "mqtt_sensor_label",       keys,                  NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "mqtt_sensor_topic",       keys,                  NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "mqtt_sensor_scope_global",keys,                  NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                CFG_O_BOOL )
+
 
 CFG_ENTRY( "temp_sensor_label",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "temp_sensor_type",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -113,7 +117,15 @@ CFG_ENTRY( "temp_sensor_scale",      keys,                   NULL,              
 CFG_ENTRY( "temp_sensor_scope_global",keys,                  NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "temp_sensor_statistics", keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
+CFG_ENTRY( "gpio_doser_label",         keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_type",          keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_pin",           keys,                   NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_address",       keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_pin_mode",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_required_state",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_ml_per_second",  keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
+/*
 CFG_ENTRY( "ph_doser_label",         keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "ph_doser_type",          keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "ph_doser_pin",           keys,                   NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -129,7 +141,7 @@ CFG_ENTRY( "orp_doser_address",      keys,                   NULL,              
 CFG_ENTRY( "orp_doser_pin_mode",     keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "orp_doser_required_state",keys,                  NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "orp_doser_ml_per_second", keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-
+*/
 
 CFG_ENTRY( "sysfs_sensor_label",      keys,                   NULL,                 CFG_STRING, CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "sysfs_sensor_path",       keys,                   NULL,                 CFG_STRING, CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -145,4 +157,5 @@ CFG_ENTRY( "sysfs_sensor_uom",        keys,                   NULL,             
 #define CFG_O_BOOL "[\"Yes\",\"No\"]"
 #define CFG_O_ONOFF "[\"on\",\"off\"]"
 #define CFG_O_ACTIVE "[\"Active High\",\"Active Low\"]"
+#define CFG_O_PMP_TYPE "[\"pH\",\"ORP\"]"
 //#define CFG_O_STATS "[\"None\",\"Daily\",\"Weekly\"]"

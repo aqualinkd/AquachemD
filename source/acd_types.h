@@ -35,13 +35,16 @@ typedef enum {
     ACD_TYPE_MQTT_TEMP,
     ACD_TYPE_D1W_TEMP,
     ACD_TYPE_SYSFS_VALUE,
+    ACD_TYPE_MQTT_VALUE,
     #define ACD_IN_FIRST ACD_TYPE_EZO_PH
     //#define ACD_IN_LAST  ACD_TYPE_D1W_TEMP
-    #define ACD_IN_LAST  ACD_TYPE_SYSFS_VALUE
+    #define ACD_IN_LAST  ACD_TYPE_MQTT_VALUE
 
 
     // Outputs (Actuators)
     ACD_TYPE_GPIO_PMP,
+    //ACD_TYPE_GPIO_PMP_PH,
+    //ACD_TYPE_GPIO_PMP_ORP,
     ACD_TYPE_EZO_PMP,
     #define ACD_OUT_FIRST ACD_TYPE_GPIO_PMP
     #define ACD_OUT_LAST  ACD_TYPE_EZO_PMP
@@ -114,18 +117,18 @@ typedef struct acd_key_t {
     uint8_t err_cnt;
     
     float value; // sensor uses for current value, pump uses for value of ph/orp when turned on.
-      
+    //acd_uom_t uom;
+
     union {
-      float flow_rate; // ml per second rate for pumps
-      uint32_t delay_on;    // condition uses for a delay before setting to on.
+      float flow_rate;      // Pumps     = ml per second rate for pumps
+      uint32_t delay_on;    // Condition = used for a delay before setting to on.
+      sensor_stats_t stats; // Sensor    = used for statics.
     };
 
     union {
       bool met;    // For conditions, met or not.
       bool ison;   // For output pump,  
     };
-
-    sensor_stats_t stats;// Only for sensors, so prime union for future.
 
     union {
         ezo_sensor_t   ezo;

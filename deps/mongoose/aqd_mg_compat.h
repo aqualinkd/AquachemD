@@ -13,6 +13,14 @@
  * CFLAGS += -include deps/mongoose/aqd_mg_compat.h
  */
 
+ /*
+ * Make sure to clean the flags on every new connection since mongoose reuses memory
+ 
+ case MG_EV_ACCEPT: 
+    // 1. Scrub reused memory block to clear ghost flags
+    nc->fn_data = NULL;
+
+ */
 
 // Mongose auto arch configure seems to silently fail without this 
 #define _GNU_SOURCE

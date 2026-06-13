@@ -847,6 +847,13 @@
   }
 
   function saveconfig(caller) {
+    _config.uri = "config/set";
+    console.log(_config);
+    send_command(_config);
+    closeconfig();
+  }
+/*
+  function saveconfig(caller) {
     var json_ordered = {
       uri: "config/set",
       values: {}
@@ -874,7 +881,7 @@
     send_command(json_ordered);
     closeconfig();
   }
-
+*/
 
 
   function closeconfig() {

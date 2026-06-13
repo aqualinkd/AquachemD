@@ -31,6 +31,9 @@ const char *gpio_active_to_str(gpio_active_t val);
 gpio_req_t parse_gpio_req(char *str);
 const char *gpio_req_to_str(gpio_req_t val);
 
+uint8_t parse_pump_type(char *str);
+const char *pump_type_to_str(uint8_t val);
+
 /*
 uint8_t parse_statistics(const char *str);
 const char *statistics_to_str(uint8_t val);

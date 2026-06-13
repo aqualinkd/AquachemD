@@ -504,6 +504,7 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
     case ACD_TYPE_MQTT_TEMP:
     case ACD_TYPE_D1W_TEMP:
     case ACD_TYPE_SYSFS_VALUE:
+    case ACD_TYPE_MQTT_VALUE:
     /*
       if (state != ACD_LED_ON && state != ACD_LED_DISABLED) {
         goodState = false;

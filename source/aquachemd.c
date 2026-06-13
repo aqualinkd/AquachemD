@@ -630,11 +630,14 @@ int main(int argc, char *argv[])
             sensor_read_error(&acddata, key);
           }
         } break;
+
         case ACD_TYPE_GPIO_PMP:
         case ACD_TYPE_EZO_PMP:
         case ACD_TYPE_MQTT_COND:
         case ACD_TYPE_GPIO_COND:
+        case ACD_TYPE_MQTT_VALUE:
         break;
+        
         default:
           LOG(LOG_WARNING, "Unknown sensor type for sensor '%s'\n", key->label);
       }
