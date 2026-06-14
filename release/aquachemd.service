@@ -20,7 +20,7 @@ StandardError=journal
 KillMode=process
 KillSignal=SIGTERM
 
-TimeoutStopSec=15s
+TimeoutStopSec=5s
 
 # Automatically restart if the process crashes
 Restart=on-failure
