@@ -13,6 +13,22 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
 void check_master(struct aquachemdata *acdata);
 
 
+void devices_emergency_stop()
+{
+  LOG(LOG_INFO,"Checking any pumps to to turned off\n");
+  // Turn off any pumps
+  for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
+    if (curr->type == ACD_TYPE_GPIO_PMP) {
+      if (relay_is_on(&curr->data.gpio)) {
+        LOG(LOG_NOTICE,"Pump %s is on, turning off\n", curr->label);
+        if (relay_off(&curr->data.gpio) == GPIO_ERROR) {
+          LOG(LOG_ERR,"GPIO Failed, manually turn %s off\n", curr->label);
+        }
+      }
+    }
+  }
+}
+
 acd_scope_t check_master_action(struct aquachemdata *acdata) {
   if (acdata->keys->scope == ACD_ACTION_BLOCK || acdata->keys->state == ACD_LED_OFF){
     return ACD_ACTION_BLOCK;

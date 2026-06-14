@@ -63,12 +63,26 @@ Usage:
 #include "gpio.h"
 #endif
 
+//pthread_t _daemon_thread_id;
+//acd_runstate_t _runstate;
+
+static acd_thread_t _thread_control = {
+    .parent_id = 0,
+    .id = 0,
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
+    .cond = PTHREAD_COND_INITIALIZER,
+    .state = ACD_STARTING
+};
+
 bool start_upgrade();
 
 //void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
 
 void intHandler(int sig_num)
 {
+  pthread_mutex_lock(&_thread_control.mutex);
+  _thread_control.state = ACD_CLEANUP;
+  pthread_mutex_unlock(&_thread_control.mutex);
   /*******************
    * 
    * safety guard so the stop task can't be skipped if the process is killed mid-dose. 
@@ -76,14 +90,10 @@ void intHandler(int sig_num)
    * 
    */
 
-  for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
-    if (curr->type == ACD_TYPE_GPIO_PMP) {
-      LOG(LOG_NOTICE,"Making sure pump %s if off\n", curr->label, curr->data.gpio.pin);
-      if (gpio_write(&curr->data.gpio, 0) == GPIO_ERROR) {
-        LOG(LOG_ERR,"GPIO Failed, manually turn %s off\n", curr->label);
-      }
-    }
-  }
+  devices_emergency_stop();
+
+  // Wake up daemon thread
+  //pthread_kill(_daemon_thread_id, SIGCLEANUPEXIT);
 
   if (sig_num == SIGRUPGRADE) {
     LOG(LOG_NOTICE, "Starting upgrade\n");
@@ -95,14 +105,18 @@ void intHandler(int sig_num)
 
   if (sig_num == SIGRESTART) {
     if (is_running_under_systemd()) {
-      LOG(LOG_WARNING, "Restarting %s!\n",AQUACHEMD_SHORT_NAME);
+      //LOG(LOG_WARNING, "Restarting %s!\n",AQUACHEMD_SHORT_NAME);
       // If we are deamonized, we need to use the system
       if(fork() == 0) {
+        setsid(); // Escape the initial cgroup session completely
         sleep(2);
+        LOG(LOG_WARNING, "Restarting %s!\n",AQUACHEMD_SHORT_NAME);
+        //LOG(LOG_NOTICE, "Starting upgrade\n");
         char *newargv[] = {"/bin/systemctl", "restart", "aquachemd", NULL};
         char *newenviron[] = { NULL };
         execve(newargv[0], newargv, newenviron);
-        exit (EXIT_SUCCESS);
+        //exit (EXIT_SUCCESS);
+        _exit(127);
       }
     } else {
       LOG(LOG_ERR, "Can't restart %s, not running as daemon!\n",AQUACHEMD_SHORT_NAME);
@@ -110,9 +124,9 @@ void intHandler(int sig_num)
     }
   }
 
-  LOG(LOG_NOTICE, "Stopping %s!\n",AQUACHEMD_SHORT_NAME);
+  LOG(LOG_NOTICE, "Received request to stop %s!\n",AQUACHEMD_SHORT_NAME);
 
-  exit(EXIT_SUCCESS);
+  //exit(EXIT_SUCCESS);
 }
 
 void setup_signal_handlers(void) {
@@ -347,6 +361,11 @@ int main(int argc, char *argv[])
   }
 */
 
+  pthread_mutex_init(&_thread_control.mutex, NULL);
+  pthread_cond_init(&_thread_control.cond, NULL);
+  _thread_control.state = ACD_STARTING;
+  _thread_control.id = pthread_self();
+
   // Make sure we catch termination
   setup_signal_handlers();
 
@@ -426,7 +445,10 @@ int main(int argc, char *argv[])
   update_display_message(&acddata, ACD_MSG_CLEAR, NULL);
   clock_gettime(CLOCK_MONOTONIC, &next_wake);
 
-  while (1)
+  _thread_control.state = ACD_KEEPRUNNING;
+
+  //while ( _runstate == ACD_KEEPRUNNING )
+  while (atomic_load_explicit(&_thread_control.state, memory_order_relaxed) == ACD_KEEPRUNNING)
   {
     acd_scope_t sensors_read_scope = ACD_SCOPE_GLOBAL;
     float temp_reading_for_ph = UNKNOWN;
@@ -661,6 +683,29 @@ next_wake:
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake, NULL);
   }
 
+  // Cleanup net services.
+  LOG(LOG_INFO, "%s Stopping.....", AQUACHEMD_SHORT_NAME);
+  
+  // Stop any devices & timers
+  stop_all_timers();
+  devices_emergency_stop();
+  
+  stop_net_services();
+  stop_gpio_monitor();
+  usleep(100000); // Wait 100ms
+  /*
+  pthread_t net_id = get_net_services_id();
+  if (net_id != 0) {
+    pthread_join(net_id, NULL);
+  }*/
+
+  // Free config memory
+  free_config();
+  free(acddata.keys);
+
+  LOG(LOG_NOTICE, "%s Stoped!", AQUACHEMD_SHORT_NAME);
+
+  _thread_control.state = ACD_FINISHED;
   return 0;
 }
 
@@ -886,335 +931,3 @@ bool OLD_start_upgrade_OLD(const char *version)
 
 
 
-
-
-
-
-#ifdef EXAMPLE_CODE
-
-// Below is some code to implement a more robust task scheduler that would allow for more complex tasks 
-// like dosing for a specific duration without blocking the main loop. 
-// It's not fully implemented yet, but I wanted to keep it around as a reference for how
- // might implement this in the future.
-
-
-#include <time.h>
-
-// ─── Task scheduler ───────────────────────────────────────────────────────────
-
-typedef void (*task_fn)(struct aquachemdata *data);
-
-typedef struct {
-  const char   *name;
-  task_fn       fn;
-  int           interval_sec;     // how often to run
-  int           duration_sec;     // 0 = instant, >0 = run for this long then stop
-  struct timespec next_run;       // absolute time of next execution
-  struct timespec stop_at;        // for duration tasks: when to stop
-  bool          running;          // for duration tasks: currently active
-} task_t;
-
-// ─── Individual task functions ────────────────────────────────────────────────
-
-static void task_read_sensors(struct aquachemdata *data)
-{
-  LOG(LOG_NOTICE, "---\n");
-  data->temp_reading = rtd_get_reading();
-
-  if (data->temp_reading.status == EZO_SUCCESS)
-  {
-    SET_DIRTY(data->is_dirty);
-    LOG(LOG_NOTICE, "Temp: %.2f°C\n", data->temp_reading.value);
-    data->ph_reading = ph_get_reading_compensated(data->temp_reading.value);
-  }
-  else
-  {
-    LOG(LOG_NOTICE, "Temp: read failed (status %d)\n", data->temp_reading.status);
-    data->ph_reading = ph_get_reading();
-  }
-
-  if (data->ph_reading.status == EZO_SUCCESS)
-  {
-    SET_DIRTY(data->is_dirty);
-    LOG(LOG_NOTICE, "pH  : %.2f\n", data->ph_reading.value);
-  }
-  else
-    LOG(LOG_NOTICE, "pH  : read failed (status %d)\n", data->ph_reading.status);
-
-  data->orp_reading = orp_get_reading();
-  if (data->orp_reading.status == EZO_SUCCESS)
-  {
-    SET_DIRTY(data->is_dirty);
-    LOG(LOG_NOTICE, "ORP : %.2f mV\n", data->orp_reading.value);
-  }
-  else
-    LOG(LOG_NOTICE, "ORP : read failed (status %d)\n", data->orp_reading.status);
-
-  LOG(LOG_NOTICE, "---\n");
-}
-
-static void task_acid_dose_start(struct aquachemdata *data)
-{
-  // Start dosing — EZO-PMP or GPIO relay
-  LOG(LOG_NOTICE, "Acid dose: START\n");
-  pump_dose_continuous(5.0f);   // or relay_on(&acid_relay)
-}
-
-static void task_acid_dose_stop(struct aquachemdata *data)
-{
-  // Stop dosing
-  LOG(LOG_NOTICE, "Acid dose: STOP\n");
-  pump_stop();                  // or relay_off(&acid_relay)
-}
-
-// ─── Scheduler helpers ────────────────────────────────────────────────────────
-
-static void timespec_add_sec(struct timespec *ts, int sec)
-{
-  ts->tv_sec += sec;
-}
-
-// Returns true if ts is in the past or now
-static bool timespec_due(const struct timespec *ts)
-{
-  struct timespec now;
-  clock_gettime(CLOCK_MONOTONIC, &now);
-  return (now.tv_sec > ts->tv_sec) ||
-         (now.tv_sec == ts->tv_sec && now.tv_nsec >= ts->tv_nsec);
-}
-
-// Sleep until the earliest upcoming task
-static void sleep_until_next(task_t *tasks, int num_tasks)
-{
-  struct timespec earliest = tasks[0].next_run;
-
-  for (int i = 1; i < num_tasks; i++)
-  {
-    if (tasks[i].next_run.tv_sec < earliest.tv_sec ||
-       (tasks[i].next_run.tv_sec == earliest.tv_sec &&
-        tasks[i].next_run.tv_nsec < earliest.tv_nsec))
-      earliest = tasks[i].next_run;
-  }
-
-  // Don't sleep if already overdue
-  struct timespec now;
-  clock_gettime(CLOCK_MONOTONIC, &now);
-  if (earliest.tv_sec <= now.tv_sec) return;
-
-  clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &earliest, NULL);
-}
-
-// ─── Main loop ────────────────────────────────────────────────────────────────
-
-void run_main_loop(struct aquachemdata *data)
-{
-  struct timespec now;
-  clock_gettime(CLOCK_MONOTONIC, &now);
-
-  // ── Define tasks ────────────────────────────────────────────────────────────
-  // For dosing: we use two tasks — start and stop — offset by duration_sec
-  // start fires every interval, stop fires interval + duration seconds later
-
-  task_t tasks[] = {
-    {
-      .name         = "sensors",
-      .fn           = task_read_sensors,
-      .interval_sec = _acdconfig_.sensor_poll_time,
-      .next_run     = now,
-    },
-    {
-      .name         = "acid_start",
-      .fn           = task_acid_dose_start,
-      .interval_sec = 30,    // dose every 30 seconds
-      .next_run     = now,
-    },
-    {
-      .name         = "acid_stop",
-      .fn           = task_acid_dose_stop,
-      .interval_sec = 30,    // same interval as start
-      .next_run     = now,
-    },
-  };
-
-  // Offset the stop task by the dose duration so it fires 5s after start
-  tasks[2].next_run.tv_sec += 5;
-
-  int num_tasks = sizeof(tasks) / sizeof(tasks[0]);
-
-  // ── Main loop ───────────────────────────────────────────────────────────────
-  while (1)
-  {
-    clock_gettime(CLOCK_MONOTONIC, &now);
-
-    for (int i = 0; i < num_tasks; i++)
-    {
-      if (!timespec_due(&tasks[i].next_run))
-        continue;
-
-      tasks[i].fn(data);
-
-      // Schedule next run — advance from the scheduled time not from now
-      // to prevent drift accumulating
-      timespec_add_sec(&tasks[i].next_run, tasks[i].interval_sec);
-
-      // Warn if we're falling behind
-      clock_gettime(CLOCK_MONOTONIC, &now);
-      if (now.tv_sec > tasks[i].next_run.tv_sec)
-        LOG(LOG_WARNING, "Task '%s' overran its interval\n", tasks[i].name);
-    }
-
-    sleep_until_next(tasks, num_tasks);
-  }
-}
-
-#endif
-
-
-
-#ifdef EXAMPLE_CODE
-
-// GPIO input and set event trigger.
-
-#include <gpiod.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-
-#define CHIP_PATH "/dev/gpiochip4"
-#define LINE_OFFSET 17
-
-int main(void) {
-    struct gpiod_chip *chip;
-    struct gpiod_line_settings *settings;
-    struct gpiod_line_config *line_cfg;
-    struct gpiod_request_config *req_cfg;
-    struct gpiod_line_request *request;
-    struct gpiod_edge_event_buffer *event_buffer;
-    struct gpiod_edge_event *event;
-
-    // 1. Open the GPIO chip
-    chip = gpiod_chip_open(CHIP_PATH);
-    if (!chip) {
-        perror("Failed to open chip");
-        return EXIT_FAILURE;
-    }
-
-    // 2. Configure line settings (Input + Both Edges)
-    settings = gpiod_line_settings_new();
-    gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_INPUT);
-    gpiod_line_settings_set_edge_detection(settings, GPIOD_LINE_EDGE_BOTH);
-
-    // 3. Map settings to the specific line offset
-    line_cfg = gpiod_line_config_new();
-    unsigned int offsets[] = { LINE_OFFSET };
-    gpiod_line_config_add_line_settings(line_cfg, offsets, 1, settings);
-
-    // 4. Set up the request (consumer name)
-    req_cfg = gpiod_request_config_new();
-    gpiod_request_config_set_consumer(req_cfg, "edge-detector-c");
-
-    // 5. Request the line
-    request = gpiod_chip_request_lines(chip, req_cfg, line_cfg);
-    if (!request) {
-        perror("Failed to request lines");
-        goto clean_up;
-    }
-
-    // 6. Create a buffer to hold incoming events
-    event_buffer = gpiod_edge_event_buffer_new(16); // Holds up to 16 events
-    if (!event_buffer) {
-        perror("Failed to create event buffer");
-        goto clean_up;
-    }
-
-    printf("Waiting for edge events on pin %d...\n", LINE_OFFSET);
-
-    while (1) {
-        // Block and wait for an event (NULL means infinite timeout)
-        int ret = gpiod_line_request_wait_edge_events(request, NULL);
-        if (ret < 0) {
-            perror("Error waiting for events");
-            break;
-        }
-
-        // Read the events into our buffer
-        int num_events = gpiod_line_request_read_edge_events(request, event_buffer, 16);
-        if (num_events < 0) {
-            perror("Error reading events");
-            break;
-        }
-
-        // Process the events
-        for (int i = 0; i < num_events; i++) {
-            event = gpiod_edge_event_buffer_get_event(event_buffer, i);
-            int ev_type = gpiod_edge_event_get_event_type(event);
-            uint64_t timestamp = gpiod_edge_event_get_timestamp_ns(event);
-
-            const char *type_str = (ev_type == GPIOD_EDGE_EVENT_RISING_EDGE) ? "Rising" : "Falling";
-            printf("Event: %s edge detected at %lu ns\n", type_str, timestamp);
-        }
-    }
-
-clean_up:
-    // Clean up allocated memory and release lines
-    if (event_buffer) gpiod_edge_event_buffer_free(event_buffer);
-    if (request) gpiod_line_request_release(request);
-    if (req_cfg) gpiod_request_config_free(req_cfg);
-    if (line_cfg) gpiod_line_config_free(line_cfg);
-    if (settings) gpiod_line_settings_free(settings);
-    if (chip) gpiod_chip_close(chip);
-
-    return EXIT_SUCCESS;
-}
-
-
-#endif
-
-
-
-
-
-
-
-#ifdef EXAMPLE_CODE
-// EZO PUMP (I2C) Dose 5ml of pH down, poll until done
-
-pump_dose(5.0f);
-sleep(1);
-while (pump_get_status().is_pumping)
-  sleep(1);
-printf("Dispensed: %.2f ml total\n", pump_get_total_volume());
-
-
-// GPIO Dosing pump example
-// CM4 — pH dosing pump on gpiochip0 pin 17, active-high relay
-gpio_handle_t ph_pump;
-gpio_open(&ph_pump, "gpiochip0", 17, GPIO_OUTPUT, GPIO_ACTIVE_HIGH, "ph_pump");
-
-// Turn pump on for 5 seconds then off
-relay_on(&ph_pump);
-sleep(5);
-relay_off(&ph_pump);
-gpio_close(&ph_pump);
-
-// 1wire sensors example
-
-// Option 1 — explicit path
-w1_sensor_t pool_temp;
-w1_init_ds18b20(&pool_temp, "/sys/bus/w1/devices/28-0304949760eb", "pool_water");
-w1_reading_t r = w1_read(&pool_temp);
-
-// Option 2 — auto-discover all DS18B20s on the bus
-w1_sensor_t sensors[8];
-int found = w1_find_ds18b20(sensors, 8);
-for (int i = 0; i < found; i++)
-{
-  w1_reading_t r = w1_read(&sensors[i]);
-  printf("%s: %.3f °C\n", sensors[i].label, r.value);
-}
-
-// Option 3 — generic sensor with custom scale/offset
-w1_sensor_t flow;
-w1_init_generic(&flow, "/sys/bus/w1/devices/xx-xxxx", 0.01f, 0.0f, "flow_meter");
-
-#endif

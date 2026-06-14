@@ -4,6 +4,10 @@
 #include "aquachemd.h"
 
 bool start_net_services(struct aquachemdata *acddata);
+void stop_net_services();
+pthread_t get_net_services_id();
+
+//acd_runstate_t get_net_services_state();
 
 void send_mqtt(struct mg_connection *nc, const char *toppic, const char *message);
 

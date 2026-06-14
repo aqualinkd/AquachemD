@@ -18,8 +18,9 @@
 //void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
 //bool stateChangeRequest(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
 
-#define SIGRESTART SIGUSR1
-#define SIGRUPGRADE SIGUSR2
+#define SIGRESTART     SIGUSR1
+#define SIGRUPGRADE    SIGUSR2
+#define SIGCLEANUPEXIT SIGUSR3
 
 void intHandler(int sig_num);
 void set_upgrade_version(char *version);

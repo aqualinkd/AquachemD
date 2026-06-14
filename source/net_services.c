@@ -26,9 +26,18 @@
 
 static struct aquachemdata *_aquachemd_data;
 //static char *_web_root;
+//static acd_runstate_t _netsrunstate;
 
-static pthread_t _net_thread_id = 0;
-static bool _keepNetServicesRunning = false;
+static acd_thread_t _netsrunstate = {
+    .parent_id = 0,
+    .id = 0,
+    .mutex = PTHREAD_MUTEX_INITIALIZER, 
+    .cond = PTHREAD_COND_INITIALIZER, 
+    .state = ACD_STARTING
+};
+
+//static pthread_t _net_thread_id = 0;
+//static bool _keepNetServicesRunning = false;
 static struct mg_mgr _mgr;
 static int _mqtt_exit_flag = false;
 
@@ -1149,8 +1158,8 @@ void start_mqtt(struct mg_mgr *mgr) {
     reset_last_mqtt_status();
     _mqtt_exit_flag = false; // set here to stop multiple connects, if it fails truley fails it will get set to false.
   }
-
 }
+
 
 
 
@@ -1213,21 +1222,28 @@ void *net_services_thread( void *ptr )
   _aquachemd_data = (struct aquachemdata *) ptr;
   //bool mqtt_started = false;
   static uint32_t heartbeat_ticks = 0;
+  
+  // Update state to RUNNING
+  pthread_mutex_lock(&_netsrunstate.mutex);
+  _netsrunstate.state = ACD_KEEPRUNNING;
+  pthread_mutex_unlock(&_netsrunstate.mutex);
 
   reset_dose_event();
 
   if (!network_service(&_mgr, _aquachemd_data)) {
     //LOG(LOG_ERR, "Failed to start network services\n");
     // Not the best way to do this (have thread exit process), but forks for the moment.
-    _keepNetServicesRunning = false;
+    //_keepNetServicesRunning = false;
+    _netsrunstate.state = ACD_FAILED;
     LOG(LOG_ERR, "Can not start webserver on port %s.\n", _acdconfig_.listen_address);
-    exit(EXIT_FAILURE);
+   // exit(EXIT_FAILURE);
     goto f_end;
   }
 
   start_mqtt(&_mgr);
 
-  while (_keepNetServicesRunning == true)
+  //while (_netsrunstate == ACD_KEEPRUNNING)
+  while (atomic_load_explicit(&_netsrunstate.state, memory_order_relaxed) == ACD_KEEPRUNNING) 
   {
     
     bool force_all = false;
@@ -1289,23 +1305,63 @@ void *net_services_thread( void *ptr )
 #endif // USE_SYSTEMD
 
 f_end:
-  LOG(LOG_NOTICE, "Stopping network services thread\n");
+  LOG(LOG_INFO, "Stopping network services thread\n");
+  //broadcast_systemd_logmessages(false);
   mg_mgr_free(&_mgr);
 
+  pthread_mutex_lock(&_netsrunstate.mutex);
+  _netsrunstate.state = ACD_FINISHED;
+  pthread_cond_signal(&_netsrunstate.cond); // Wake up anyone waiting for exit
+  pthread_mutex_unlock(&_netsrunstate.mutex);
+
+  LOG(LOG_INFO, "Stopped network services thread\n");
   pthread_exit(0);
 
 }
 
+bool start_net_services(struct aquachemdata *acddata) 
+{
+    // Use the mutex to safely check state
+    pthread_mutex_lock(&_netsrunstate.mutex);
+    if (_netsrunstate.state == ACD_KEEPRUNNING) {
+        pthread_mutex_unlock(&_netsrunstate.mutex);
+        LOG(LOG_NOTICE, "Network services thread is already running\n");
+        return true;
+    }
+    
+    // Capture the thread ID of the parent (the thread calling this function)
+    _netsrunstate.parent_id = pthread_self();
 
+    // Set starting state
+    _netsrunstate.state = ACD_STARTING;
+    pthread_mutex_unlock(&_netsrunstate.mutex);
+
+    LOG(LOG_NOTICE, "Starting network services thread\n");
+
+    // Pass the pointer to our struct as the thread argument
+    if (pthread_create(&_netsrunstate.id, NULL, net_services_thread, acddata) != 0) {
+        pthread_mutex_lock(&_netsrunstate.mutex);
+        _netsrunstate.state = ACD_FAILED;
+        pthread_mutex_unlock(&_netsrunstate.mutex);
+        LOG(LOG_ERR, "Could not create network thread\n");
+        return false;
+    }
+
+    pthread_detach(_netsrunstate.id);
+    return true;
+}
+
+/*
 bool start_net_services(struct aquachemdata *acddata) 
 {
   // Not the best way to see if we are running, but works for now.
-  if (_net_thread_id != 0 && _keepNetServicesRunning) {
+  if (_net_thread_id != 0 && _netsrunstate == ACD_KEEPRUNNING) {
     LOG(LOG_NOTICE, "Network services thread is already running, not starting\n");
     return true;
   }
 
-  _keepNetServicesRunning = true;
+  //_keepNetServicesRunning = true;
+  _netsrunstate = ACD_STARTING;
 
   LOG(LOG_NOTICE, "Starting network services thread\n");
 
@@ -1318,7 +1374,26 @@ bool start_net_services(struct aquachemdata *acddata)
 
   return true;
 }
+*/
 
+
+void stop_net_services()
+{
+    // Just trigger the stop
+    pthread_mutex_lock(&_netsrunstate.mutex);
+    if (_netsrunstate.state == ACD_KEEPRUNNING) {
+        _netsrunstate.state = ACD_CLEANUP;
+        mg_wakeup(&_mgr, 0, NULL, 0); 
+    }
+    pthread_mutex_unlock(&_netsrunstate.mutex);
+    LOG(LOG_INFO, "Network services stop requested\n");
+}
+
+// Return the thread ID so the caller can wait
+pthread_t get_net_services_id() 
+{
+    return _netsrunstate.id;
+}
 
 
 /*. SD Jornal */

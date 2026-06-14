@@ -13,11 +13,13 @@
 #include "utils.h"
 #include "acd_timer.h"
 #include "state_manager.h"
+#include "acd_types.h"
 
 struct timerthread {
-  pthread_t thread_id;
-  pthread_mutex_t thread_mutex;
-  pthread_cond_t thread_cond;
+  //pthread_t thread_id;
+  //pthread_mutex_t thread_mutex;
+  //pthread_cond_t thread_cond;
+  acd_thread_t control;
   acd_key_t *key;
   uint32_t mask_type;
   struct aquachemdata *acddata;
@@ -34,6 +36,37 @@ static pthread_mutex_t _ll_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct timerthread *_timerthread_ll = NULL;
 
 void *timer_worker( void *ptr );
+
+void acd_thread_init_dynamic(acd_thread_t *t) {
+    t->id = 0;
+    pthread_mutex_init(&t->mutex, NULL);
+    pthread_cond_init(&t->cond, NULL);
+    t->state = ACD_STARTING;
+    t->parent_id = pthread_self();
+}
+
+void stop_all_timers()
+{
+    LOG(LOG_NOTICE, "Stopping all active timer threads\n");
+    
+    pthread_mutex_lock(&_ll_mutex);
+    struct timerthread *curr = _timerthread_ll;
+    
+    // Iterate through the whole list and tell every timer to stop
+    while (curr != NULL) {
+        pthread_mutex_lock(&curr->control.mutex);
+        curr->control.state = ACD_CLEANUP;
+        pthread_cond_broadcast(&curr->control.cond);
+        pthread_mutex_unlock(&curr->control.mutex);
+        
+        curr = curr->next;
+    }
+    pthread_mutex_unlock(&_ll_mutex);
+    
+    // Give detached threads a fraction of a second to clean themselves up
+    // before the process memory is destroyed.
+    usleep(100000); // 100ms
+}
 
 // NOTE: Caller MUST hold _ll_mutex before calling this function
 struct timerthread *find_timerthread(acd_key_t *key)
@@ -112,11 +145,12 @@ void clear_timer(struct aquachemdata *acddata, acd_key_t *key)
     LOG(LOG_INFO, "Clearing timer for '%s'\n", t_ptr->key->label);
     
     // Lock the thread's specific mutex before changing its variables
-    pthread_mutex_lock(&t_ptr->thread_mutex);
+    pthread_mutex_lock(&t_ptr->control.mutex);
+    t_ptr->control.state = ACD_CLEANUP; 
     t_ptr->duration_min = 0;
     t_ptr->duration_sec = 0;
-    pthread_cond_broadcast(&t_ptr->thread_cond);
-    pthread_mutex_unlock(&t_ptr->thread_mutex);
+    pthread_cond_broadcast(&t_ptr->control.cond);
+    pthread_mutex_unlock(&t_ptr->control.mutex);
     // Timer thread will wake and stop/clear itself.
   }
   pthread_mutex_unlock(&_ll_mutex);
@@ -142,11 +176,11 @@ void _start_timer(struct aquachemdata *acddata, acd_key_t *key, int duration_min
   if (t_ptr != NULL) {
     LOG(LOG_INFO, "Timer already active for '%s', resetting\n", t_ptr->key->label);
     
-    pthread_mutex_lock(&t_ptr->thread_mutex);
+    pthread_mutex_lock(&t_ptr->control.mutex);
     t_ptr->duration_min = duration_min;
     t_ptr->duration_sec = duration_sec;
-    pthread_cond_broadcast(&t_ptr->thread_cond);
-    pthread_mutex_unlock(&t_ptr->thread_mutex);
+    pthread_cond_broadcast(&t_ptr->control.cond);
+    pthread_mutex_unlock(&t_ptr->control.mutex);
     
     pthread_mutex_unlock(&_ll_mutex);
     
@@ -163,8 +197,9 @@ void _start_timer(struct aquachemdata *acddata, acd_key_t *key, int duration_min
   tmthread->mask_type = mask_type;
 
   // CRITICAL: Initialize threading primitives
-  pthread_mutex_init(&tmthread->thread_mutex, NULL);
-  pthread_cond_init(&tmthread->thread_cond, NULL);
+  //pthread_mutex_init(&tmthread->thread_mutex, NULL);
+  //pthread_cond_init(&tmthread->thread_cond, NULL);
+  acd_thread_init_dynamic(&tmthread->control);
 
   // Add to Linked List (Safely inside _ll_mutex lock)
   if (_timerthread_ll == NULL) {
@@ -176,19 +211,19 @@ void _start_timer(struct aquachemdata *acddata, acd_key_t *key, int duration_min
   }
 
   // Start Thread
-  if(pthread_create(&tmthread->thread_id, NULL, timer_worker, (void*)tmthread) < 0) {
+  if(pthread_create(&tmthread->control.id, NULL, timer_worker, (void*)tmthread) < 0) {
     LOG(LOG_ERR, "could not create timer thread for key '%s'\n", key->label);
     // Cleanup if creation fails
     if (tmthread->prev) tmthread->prev->next = NULL;
     else _timerthread_ll = NULL;
-    pthread_mutex_destroy(&tmthread->thread_mutex);
-    pthread_cond_destroy(&tmthread->thread_cond);
+    pthread_mutex_destroy(&tmthread->control.mutex);
+    pthread_cond_destroy(&tmthread->control.cond);
     free(tmthread);
     pthread_mutex_unlock(&_ll_mutex);
     return;
   }
 
-  pthread_detach(tmthread->thread_id);
+  pthread_detach(tmthread->control.id);
   pthread_mutex_unlock(&_ll_mutex);
 }
 
@@ -204,8 +239,19 @@ void *timer_worker(void *ptr)
   //tmthread->key->flags |= TIMER_ACTIVE;
   tmthread->key->flags |= tmthread->mask_type;
 
+  // Mark thread as officially running
+  pthread_mutex_lock(&tmthread->control.mutex);
+  tmthread->control.state = ACD_KEEPRUNNING;
+  pthread_mutex_unlock(&tmthread->control.mutex);
+
   // Wait for device to turn on
   while (tmthread->key->state == ACD_LED_OFF && tmthread->mask_type == TIMER_ACTIVE) {
+    // Check if we were cancelled during startup!
+    if (atomic_load_explicit(&tmthread->control.state, memory_order_relaxed) == ACD_CLEANUP) {
+        LOG(LOG_INFO, "Timer cancelled during startup phase for '%s'\n", tmthread->key->label);
+        goto cleanup_exit; 
+    }
+
     LOG(LOG_DEBUG, "waiting for key state '%s' to change\n", tmthread->key->label);
     precise_delay(WAIT_TIME_BEFORE_ON_CHECK);
     if (cnt++ == 5) {
@@ -217,7 +263,7 @@ void *timer_worker(void *ptr)
     }
   }
 
-  pthread_mutex_lock(&tmthread->thread_mutex);
+  pthread_mutex_lock(&tmthread->control.mutex);
 
   struct timespec end_time;
   clock_gettime(CLOCK_REALTIME, &end_time);
@@ -246,9 +292,14 @@ void *timer_worker(void *ptr)
     //tmthread->timeout.tv_sec += (remaining_sec >= 60) ? 60 : 1; // Wake ever second if under 1 minute left on timer
     tmthread->timeout.tv_sec += (remaining_sec > 60) ? (remaining_sec - 60) : 1; // Wake ever second if under 1 minute left on timer
 
-    retval = pthread_cond_timedwait(&tmthread->thread_cond, &tmthread->thread_mutex, &tmthread->timeout);
+    retval = pthread_cond_timedwait(&tmthread->control.cond, &tmthread->control.mutex, &tmthread->timeout);
 
     if (retval == 0) {
+      // Check STATE instead of checking if duration <= 0
+      if (tmthread->control.state == ACD_CLEANUP) {
+          LOG(LOG_INFO, "Timer cancelled for '%s'\n", tmthread->key->label);
+          break; 
+      }
       if (tmthread->duration_min <= 0 && tmthread->duration_sec <= 0) break;
 
       LOG(LOG_INFO, "Timer update received for '%s'. Recalculating...\n", tmthread->key->label);
@@ -261,7 +312,7 @@ void *timer_worker(void *ptr)
     }
   }
 
-  pthread_mutex_unlock(&tmthread->thread_mutex);
+  pthread_mutex_unlock(&tmthread->control.mutex);
   LOG(LOG_NOTICE, "End timer for '%s'\n", tmthread->key->label);
 
   // Determine if we timed out naturally or were cancelled
@@ -282,7 +333,7 @@ void *timer_worker(void *ptr)
   }
      
 
-  //tmthread->key->flags &= ~TIMER_ACTIVE;
+cleanup_exit:
   tmthread->key->flags &= ~tmthread->mask_type;
 
 
@@ -302,8 +353,8 @@ void *timer_worker(void *ptr)
   }
 
   // Destroy primitives before freeing memory
-  pthread_mutex_destroy(&tmthread->thread_mutex);
-  pthread_cond_destroy(&tmthread->thread_cond);
+  pthread_mutex_destroy(&tmthread->control.mutex);
+  pthread_cond_destroy(&tmthread->control.cond);
   
   free(tmthread);
   pthread_mutex_unlock(&_ll_mutex);

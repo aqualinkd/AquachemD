@@ -9,6 +9,7 @@ struct aquachemdata;
 struct acd_condition;
 
 void parse_config_file(struct aquachemdata *acdata);
+void free_config();
 bool write_config_file (struct aquachemdata *acdata);
 void check_print_config (struct aquachemdata *acdata);
 bool build_aquachem_config_json(char *buffer, size_t buf_size);

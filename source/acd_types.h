@@ -2,6 +2,7 @@
 #define ACD_TYPES_H_  
 
 #include <time.h>
+#include <stdatomic.h>
 
 #include "ezo.h"
 #include "1wire.h"
@@ -14,6 +15,38 @@ typedef enum {
   ACD_WEEK
 } acd_period_t;   // Just used for metrics at the moment.
 */
+
+typedef enum {
+  ACD_STARTING,
+  ACD_KEEPRUNNING,
+  ACD_CLEANUP,
+  ACD_FINISHED,
+  ACD_FAILED
+} acd_runstate_t;
+
+typedef struct {
+  pthread_t parent_id;
+  pthread_t id;
+  pthread_mutex_t mutex;
+  pthread_cond_t cond;
+  //acd_runstate_t state;
+  atomic_int state; 
+} acd_thread_t;
+
+/* Use as below
+static acd_thread_t _my_worker = {
+    .parent_id = 0,
+    .id = 0,
+    .mutex = PTHREAD_MUTEX_INITIALIZER, 
+    .cond = PTHREAD_COND_INITIALIZER, 
+    .state = ACD_STARTING
+};
+and
+ if (atomic_load_explicit(&_my_worker.state, memory_order_relaxed) != ACD_KEEPRUNNING) {
+ ..........
+ }
+*/
+
 
 typedef enum {
     ACD_TYPE_NONE = 0,

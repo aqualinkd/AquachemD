@@ -456,7 +456,30 @@ void parse_config_file(struct aquachemdata *acdata) {
     check_print_config(acdata);
 }
 
+void free_config()
+{
+    LOG(LOG_NOTICE, "Cleaning config memory\n");
 
+    // FREE THE OLD HARDWARE LINKED LIST
+    // We must safely remove the existing custom blocks to prevent memory leaks.
+    acd_key_t *curr = _acdconfig_.keys->next; // Start one from master.
+    while (curr != NULL) {
+        acd_key_t *next = curr->next;
+        if (curr->label) free(curr->label);
+        if (curr->ID) free(curr->ID);
+        
+        if (curr->type == ACD_TYPE_MQTT_COND || curr->type == ACD_TYPE_MQTT_TEMP) {
+            if (curr->data.mqtt.topic) free(curr->data.mqtt.topic);
+            if (curr->data.mqtt.target_value) free(curr->data.mqtt.target_value);
+        }
+        if (curr->type == ACD_TYPE_SYSFS_VALUE) {
+            if (curr->data.sysfs.regex_pattern) free(curr->data.sysfs.regex_pattern);
+        }
+        
+        free(curr);
+        curr = next;
+    }
+}
 
 /**
  * Processes incoming JSON from the Web UI, updates internal memory safely, 
@@ -475,7 +498,7 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
         snprintf(outBuf, outSize, "{\"status\":\"error\",\"message\":\"Invalid JSON payload.\"}");
         return -1;
     }
-
+/*
     // 1. FREE THE OLD HARDWARE LINKED LIST
     // We must safely remove the existing custom blocks to prevent memory leaks.
     acd_key_t *curr = _acdconfig_.keys;
@@ -496,7 +519,9 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
         curr = next;
     }
     _acdconfig_.keys = NULL;
-    
+ */ 
+    free_config();
+
     // Disconnect the daemon's pointer before we rebuild
     if (acdata && acdata->keys) {
         acdata->keys->next = NULL;

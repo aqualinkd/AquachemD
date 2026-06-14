@@ -8,4 +8,6 @@ bool state_change_request_extended(struct aquachemdata *acdata, acd_key_t *key, 
 void check_pump_state(struct aquachemdata *acdata, acd_key_t *key);
 void sensor_read_error(struct aquachemdata *acddata, acd_key_t *key);
 
+void devices_emergency_stop();
+
 #endif
