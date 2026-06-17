@@ -1503,7 +1503,7 @@ void find_aquachemd_lifecycle_start(sd_journal *journal)
 {
   const int MAX_SEARCH_LINES = 200;
   //const int FALLBACK_LINES = 10;
-  
+
   sd_journal_flush_matches(journal);
   
   // 1. Set up the OR filter for the unique startup/upgrade message UUIDs
@@ -1519,8 +1519,7 @@ void find_aquachemd_lifecycle_start(sd_journal *journal)
       // Walk back up to 200 steps to find the start of our current lifecycle
       for (int i = 0; i < MAX_SEARCH_LINES; i++) {
           int r = sd_journal_previous(journal);
-          if (r <= 0) break; // Reached end of log file or error
-          
+          if (r <= 0) break; // Reached end of log file or error    
           found = true; 
           break; 
       }
@@ -1533,13 +1532,13 @@ void find_aquachemd_lifecycle_start(sd_journal *journal)
   sd_journal_add_match(journal, filter, 0);
 
   // 3. Adjust the cursor position based on search results
-  if (found) {
+  if (found) {    
       // We are sitting exactly ON the startup message.
       // Step back one line within our daemon's filter context so that 
       // the main loop's first sd_journal_next() lands directly back ON it.
       sd_journal_previous(journal);
   }
-  else {
+  else {   
       // Fallback: If no markers found, seek to the tail of our daemon's logs
       // and back up by 11 lines so that the first next() returns line #10.
       sd_journal_seek_tail(journal);
@@ -1595,6 +1594,7 @@ bool broadcast_systemd_logmessages(bool acdMgrActive)
       // Fresh connection established (cursor is NULL)
       if (first_connection_since_boot)
       {
+        LOG(LOG_DEBUG, "First WD Manager connection, searching for startup messages\n");
         // SCENARIO 2: Daemon just booted or completed an upgrade.
         // Trace back to the boot sequence origin and stream forward.
         find_aquachemd_lifecycle_start(journal);
@@ -1604,6 +1604,7 @@ bool broadcast_systemd_logmessages(bool acdMgrActive)
       {
         // SCENARIO 1: Standard operation/UI Refresh. 
         // Just grab the last 10 lines of our daemon logs to confirm the stream is alive.
+        LOG(LOG_DEBUG, "New WD Manager connection, going back 10 messages\n");
         sd_journal_flush_matches(journal);
         char filter[84];
         snprintf(filter, sizeof(filter), "SYSLOG_IDENTIFIER=%s", _aquachemd_data->self);

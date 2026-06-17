@@ -235,7 +235,7 @@ void *timer_worker(void *ptr)
   int retval = 0;
   int cnt = 0;
 
-  LOG(LOG_NOTICE, "Start timer for '%s'\n", tmthread->key->label);
+  LOG(LOG_NOTICE, "Start %s for '%s'\n", isMASKSET(tmthread->mask_type, TIMER_ACTIVE)?"timer":"delay", tmthread->key->label);
   //tmthread->key->flags |= TIMER_ACTIVE;
   tmthread->key->flags |= tmthread->mask_type;
 
@@ -313,7 +313,7 @@ void *timer_worker(void *ptr)
   }
 
   pthread_mutex_unlock(&tmthread->control.mutex);
-  LOG(LOG_NOTICE, "End timer for '%s'\n", tmthread->key->label);
+  LOG(LOG_NOTICE, "End %s for '%s'\n", isMASKSET(tmthread->key->flags, TIMER_ACTIVE)?"timer":"delay", tmthread->key->label);
 
   // Determine if we timed out naturally or were cancelled
   if (isMASKSET(tmthread->key->flags, TIMER_ACTIVE)) {

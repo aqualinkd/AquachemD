@@ -279,6 +279,8 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
       if (key->state == ACD_LED_OFF && (state == ACD_LED_ON || state == ACD_LED_ENABLED)) {
         if (acdata->keys->state == ACD_LED_OFF) {
           ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty); // Master is off, can only set to disabled.
+        } else if (acdata->keys->state == ACD_LED_ON) { // Master is on, we can set enabled
+          ASSIGN_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
         } else {
           ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty); // Master is has ACD_ACTION_BLOCK | ACD_ACTION_LIMIT, can only set disabled.
         }

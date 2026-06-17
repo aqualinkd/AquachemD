@@ -85,20 +85,20 @@ typedef enum cfg_value_type {
 typedef struct cfgParam {
   void *value_ptr;
   cfg_value_type value_type;
-  uint16_t config_mask;
+  uint16_t config_mask;      // Could change this is 8
   char *name;
   char *metadata;
   uint16_t bit_flag;
 } cfgParam;
 
-#define CFG_PERSISTANT (1 << 0)
-#define CFG_GRP_ADVANCED (1 << 1)
-#define CFG_READONLY (1 << 2)
-#define CFG_HIDE (1 << 3)
-#define CFG_FORCE_RESTART (1 << 4)
+//#define CFG_PERSISTANT (1 << 0)
+#define CFG_ADVANCED (1 << 1)       // Show as advanced
+#define CFG_READONLY (1 << 2)       // Show as no edit in UI     
+#define CFG_HIDE (1 << 3)           // Hide in ui.
+//#define CFG_FORCE_RESTART (1 << 4)
 #define CFG_PASSWD_MASK (1 << 5)
 #define CFG_MULTIPLE (1 << 6)
-#define CFG_IS_ALLOCATED (1 << 7)
+#define CFG_IS_ALLOCATED (1 << 7)   // Code needs this, not config template
 
 #define PASSWD_MASK_TEXT "********"
 //#define UNKNOWN -1

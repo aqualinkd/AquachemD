@@ -20,10 +20,11 @@
 
 #define SIGRESTART     SIGUSR1
 #define SIGRUPGRADE    SIGUSR2
-#define SIGCLEANUPEXIT SIGUSR3
+//#define SIGCLEANUPEXIT SIGUSR3
 
 void intHandler(int sig_num);
 void set_upgrade_version(char *version);
+void aquachemd_request_reload(void);
 
 /**
  * SET_IF_CHANGED: Updates a variable and sets a flag if the value has changed.

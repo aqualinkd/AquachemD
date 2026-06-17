@@ -19,6 +19,7 @@ typedef enum {
 typedef enum {
   ACD_STARTING,
   ACD_KEEPRUNNING,
+  ACD_RELOAD,
   ACD_CLEANUP,
   ACD_FINISHED,
   ACD_FAILED

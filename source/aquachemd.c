@@ -40,6 +40,7 @@ Usage:
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include "version.h"
 #include "aquachemd.h"
@@ -76,7 +77,26 @@ static acd_thread_t _thread_control = {
 
 bool start_upgrade();
 
-//void setKeyLed(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
+
+
+// 100% Async-Signal-Safe mapping function
+static const char* get_async_sig_name(int sig_num) {
+    switch (sig_num) {
+        case SIGINT:  return "SIGINT";
+        case SIGTERM: return "SIGTERM";
+        case SIGQUIT: return "SIGQUIT";
+        case SIGHUP:  return "SIGHUP";
+        case SIGSEGV: return "SIGSEGV";
+        case SIGBUS:  return "SIGBUS";
+        case SIGILL:  return "SIGILL";
+        case SIGFPE:  return "SIGFPE";
+        case SIGRESTART:     return "SIGRESTART";
+        case SIGRUPGRADE:    return "SIGUPGRADE";
+        //case SIGCLEANUPEXIT: return "SIGCLEANUPEXIT";
+        default:      return "UNKNOWN_SIGNAL";
+    }
+}
+
 
 void intHandler(int sig_num)
 {
@@ -89,6 +109,8 @@ void intHandler(int sig_num)
    * signal handler calling pump_stop() / relay_off() on SIGTERM/SIGINT 
    * 
    */
+
+  LOG(LOG_INFO, "Exception Raised %s\n",get_async_sig_name(sig_num));
 
   devices_emergency_stop();
 
@@ -143,6 +165,15 @@ void setup_signal_handlers(void) {
     sigaction(SIGPIPE, &sa, NULL);  // broken pipe
 }
 
+// Keep this private to aquachemd.c
+//static acd_thread_t _main_thread_ctl; 
+
+void aquachemd_request_reload(void) {
+    // Release memory order guarantees that the newly written aquachemd.conf file 
+    // changes are fully flushed to disk/OS caches before the state becomes visible.
+    atomic_store_explicit(&_thread_control.state, ACD_RELOAD, memory_order_release);
+    LOG(LOG_NOTICE, "Subsystem requested an application reload.\n");
+}
 
 typedef enum {
   ACD_MSG_CLEAR = -1,
@@ -385,6 +416,13 @@ int main(int argc, char *argv[])
   acddata.keys->type = ACD_TYPE_MASTER;
   acddata.keys->label = "AquachemD";
   acddata.keys->state = ACD_LED_ENABLED;
+
+
+  // --- THE RESET ---
+reload_configuration:
+
+  LOG(LOG_NOTICE, "Initializing and launching daemon subsystems...");
+
 
   parse_config_file(&acddata);
   acddata.keys->label = _acdconfig_.main_label; // Update main label from config
@@ -682,6 +720,30 @@ next_wake:
     // Sleep until the next wake time
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake, NULL);
   }
+
+
+
+  if (atomic_load_explicit(&_thread_control.state, memory_order_acquire) == ACD_RELOAD) {
+        LOG(LOG_NOTICE, "--- CONFIGURATION RELOAD INITIATED ---");
+        
+        // Perform a safe, sequential shutdown of the active threads
+        stop_all_timers();
+        devices_emergency_stop();
+        stop_net_services();
+        stop_gpio_monitor();
+
+        usleep(100000); // Wait 100ms for net_services to stop
+        
+        // Free the old configuration structures from memory
+        free_config();
+        acddata.keys->next = NULL;
+        
+        LOG(LOG_NOTICE, "--- TEARDOWN COMPLETE. REBOOTING SERVICES ---");
+        
+        // Jump right back to the initialization sequence
+        goto reload_configuration; 
+  }
+
 
   // Cleanup net services.
   LOG(LOG_INFO, "%s Stopping.....", AQUACHEMD_SHORT_NAME);

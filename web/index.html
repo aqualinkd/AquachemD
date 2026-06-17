@@ -340,8 +340,10 @@
       border-radius: 6px;
       font-size: 0.9rem;
       font-weight: 600;
-      color: var(--tile_text);
+      /*color: var(--tile_text);*/
+      color: var(--body_text);
       transition: background-color 0.2s, color 0.2s;
+      /*background-color: var(--options_slider_lowlight);*/
     }
 
     .radio-segment input[type="radio"]:checked+.segment-label {
@@ -392,7 +394,8 @@
       border-radius: 8px !important;
       padding: 6px 15px;
       cursor: pointer;
-      border: 1px solid var(--options_pane_bordercolor);
+      /*border: 1px solid var(--options_pane_bordercolor);*/
+      border: 0px solid var(--options_pane_bordercolor);
       width: 60px;
       /* Fixed width */
       height: 25px;
@@ -1402,7 +1405,7 @@
         tableHtml += `
       <tr style="border-bottom: 1px solid #eee;">
         <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc;">${shortenTimestamp(item.timestamp)}</td>
-        <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc; text-align: right;">${item.reading.toFixed(1)}</td>
+        <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc; text-align: right;">${item.reading.toFixed(2)}</td>
         <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc; text-align: right;">${item.seconds}s</td>
         <td style="padding: 0 2px 0 2px; text-align: right;">${item.ml.toFixed(1)}ml</td>
       </tr>`;

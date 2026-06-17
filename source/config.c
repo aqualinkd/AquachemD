@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <string.h>
 
 #define CONFIG_C
 #include "config.h"
@@ -462,7 +463,7 @@ void free_config()
 
     // FREE THE OLD HARDWARE LINKED LIST
     // We must safely remove the existing custom blocks to prevent memory leaks.
-    acd_key_t *curr = _acdconfig_.keys->next; // Start one from master.
+    acd_key_t *curr = _acdconfig_.keys; // Start one from master.
     while (curr != NULL) {
         acd_key_t *next = curr->next;
         if (curr->label) free(curr->label);
@@ -479,18 +480,108 @@ void free_config()
         free(curr);
         curr = next;
     }
+
+    _acdconfig_.keys = NULL;
 }
 
-/**
- * Processes incoming JSON from the Web UI, updates internal memory safely, 
- * rebuilds the hardware definitions, and saves to the config file.
- * * @param inBuf   Incoming JSON string
- * @param inSize  Length of incoming JSON string
- * @param outBuf  Buffer to write the success/error JSON response
- * @param outSize Max size of the output buffer
- * @param acdata  Pointer to the main aquachemdata structure
- * @return 0 on success, -1 on failure
- */
+
+
+// Helper: Checks if a value is valid for a given config parameter without mutating memory.
+static bool is_valid_config(const char *param, const char *value) {
+    LOG(LOG_DEBUG, "Validating: '%s' option for '%s'", value, param);
+                
+    for (int i = 0; i < CFG_PARAM_COUNT; i++) {
+        if (strcasecmp(param, _cfgParams[i].name) == 0) {
+            
+            
+            // Check UI Metadata dropdown constraints (if any)
+            // This doesn't work for things like bool where it's true/false in the json, but yes/no in the metadata object
+            //if (_cfgParams[i].metadata != NULL && strcasestr(_cfgParams[i].metadata, value) == NULL) {
+            if (_cfgParams[i].value_type != CFG_BOOL && _cfgParams[i].metadata != NULL && strcasestr(_cfgParams[i].metadata, value) == NULL) {
+                LOG(LOG_WARNING, "Validation failed: '%s' is not a valid option for '%s'", value, param);
+                return false; 
+            }
+            
+            // Type-specific validation
+            char *endptr;
+            switch (_cfgParams[i].value_type) {
+                case CFG_INT:
+                //case CFG_TXT_INT:
+                    strtol(value, &endptr, 10);
+                    if (*endptr != '\0') return false; // Not a clean integer
+                    break;
+                case CFG_FLOAT:
+                    strtof(value, &endptr);
+                    if (*endptr != '\0') return false; // Not a clean float
+                    break;
+                case CFG_HEX:
+                    strtoul(value, &endptr, 16);
+                    if (*endptr != '\0') return false; // Not a clean hex
+                    break;
+                case CFG_BOOL:
+                    if (strcasecmp(value, "true") != 0 && strcasecmp(value, "false") != 0 &&
+                        strcmp(value, "1") != 0 && strcmp(value, "0") != 0 &&
+                        strcasecmp(value, "yes") != 0 && strcasecmp(value, "no") != 0 &&
+                        strcasecmp(value, "on") != 0 && strcasecmp(value, "off") != 0) {
+                        LOG(LOG_WARNING, "Validation failed: '%s' is not a valid option for '%s'", value, param);
+                        return false;
+                    }
+                    break;
+                case CFG_TXT_INT:
+                case CFG_STRING:
+                    // Validate string ???
+                    break;
+                default:
+                    break; // Strings and custom types pass basic checks
+            }
+            return true;
+        }
+    }
+    
+    // If it's a dynamic staging key (e.g., "mqtt_condition_label"), we allow it to pass 
+    // because the daemon's parser handles these on boot.
+    if (strstr(param, "_label") || strstr(param, "_type") || strstr(param, "_pin") || 
+        strstr(param, "_topic") || strstr(param, "_address") || strstr(param, "_scope")) {
+        return true;
+    }
+
+    LOG(LOG_WARNING, "Validation failed: Unknown parameter '%s'", param);
+    return false;
+}
+
+
+
+// Helper to extract the active in-memory variable value as a string while we loop over the saving json config
+static bool get_config_val_str(const char *name, char *buf, size_t buf_size) {
+    for (int i = 0; i < CFG_PARAM_COUNT; i++) {
+        if (strcasecmp(name, _cfgParams[i].name) == 0) {
+            switch (_cfgParams[i].value_type) {
+                case CFG_STRING:
+                    snprintf(buf, buf_size, "%s", *(char **)_cfgParams[i].value_ptr ? *(char **)_cfgParams[i].value_ptr : "");
+                    break;
+                case CFG_INT:
+                case CFG_TXT_INT:
+                    snprintf(buf, buf_size, "%d", *(int *)_cfgParams[i].value_ptr);
+                    break;
+                case CFG_FLOAT:
+                    snprintf(buf, buf_size, "%.6g", *(float *)_cfgParams[i].value_ptr);
+                    break;
+                case CFG_BOOL:
+                    snprintf(buf, buf_size, "%s", bool_to_str(*(bool *)_cfgParams[i].value_ptr));
+                    break;
+                case CFG_HEX:
+                    snprintf(buf, buf_size, "0x%02hhx", *(unsigned char *)_cfgParams[i].value_ptr);
+                    break;
+                default: 
+                    buf[0] = '\0'; 
+                    break;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int outSize, struct aquachemdata *acdata) {
     cJSON *root = cJSON_ParseWithLength(inBuf, inSize);
     if (!root) {
@@ -498,106 +589,202 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
         snprintf(outBuf, outSize, "{\"status\":\"error\",\"message\":\"Invalid JSON payload.\"}");
         return -1;
     }
+
+    // Write to a temporary file first so a crash doesn't corrupt the main config
+    //const char *tmp_file = "/tmp/aquachemd.conf.tmp";
+    char tmp_file[256];
+    snprintf(tmp_file, sizeof(tmp_file), "%s.tmp", _acdconfig_.config_file);
+    FILE *fp = fopen(tmp_file, "w");
+    if (!fp) {
+        LOG(LOG_ERR, "Failed to open temporary config file for writing.");
+        snprintf(outBuf, outSize, "{\"status\":\"error\",\"message\":\"Disk write error.\"}");
+        cJSON_Delete(root);
+        return -1;
+    }
+
+    bool validation_failed = false;
 /*
-    // 1. FREE THE OLD HARDWARE LINKED LIST
-    // We must safely remove the existing custom blocks to prevent memory leaks.
-    acd_key_t *curr = _acdconfig_.keys;
-    while (curr != NULL) {
-        acd_key_t *next = curr->next;
-        if (curr->label) free(curr->label);
-        if (curr->ID) free(curr->ID);
-        
-        if (curr->type == ACD_TYPE_MQTT_COND || curr->type == ACD_TYPE_MQTT_TEMP) {
-            if (curr->data.mqtt.topic) free(curr->data.mqtt.topic);
-            if (curr->data.mqtt.target_value) free(curr->data.mqtt.target_value);
-        }
-        if (curr->type == ACD_TYPE_SYSFS_VALUE) {
-            if (curr->data.sysfs.regex_pattern) free(curr->data.sysfs.regex_pattern);
-        }
-        
-        free(curr);
-        curr = next;
-    }
-    _acdconfig_.keys = NULL;
- */ 
-    free_config();
-
-    // Disconnect the daemon's pointer before we rebuild
-    if (acdata && acdata->keys) {
-        acdata->keys->next = NULL;
-    }
-
-    // 2. PROCESS STANDARD GLOBAL FIELDS
+    // 1. PROCESS STANDARD GLOBAL FIELDS
     cJSON *fields = cJSON_GetObjectItem(root, "fields");
     if (cJSON_IsArray(fields)) {
-        // Reset dynamic array counts before we repopulate them
-        _acdconfig_.ph_step_count = 0;
-        _acdconfig_.orp_step_count = 0;
-
+        fprintf(fp, "# Global System Parameters\n");
         cJSON *field;
+        char last_k = '\n';
         cJSON_ArrayForEach(field, fields) {
             cJSON *k = cJSON_GetObjectItem(field, "key");
             cJSON *v = cJSON_GetObjectItem(field, "value");
             cJSON *t = cJSON_GetObjectItem(field, "type");
             
             if (!k || !v || !cJSON_IsString(k)) continue;
-            
+
+            // save the first char of key, and if changes print new line
+            // Ensure the key string isn't empty before checking its first character
+            if (k->valuestring[0] != '\0') {
+                char current_first_char = k->valuestring[0]; // [0] is the first character in C
+                // If this isn't the first item, and the character has changed, print a newline
+                if (last_k != '\0' && current_first_char != last_k) {
+                    fprintf(fp, "\n");
+                }
+                // Update last_k to match the current first character
+                last_k = current_first_char;
+            }
+
             // Handle array_text (Dosing ranges)
             if (t && cJSON_IsString(t) && strcmp(t->valuestring, "array_text") == 0) {
                 if (cJSON_IsArray(v)) {
                     cJSON *arr_item;
                     cJSON_ArrayForEach(arr_item, v) {
                         if (cJSON_IsString(arr_item)) {
-                            setConfigValue(acdata, k->valuestring, arr_item->valuestring);
+                            fprintf(fp, "%s=%s\n", k->valuestring, arr_item->valuestring);
                         }
                     }
                 }
             } 
-            // Handle all other standard types
+            // Handle all standard types
             else {
                 char val_str[256] = {0};
-                if (cJSON_IsString(v)) {
-                    snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
-                } else if (cJSON_IsNumber(v)) {
-                    if (v->valueint == v->valuedouble) {
-                        snprintf(val_str, sizeof(val_str), "%d", v->valueint);
-                    } else {
-                        snprintf(val_str, sizeof(val_str), "%.6g", v->valuedouble); // %g prevents trailing zeroes
-                    }
+                if (cJSON_IsString(v)) snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
+                else if (cJSON_IsNumber(v)) {
+                    if (v->valueint == v->valuedouble) snprintf(val_str, sizeof(val_str), "%d", v->valueint);
+                    else snprintf(val_str, sizeof(val_str), "%.6g", v->valuedouble);
                 } else if (cJSON_IsBool(v)) {
-                    snprintf(val_str, sizeof(val_str), "%s", cJSON_IsTrue(v) ? "true" : "false");
+                    //snprintf(val_str, sizeof(val_str), "%s", cJSON_IsTrue(v) ? "true" : "false");
+                    snprintf(val_str, sizeof(val_str), "%s", bool_to_str(cJSON_IsTrue(v)));
                 }
-                
-                // Let the native parser handle allocations and assignments
-                setConfigValue(acdata, k->valuestring, val_str);
+
+                if (is_valid_config(k->valuestring, val_str)) {
+                    fprintf(fp, "%s=%s\n", k->valuestring, val_str);
+                } else {
+                    validation_failed = true;
+                    break;
+                }
+            }
+        }
+    }
+*/
+    // 1. PROCESS STANDARD GLOBAL FIELDS
+    cJSON *fields = cJSON_GetObjectItem(root, "fields");
+    if (cJSON_IsArray(fields)) {
+        fprintf(fp, "# Global System Parameters\n");
+        cJSON *field;
+        char last_k = '\n';
+        
+        cJSON_ArrayForEach(field, fields) {
+            cJSON *k = cJSON_GetObjectItem(field, "key");
+            cJSON *v = cJSON_GetObjectItem(field, "value");
+            cJSON *t = cJSON_GetObjectItem(field, "type");
+            
+            if (!k || !v || !cJSON_IsString(k)) continue;
+
+            // Find the bitmask for this parameter ---
+            int mask = 0;
+            for (int i = 0; i < CFG_PARAM_COUNT; i++) {
+                if (strcasecmp(k->valuestring, _cfgParams[i].name) == 0) {
+                    mask = _cfgParams[i].config_mask;
+                    break;
+                }
+            }
+
+            // Spoof Protection ---
+            // If the UI maliciously sent a hidden field, ignore the payload entirely.
+            if (mask & CFG_HIDE) {
+                continue; 
+            }
+
+            // save the first char of key, and if changes print new line
+            if (k->valuestring[0] != '\0') {
+                char current_first_char = k->valuestring[0]; 
+                if (last_k != '\0' && current_first_char != last_k) {
+                    fprintf(fp, "\n");
+                }
+                last_k = current_first_char;
+            }
+
+            // Handle array_text (Dosing ranges)
+            if (t && cJSON_IsString(t) && strcmp(t->valuestring, "array_text") == 0) {
+                if (cJSON_IsArray(v)) {
+                    cJSON *arr_item;
+                    cJSON_ArrayForEach(arr_item, v) {
+                        if (cJSON_IsString(arr_item)) {
+                            fprintf(fp, "%s=%s\n", k->valuestring, arr_item->valuestring);
+                        }
+                    }
+                }
+            } 
+            // Handle all standard types
+            else {
+                char val_str[256] = {0};
+                if (cJSON_IsString(v)) snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
+                else if (cJSON_IsNumber(v)) {
+                    if (v->valueint == v->valuedouble) snprintf(val_str, sizeof(val_str), "%d", v->valueint);
+                    else snprintf(val_str, sizeof(val_str), "%.6g", v->valuedouble);
+                } else if (cJSON_IsBool(v)) {
+                    snprintf(val_str, sizeof(val_str), "%s", bool_to_str(cJSON_IsTrue(v)));
+                }
+
+                // Password Mask and Read-Only Interception ---
+                // If the UI sent back "********" OR the field is read-only, pull the REAL value from memory.
+                if ((mask & CFG_READONLY) || ((mask & CFG_PASSWD_MASK) && strcmp(val_str, PASSWD_MASK_TEXT) == 0)) {
+                    get_config_val_str(k->valuestring, val_str, sizeof(val_str));
+                }
+
+                if (is_valid_config(k->valuestring, val_str)) {
+                    fprintf(fp, "%s=%s\n", k->valuestring, val_str);
+                } else {
+                    validation_failed = true;
+                    break;
+                }
+            }
+        }
+
+        // Because hidden variables weren't in the JSON, we must write them to the file now.
+        fprintf(fp, "\n# Hidden System Parameters\n");
+        for (int i = 0; i < CFG_PARAM_COUNT; i++) {
+            if ((_cfgParams[i].config_mask & CFG_HIDE) && !(_cfgParams[i].config_mask & CFG_MULTIPLE)) {
+                char hidden_val[256] = {0};
+                if (get_config_val_str(_cfgParams[i].name, hidden_val, sizeof(hidden_val))) {
+                    fprintf(fp, "%s=%s\n", _cfgParams[i].name, hidden_val);
+                }
             }
         }
     }
 
-    // 3. PROCESS CUSTOM HARDWARE BLOCKS
+    fprintf(fp, "\n# Conditions & Sensors\n");
+
+    // PROCESS CUSTOM HARDWARE BLOCKS
     cJSON *blocks = cJSON_GetObjectItem(root, "custom_blocks");
-    if (cJSON_IsArray(blocks)) {
+    if (cJSON_IsArray(blocks) && !validation_failed) {
         cJSON *block;
         cJSON_ArrayForEach(block, blocks) {
+            fprintf(fp, "\n"); // Add spacing between blocks
+
+            // --- THE FIX: Explicitly extract and write the Label FIRST ---
             cJSON *label = cJSON_GetObjectItem(block, "label");
             cJSON *type_id = cJSON_GetObjectItem(block, "block_type_id");
+
+            if (label && cJSON_IsString(label) && type_id && cJSON_IsNumber(type_id)) {
+                int type = type_id->valueint;
+                const char *lbl = label->valuestring;
+                
+                // Write the label and mandatory type parameters exactly as the parser expects them
+                switch(type) {
+                    case ACD_TYPE_MQTT_COND:   fprintf(fp, "mqtt_condition_label=%s\n", lbl); break;
+                    case ACD_TYPE_GPIO_COND:   fprintf(fp, "gpio_condition_label=%s\n", lbl); break;
+                    case ACD_TYPE_EZO_PH:      fprintf(fp, "ph_sensor_label=%s\nph_sensor_type=ezo\n", lbl); break;
+                    case ACD_TYPE_EZO_ORP:     fprintf(fp, "orp_sensor_label=%s\norp_sensor_type=ezo\n", lbl); break;
+                    case ACD_TYPE_EZO_PRS:     fprintf(fp, "prs_sensor_label=%s\nprs_sensor_type=ezo\n", lbl); break;
+                    case ACD_TYPE_EZO_TEMP:    fprintf(fp, "temp_sensor_label=%s\ntemp_sensor_type=ezo\n", lbl); break;
+                    case ACD_TYPE_MQTT_TEMP:   fprintf(fp, "temp_sensor_label=%s\ntemp_sensor_type=mqtt\n", lbl); break;
+                    case ACD_TYPE_D1W_TEMP:    fprintf(fp, "temp_sensor_label=%s\ntemp_sensor_type=d1w\n", lbl); break;
+                    case ACD_TYPE_SYSFS_VALUE: fprintf(fp, "sysfs_sensor_label=%s\n", lbl); break;
+                    case ACD_TYPE_GPIO_PMP:    fprintf(fp, "gpio_doser_label=%s\n", lbl); break;
+                    case ACD_TYPE_MQTT_VALUE:  fprintf(fp, "mqtt_sensor_label=%s\n", lbl); break;
+                    default: break;
+                }
+            }
+
+            // --- NOW safely iterate through the rest of the fields ---
             cJSON *b_fields = cJSON_GetObjectItem(block, "fields");
-
-            // Prep the staging area
-            clear_staging();
-            if (label && cJSON_IsString(label) && strlen(label->valuestring) > 0) {
-                _staging.label = strdup(label->valuestring);
-            } else {
-                _staging.label = strdup("Unknown");
-            }
-            
-            if (type_id && cJSON_IsNumber(type_id)) {
-                _staging.pending_type = (acd_type_t)type_id->valueint;
-            } else {
-                _staging.pending_type = ACD_TYPE_NONE;
-            }
-
-            // Feed block fields through the parser
             if (cJSON_IsArray(b_fields)) {
                 cJSON *fld;
                 cJSON_ArrayForEach(fld, b_fields) {
@@ -606,194 +793,58 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                     if (!k || !v || !cJSON_IsString(k)) continue;
 
                     char val_str[256] = {0};
-                    if (cJSON_IsString(v)) {
-                        snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
-                    } else if (cJSON_IsNumber(v)) {
-                        if (v->valueint == v->valuedouble) {
-                            snprintf(val_str, sizeof(val_str), "%d", v->valueint);
-                        } else {
-                            snprintf(val_str, sizeof(val_str), "%.6g", v->valuedouble);
-                        }
+                    if (cJSON_IsString(v)) snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
+                    else if (cJSON_IsNumber(v)) {
+                        if (v->valueint == v->valuedouble) snprintf(val_str, sizeof(val_str), "%d", v->valueint);
+                        else snprintf(val_str, sizeof(val_str), "%.6g", v->valuedouble);
                     } else if (cJSON_IsBool(v)) {
-                        snprintf(val_str, sizeof(val_str), "%s", cJSON_IsTrue(v) ? "true" : "false");
+                        //snprintf(val_str, sizeof(val_str), "%s", cJSON_IsTrue(v) ? "true" : "false");
+                        snprintf(val_str, sizeof(val_str), "%s", bool_to_str(cJSON_IsTrue(v)));
                     }
                     
-                    setConfigValue(acdata, k->valuestring, val_str);
+                    if (is_valid_config(k->valuestring, val_str)) {
+                        // Skip re-writing the label if the UI accidentally included it in the fields array
+                        if (strstr(k->valuestring, "_label") == NULL) {
+                            fprintf(fp, "%s=%s\n", k->valuestring, val_str);
+                        }
+                    } else {
+                        validation_failed = true;
+                        break;
+                    }
                 }
             }
-            
-            // Build and link the new node
-            action_staging();
+            if (validation_failed) break;
         }
     }
 
-    // 4. RE-LINK TO MAIN STRUCT & SAVE
-    if (acdata && acdata->keys) {
-        acdata->keys->next = _acdconfig_.keys;
-    }
 
-    check_print_config (acdata);
-
-    if (write_config_file(acdata)) {
-        snprintf(outBuf, outSize, "{\"status\":\"success\",\"message\":\"Configuration saved successfully.\"}");
-        LOG(LOG_NOTICE, "Configuration updated via Web UI and saved to disk.");
-    } else {
-        snprintf(outBuf, outSize, "{\"status\":\"error\",\"message\":\"Failed to write config file to disk.\"}");
-        LOG(LOG_ERR, "Web UI config update failed during disk write.");
-    }
-
-    cJSON_Delete(root);
-    return 0;
-}
-
-
-bool write_config_file(struct aquachemdata *acdata) {
-    FILE *fp = fopen(_acdconfig_.config_file, "w");
-    if (fp == NULL) return false;
-
-    char *lastName = NULL;
-    for (int i = 0; i < CFG_PARAM_COUNT; i++) {
-        // Skip dynamic multiples (handled below)
-        if (_cfgParams[i].config_mask & CFG_MULTIPLE) continue;
-
-        if (lastName != NULL && lastName[0] != _cfgParams[i].name[0]) {
-            fprintf(fp, "\n");
-        }
-
-        switch (_cfgParams[i].value_type) {
-            case CFG_STRING:
-                if (*(char **)_cfgParams[i].value_ptr == NULL) fprintf(fp, "#%s=\n", _cfgParams[i].name);
-                else fprintf(fp, "%s=%s\n", _cfgParams[i].name, *(char **)_cfgParams[i].value_ptr);
-                break;
-            case CFG_INT:
-                if (*(int *)_cfgParams[i].value_ptr == UNKNOWN) fprintf(fp, "#%s=\n", _cfgParams[i].name);
-                else fprintf(fp, "%s=%d\n", _cfgParams[i].name, *(int *)_cfgParams[i].value_ptr);
-                break;
-            case CFG_BOOL:
-                fprintf(fp, "%s=%s\n", _cfgParams[i].name, bool_to_str(*(bool *)_cfgParams[i].value_ptr));
-                break;
-            case CFG_HEX:
-                fprintf(fp, "%s=0x%02hhx\n", _cfgParams[i].name, *(unsigned char *)_cfgParams[i].value_ptr);
-                break;
-            case CFG_FLOAT:
-                fprintf(fp, "%s=%f\n", _cfgParams[i].name, *(float *)_cfgParams[i].value_ptr);
-                break;
-            case CFG_TXT_INT:
-                if (_cfgParams[i].value_ptr == &_acdconfig_.log_level) {
-                    fprintf(fp, "%s=%s\n", _cfgParams[i].name, log_priority_to_str(_acdconfig_.log_level));
-                }
-                break;
-            default: break;
-        }
-        lastName = _cfgParams[i].name;
-    }
-
-    if (_acdconfig_.ph_step_count > 0) {
-        fprintf(fp, "\n# pH Dosing Ranges\n");
-        for (int s = 0; s < _acdconfig_.ph_step_count; s++) {
-            fprintf(fp, "ph_dose_range=%.1f:%d\n", _acdconfig_.ph_steps[s].threshold, _acdconfig_.ph_steps[s].seconds);
-        }
-    }
-    if (_acdconfig_.orp_step_count > 0) {
-        fprintf(fp, "\n# ORP Dosing Ranges\n");
-        for (int s = 0; s < _acdconfig_.orp_step_count; s++) {
-            fprintf(fp, "orp_dose_range=%.1f:%d\n", _acdconfig_.orp_steps[s].threshold, _acdconfig_.orp_steps[s].seconds);
-        }
-    }
-
-    /* --- Dynamic Sensors & Conditions Section --- */
-    char stat_buf[32];
-    for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
-        fprintf(fp, "\n");
-        switch (curr->type) {
-            case ACD_TYPE_MQTT_COND:
-                fprintf(fp, "mqtt_condition_label=%s\n", curr->label);
-                fprintf(fp, "mqtt_condition_topic=%s\n", curr->data.mqtt.topic);
-                fprintf(fp, "mqtt_condition_value=%s\n", curr->data.mqtt.target_value);
-                fprintf(fp, "mqtt_condition_scope_global=%s\n", curr->scope == ACD_ACTION_BLOCK ? "true" : "false");
-                fprintf(fp, "mqtt_condition_met_delay=%d\n", curr->delay_on);
-                break;
-            case ACD_TYPE_GPIO_COND:
-                fprintf(fp, "gpio_condition_label=%s\n", curr->label);
-                fprintf(fp, "gpio_condition_pin=%d\n", curr->data.gpio.pin);
-                fprintf(fp, "gpio_condition_pin_mode=%s\n", gpio_active_to_str(curr->data.gpio.active));
-                fprintf(fp, "gpio_condition_required_state=%s\n", gpio_req_to_str(curr->data.gpio.required));
-                fprintf(fp, "gpio_condition_scope_global=%s\n", curr->scope == ACD_ACTION_BLOCK ? "true" : "false");
-                fprintf(fp, "gpio_condition_met_delay=%d\n", curr->delay_on);
-                break;
-            case ACD_TYPE_EZO_PH:
-                fprintf(fp, "ph_sensor_label=%s\nph_sensor_type=ezo\nph_sensor_address=0x%02x\n", curr->label, curr->data.ezo.address);
-                fprintf(fp, "ph_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
-                if (curr->stats.tau_seconds > 0) {
-                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
-                    fprintf(fp, "ph_sensor_statistics=%s\n", stat_buf);
-                }
-                break;
-            case ACD_TYPE_EZO_ORP:
-                fprintf(fp, "orp_sensor_label=%s\norp_sensor_type=ezo\norp_sensor_address=0x%02x\n", curr->label, curr->data.ezo.address);
-                fprintf(fp, "orp_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
-                if (curr->stats.tau_seconds > 0) {
-                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
-                    fprintf(fp, "orp_sensor_statistics=%s\n", stat_buf);
-                }
-                break;
-            case ACD_TYPE_EZO_PRS:
-                fprintf(fp, "prs_sensor_label=%s\nprs_sensor_type=ezo\nprs_sensor_address=0x%02x\n", curr->label, curr->data.ezo.address);
-                fprintf(fp, "prs_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
-                if (curr->stats.tau_seconds > 0) {
-                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
-                    fprintf(fp, "prs_sensor_statistics=%s\n", stat_buf);
-                }
-                break;
-            case ACD_TYPE_EZO_TEMP:
-                fprintf(fp, "temp_sensor_label=%s\ntemp_sensor_type=ezo\ntemp_sensor_address=0x%02x\n", curr->label, curr->data.ezo.address);
-                fprintf(fp, "temp_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
-                if (curr->stats.tau_seconds > 0) {
-                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
-                    fprintf(fp, "temp_sensor_statistics=%s\n", stat_buf);
-                }
-                break;
-            case ACD_TYPE_MQTT_TEMP:
-                fprintf(fp, "temp_sensor_label=%s\ntemp_sensor_type=mqtt\ntemp_sensor_topic=%s\n", curr->label, curr->data.mqtt.topic);
-                fprintf(fp, "temp_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
-                if (curr->stats.tau_seconds > 0) {
-                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
-                    fprintf(fp, "temp_sensor_statistics=%s\n", stat_buf);
-                }
-                break;
-            case ACD_TYPE_D1W_TEMP:
-                fprintf(fp, "temp_sensor_label=%s\ntemp_sensor_type=d1w\ntemp_sensor_path=%s\n", curr->label, curr->data.w1.path);
-                fprintf(fp, "temp_sensor_offset=%f\ntemp_sensor_scale=%.4f\n", curr->data.w1.offset, curr->data.w1.scale);
-                fprintf(fp, "temp_sensor_scope_global=%s\n", curr->scope == ACD_SCOPE_GLOBAL ? "true" : "false");
-                if (curr->stats.tau_seconds > 0) {
-                    duration_seconds_to_string(curr->stats.tau_seconds, stat_buf, sizeof(stat_buf));
-                    fprintf(fp, "temp_sensor_statistics=%s\n", stat_buf);
-                }
-                break;
-            case ACD_TYPE_SYSFS_VALUE:
-                fprintf(fp, "sysfs_sensor_label=%s\n", curr->label);
-                fprintf(fp, "sysfs_sensor_path=%s\n", curr->data.sysfs.path);
-                fprintf(fp, "sysfs_sensor_offset=%.4f\n", curr->data.sysfs.offset);
-                fprintf(fp, "sysfs_sensor_scale=%.4f\n", curr->data.sysfs.multiplier);
-                if (curr->data.sysfs.regex_pattern) {
-                    fprintf(fp, "sysfs_sensor_regex=%s\n", curr->data.sysfs.regex_pattern);
-                }
-                break;
-            case ACD_TYPE_GPIO_PMP:
-                fprintf(fp, "gpio_doser_label=%s\n", curr->label);
-                fprintf(fp, "gpio_doser_type=%s\n", pump_type_to_str(curr->flags));
-                fprintf(fp, "gpio_doser_pin=%d\n", curr->data.gpio.pin);
-                fprintf(fp, "gpio_doser_pin_mode=%s\n", gpio_active_to_str(curr->data.gpio.active));
-                fprintf(fp, "gpio_doser_required_state=%s\n", gpio_req_to_str(curr->data.gpio.required));
-                fprintf(fp, "gpio_doser_ml_per_second=%f\n", curr->flow_rate);
-                break;
-            default: break;
-        }
-    }
     fclose(fp);
-    return true;
-}
+    cJSON_Delete(root);
 
+    // 3. APPLY OR REJECT
+    if (validation_failed) {
+        remove(tmp_file); // Clean up the garbage file
+        snprintf(outBuf, outSize, "{\"status\":\"error\",\"message\":\"Configuration failed validation rules.\"}");
+        LOG(LOG_ERR, "Web UI config update rejected due to validation failure.");
+        return -1;
+    } else {
+        // Move temp file to actual config path (atomic operation on POSIX systems)
+        if (rename(tmp_file, _acdconfig_.config_file) == 0) {
+            snprintf(outBuf, outSize, "{\"status\":\"success\",\"message\":\"Configuration saved. Daemon is restarting...\"}");
+            LOG(LOG_NOTICE, "Configuration updated via Web UI. Requesting soft restart.");
+            
+            // SIGNAL THE MAIN THREAD TO RELOAD
+            //aquachemd_request_reload();
+            // Above not working yet.
+            LOG(LOG_WARNING, "AquachemD must be restarted for configuration changes to take effect!");
+            return 0;
+        } else {
+            snprintf(outBuf, outSize, "{\"status\":\"error\",\"message\":\"Failed to apply config file.\"}");
+            LOG(LOG_ERR, "Failed to rename temp config file over main config.");
+            return -1;
+        }
+    }
+}
 
 
 bool build_aquachem_config_json(char *buffer, size_t buf_size) {
@@ -815,7 +866,8 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
         cJSON *item = cJSON_CreateObject();
         cJSON_AddStringToObject(item, "key", _cfgParams[i].name);
         cJSON_AddBoolToObject(item, "readonly", (_cfgParams[i].config_mask & CFG_READONLY) ? true : false);
-
+        cJSON_AddBoolToObject(item, "advanced", (_cfgParams[i].config_mask & CFG_ADVANCED) ? true : false);
+        
         if (_cfgParams[i].metadata) {
             cJSON *opts = cJSON_Parse(_cfgParams[i].metadata);
             if (opts) cJSON_AddItemToObject(item, "options", opts);
@@ -824,7 +876,12 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
         switch (_cfgParams[i].value_type) {
             case CFG_STRING:
                 cJSON_AddStringToObject(item, "type", "text");
-                cJSON_AddStringToObject(item, "value", *(char **)_cfgParams[i].value_ptr ? *(char **)_cfgParams[i].value_ptr : "");
+
+                if (_cfgParams[i].config_mask & CFG_PASSWD_MASK) {
+                  cJSON_AddStringToObject(item, "value", PASSWD_MASK_TEXT);
+                } else {
+                  cJSON_AddStringToObject(item, "value", *(char **)_cfgParams[i].value_ptr ? *(char **)_cfgParams[i].value_ptr : "");
+                }
                 break;
             case CFG_INT:
                 cJSON_AddStringToObject(item, "type", "number");

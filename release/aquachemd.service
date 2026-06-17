@@ -19,7 +19,6 @@ StandardError=journal
 # Set kill modes for upgrade and service restart
 KillMode=process
 KillSignal=SIGTERM
-
 TimeoutStopSec=5s
 
 # Automatically restart if the process crashes

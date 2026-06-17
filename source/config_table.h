@@ -13,31 +13,31 @@
  * 7. ui_metadata : JSON string for UI dropdowns
  */
 
-CFG_ENTRY( "main_label",             main_label,             "AquachemD",          CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
+CFG_ENTRY( "main_label",             main_label,             "AquachemD",          CFG_STRING,  0,                  0,                NULL )
 
 /* --- 1. GLOBAL SYSTEM & LOGGING --- */
-CFG_ENTRY( "listen_address",         listen_address,         "http://0.0.0.0:80",  CFG_STRING,  CFG_GRP_ADVANCED|CFG_FORCE_RESTART, 0,                NULL )
+CFG_ENTRY( "listen_address",         listen_address,         "http://0.0.0.0:80",  CFG_STRING,  CFG_ADVANCED, 0,                NULL )
 CFG_ENTRY( "log_level",              log_level,              LOG_NOTICE,           CFG_TXT_INT, 0,                                  0,                CFG_O_log_level )
 CFG_ENTRY( "mg_log_level",           mg_log_level,           0,                    CFG_INT,     CFG_READONLY|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "log_sensor_readings",    log_sensor_readings,    false,                CFG_BOOL,    0,                                  0,                NULL )
+CFG_ENTRY( "log_sensor_readings",    log_sensor_readings,    false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 /* --- 2. WEB & DIRECTORIES --- */
-CFG_ENTRY( "web_directory",          web_directory,          "/var/www/aquachemd", CFG_STRING,  CFG_GRP_ADVANCED|CFG_READONLY|CFG_HIDE,      0,     NULL )
+CFG_ENTRY( "web_directory",          web_directory,          "/var/www/aquachemd", CFG_STRING,  CFG_READONLY|CFG_HIDE,      0,     NULL )
 //CFG_ENTRY( "web_config",             web_config,             "",                   CFG_STRING,  CFG_GRP_ADVANCED|CFG_READONLY|CFG_HIDE,      0,     NULL )
 
 /* --- 3. MQTT COMMUNICATION --- */
-CFG_ENTRY( "mqtt_server",            mqtt_server,            NULL,                 CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
-CFG_ENTRY( "mqtt_user",              mqtt_user,              NULL,                 CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
-CFG_ENTRY( "mqtt_passwd",            mqtt_passwd,            NULL,                 CFG_STRING,  CFG_FORCE_RESTART|CFG_PASSWD_MASK,  0,                NULL )
-CFG_ENTRY( "mqtt_aquachemd_topic",   mqtt_aquachemd_topic,   "aquachemd",          CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
-CFG_ENTRY( "mqtt_aqualinkd_topic",   mqtt_aqualinkd_topic,   "aqualinkd",          CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
-CFG_ENTRY( "mqtt_discovery_topic",   mqtt_discovery_topic,   "homeassistant",      CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
-CFG_ENTRY( "mqtt_discovery_use_mac", mqtt_discovery_use_mac, true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
-CFG_ENTRY( "mqtt_timed_update",      mqtt_timed_update,      true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
-CFG_ENTRY( "mqtt_repost_sensors",    mqtt_repost_sensors,    false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
-CFG_ENTRY( "mqtt_discovery_strict_availability",mqtt_strict_avail,false,           CFG_BOOL,    0,                                  0,               CFG_O_BOOL )
+CFG_ENTRY( "mqtt_server",            mqtt_server,            NULL,                 CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
+CFG_ENTRY( "mqtt_user",              mqtt_user,              NULL,                 CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
+CFG_ENTRY( "mqtt_passwd",            mqtt_passwd,            NULL,                 CFG_STRING,  CFG_ADVANCED|CFG_PASSWD_MASK,  0,                NULL )
+CFG_ENTRY( "mqtt_aquachemd_topic",   mqtt_aquachemd_topic,   "aquachemd",          CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
+CFG_ENTRY( "mqtt_aqualinkd_topic",   mqtt_aqualinkd_topic,   "aqualinkd",          CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
+CFG_ENTRY( "mqtt_discovery_topic",   mqtt_discovery_topic,   "homeassistant",      CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
+CFG_ENTRY( "mqtt_discovery_use_mac", mqtt_discovery_use_mac, true,                 CFG_BOOL,    CFG_ADVANCED,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "mqtt_timed_update",      mqtt_timed_update,      true,                 CFG_BOOL,    CFG_ADVANCED,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "mqtt_repost_sensors",    mqtt_repost_sensors,    false,                CFG_BOOL,    CFG_ADVANCED,                                  0,                CFG_O_BOOL )
+CFG_ENTRY( "mqtt_discovery_strict_availability",mqtt_strict_avail,false,           CFG_BOOL,    CFG_ADVANCED,                                  0,               CFG_O_BOOL )
 
 /* --- 4. GPIO CONFIGURATION --- */
-CFG_ENTRY( "gpio_chip",              gpio_chip,              "/dev/gpiochip0",     CFG_STRING,  CFG_FORCE_RESTART,                  0,                NULL )
+CFG_ENTRY( "gpio_chip",              gpio_chip,              "/dev/gpiochip0",     CFG_STRING,  CFG_ADVANCED,                       0,                NULL )
 
 /* --- 5. POLLING & CONVERSION --- */
 CFG_ENTRY( "sensor_poll_time",       sensor_poll_time,       60,                   CFG_INT,     0,                                  0,                NULL )
@@ -58,7 +58,7 @@ CFG_ENTRY( "orp_average_dose_calc",  orp_average_dose_calc,  false,             
 
 /* --- 7. SECURITY / TLS (Conditional) --- */
 #if MG_TLS > 0
-CFG_ENTRY( "cert_dir",               cert_dir,               NULL,                 CFG_STRING,  CFG_GRP_ADVANCED|CFG_FORCE_RESTART, 0,                NULL )
+CFG_ENTRY( "cert_dir",               cert_dir,               NULL,                 CFG_STRING,  CFG_GRP_ADVANCED,                   0,                NULL )
 #endif
 
 CFG_ENTRY( "post_condition",         post_condition,         true,                 CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
