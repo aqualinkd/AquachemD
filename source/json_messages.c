@@ -154,6 +154,7 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
   cJSON_AddStringToObject(device, "status", acd_state_to_str(acddata->keys->state));
   cJSON_AddNumberToObject(device, "int_status", acddata->keys->state);
   cJSON_AddStringToObject(device, "type", "switch");
+
   //cJSON_AddStringToObject(device, "type", "switch");
   cJSON *attributes = cJSON_CreateArray();
   cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_OFF)));
@@ -208,6 +209,9 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
         
         cJSON_AddItemToObject(device, "attributes", attributes);
       } else {
+        if (uom_to_display_str(curr->uom) != UOM_NONE) { // ph UOM is set pH, 
+          cJSON_AddStringToObject(device, "uom", uom_to_display_str(curr->uom));
+        }
         char buf[16];
         cJSON_AddStringToObject(device, "type", "sensor");
         if (isMASKSET(curr->flags,CALC_AVERAGE) ) {

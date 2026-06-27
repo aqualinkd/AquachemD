@@ -105,6 +105,7 @@ CFG_ENTRY( "prs_sensor_statistics",  keys,                   NULL,              
 CFG_ENTRY( "mqtt_sensor_label",       keys,                  NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_sensor_topic",       keys,                  NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 //CFG_ENTRY( "mqtt_sensor_scope_global",keys,                  NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "mqtt_sensor_uom",         keys,                  NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 
 CFG_ENTRY( "temp_sensor_label",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -116,6 +117,8 @@ CFG_ENTRY( "temp_sensor_offset",     keys,                   NULL,              
 CFG_ENTRY( "temp_sensor_scale",      keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "temp_sensor_scope_global",keys,                  NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "temp_sensor_statistics", keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "temp_sensor_uom",        keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
 
 CFG_ENTRY( "gpio_doser_label",         keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_type",          keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -158,4 +161,7 @@ CFG_ENTRY( "sysfs_sensor_uom",        keys,                   NULL,             
 #define CFG_O_ONOFF "[\"on\",\"off\"]"
 #define CFG_O_ACTIVE "[\"Active High\",\"Active Low\"]"
 #define CFG_O_PMP_TYPE "[\"pH\",\"ORP\"]"
+
+#define CFG_O_UOM_LIST "[\"°C\",\"°F\",\"pH\",\"mV\",\"PSI\",\"%\",\"RPM\",\"bytes\",\"s\",\"min\",\"ratio\",\"\"]"
+#define CFG_O_UOM_TEMPERATURE "[\"°C\",\"°F\",\"\"]"
 //#define CFG_O_STATS "[\"None\",\"Daily\",\"Weekly\"]"

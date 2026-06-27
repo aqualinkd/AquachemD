@@ -14,6 +14,7 @@
 #include "aquachemd.h"
 #include "cJSON.h"
 #include "sensor_stats.h"
+#include "uom.h"
 
 void set_config_defaults();
 
@@ -74,6 +75,7 @@ typedef struct {
     unsigned char address;
     acd_type_t pending_type;
     uint8_t flags;
+    acd_uom_t uom;
 } acd_staging_t;
 
 static acd_staging_t _staging;
@@ -132,6 +134,7 @@ void clear_staging() {
     _staging.pending_type = ACD_TYPE_NONE;
     _staging.flags = 0;
     _staging.is_global = true;
+    _staging.uom = UOM_NONE;
 }
 
 void action_staging() {
@@ -371,9 +374,10 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     if (_staging.char_value) free(_staging.char_value);
                     _staging.char_value = strdup(value);
                 }
-                else if (strncasecmp(param, "sysfs_sensor_uom", 16) == 0) {
-                    //if (_staging.topic_path) free(_staging.topic_path);
-                    //_staging.topic_path = strdup(value);
+                else if (strstr(param, "_sensor_uom")) {
+                    // temp_sensor_uom
+                    // sysfs_sensor_uom
+                    _staging.uom = parse_uom(value);
                 }
                 else if (strncasecmp(param, "sysfs_sensor_scale", 18) == 0) {
                     _staging.value2 = strtof(value, NULL);
@@ -1211,25 +1215,41 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", (curr->data.sysfs.regex_pattern != NULL) ? curr->data.sysfs.regex_pattern : "");
                 cJSON_AddItemToArray(block_fields, f_item);         
+                
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sysfs_sensor_uom");
+                cJSON_AddStringToObject(f_item, "type", "select");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_UOM_LIST));
+                cJSON_AddStringToObject(f_item, "value", uom_to_str(curr->uom));
+                cJSON_AddItemToArray(block_fields, f_item);
                 break;
 
             case ACD_TYPE_MQTT_VALUE:
                 cJSON_AddStringToObject(block, "driver_type", "mqtt_value_sensor");
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "mqgg_sensor_topic");
+                cJSON_AddStringToObject(f_item, "key", "mqtt_sensor_topic");
                 cJSON_AddStringToObject(f_item, "type", "text");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", curr->data.mqtt.topic ? curr->data.mqtt.topic : "");
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sysfs_sensor_uom");
+                cJSON_AddStringToObject(f_item, "type", "select");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_UOM_LIST));
+                cJSON_AddStringToObject(f_item, "value", uom_to_str(curr->uom));
+                cJSON_AddItemToArray(block_fields, f_item);
+                /*
+                f_item = cJSON_CreateObject();
                 cJSON_AddStringToObject(f_item, "key", "mqtt_sensor_scope_global");
                 cJSON_AddStringToObject(f_item, "type", "boolean");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
                 cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
-                cJSON_AddItemToArray(block_fields, f_item);
+                cJSON_AddItemToArray(block_fields, f_item);*/
                 break;
 
             case ACD_TYPE_EZO_PMP: 
@@ -1389,9 +1409,17 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     df_arr = cJSON_AddArrayToObject(drv, "fields");
 
     df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "temp_sensor_topic");
+    cJSON_AddStringToObject(df_item, "key", "mqtt_sensor_topic");
     cJSON_AddStringToObject(df_item, "type", "text");
     cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "mqtt_sensor_uom");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_UOM_LIST));
     cJSON_AddItemToArray(df_arr, df_item);
     cJSON_AddItemToArray(available_drivers, drv);
 
@@ -1424,6 +1452,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "sysfs_sensor_regex");
     cJSON_AddStringToObject(df_item, "type", "text");
     cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "sysfs_sensor_uom");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_UOM_LIST));
     cJSON_AddItemToArray(df_arr, df_item);
     cJSON_AddItemToArray(available_drivers, drv);
 
@@ -1858,6 +1894,18 @@ void add_sensor_ezo(const acd_staging_t *st) {
       //sprintf(new_node->stats.ID, "STS_%s", new_node->ID);
     }
 
+    if (new_node->type == ACD_TYPE_EZO_TEMP)
+    {
+      if (st->uom != UOM_NONE) {new_node->uom = st->uom;}
+      else {new_node->uom = UOM_CELSIUS;}
+    } else if (new_node->type == ACD_TYPE_EZO_PH) {
+      new_node->uom = UOM_PH;
+    } else if (new_node->type == ACD_TYPE_EZO_ORP) {
+      new_node->uom = UOM_MV;
+    } else if (new_node->type == ACD_TYPE_EZO_PRS) {
+      new_node->uom = UOM_PSI;
+    }
+
     append_to_key_list(new_node);
 }
 
@@ -1877,6 +1925,12 @@ void add_sensor_mqtt(const acd_staging_t *st) {
       new_node->flags = st->flags;
       //new_node->stats.ID = malloc(strlen(new_node->ID)+ 5);
       //sprintf(new_node->stats.ID, "STS_%s", new_node->ID);
+    }
+
+    if (st->uom != UOM_NONE) {
+      new_node->uom = st->uom;
+    } else if ( new_node->type == ACD_TYPE_MQTT_TEMP) {
+      new_node->uom = UOM_CELSIUS;
     }
 
     append_to_key_list(new_node);
@@ -1901,6 +1955,13 @@ void add_sensor_d1w(const acd_staging_t *st) {
       new_node->flags = st->flags;
       //new_node->stats.ID = malloc(strlen(new_node->ID)+ 5);
       //sprintf(new_node->stats.ID, "STS_%s", new_node->ID);
+    }
+
+
+    if (st->uom != UOM_NONE) {
+      new_node->uom = st->uom;
+    } else {
+      new_node->uom = UOM_CELSIUS;
     }
 
     append_to_key_list(new_node);
@@ -1945,6 +2006,8 @@ void add_sensor_sysfs(const acd_staging_t *st) {
     }
     //new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
     new_node->scope = ACD_SCOPE_LOCAL;
+
+    new_node->uom = st->uom;
 
     generate_sensor_id(new_node);
 

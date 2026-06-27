@@ -123,6 +123,11 @@ uint32_t get_pump_runtime(struct aquachemdata *acdata, acd_key_t *key) {
 
 // This is a request from MQTT/WebSocket/Web, NOT for a system change
 
+void queue_pump_event(acd_key_t *key, int value) {
+  LOG(LOG_WARNING, "Need to queue this pump request, not implimented yet\n"); 
+  LOG_PUMP_EVENT(key, 0, 0, 0);
+  post_dosing_event(key, 0, 0);
+}
 
 void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration_sec) {
   
@@ -271,7 +276,12 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
       if (acdata->keys->scope != ACD_ACTION_ALLOW && (state == ACD_LED_ON || state == ACD_LED_ENABLED )) {
         LOG(LOG_WARNING, "Master is in %s but with scope %s, can't turn %s to %s, setting to %s", acd_state_to_str(acdata->keys->state), acd_scope_to_str(acdata->keys->scope), key->label, acd_state_to_str(state), acd_state_to_str(ACD_LED_DISABLED));
         // We can turn to disable though.
-        ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty); 
+        ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty);
+        if (state == ACD_LED_ON && _acdconfig_.log_zerorun_pump_events) {
+          queue_pump_event(key, value);
+          //LOG_PUMP_EVENT(key, 0, 0, 0);
+          //post_dosing_event(key, 0, 0);
+        }
         return false;
       }
 
@@ -289,6 +299,11 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
           turn_pump_on(acdata, key, value<=0?0:value);
         } else {
           LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
+          if (state == ACD_LED_ON && _acdconfig_.log_zerorun_pump_events) {
+            queue_pump_event(key, value);
+            //LOG_PUMP_EVENT(key, 0, 0, 0);
+            //post_dosing_event(key, 0, 0);
+          }
           return false;
         }
       } else if (key->state == ACD_LED_ON && state == ACD_LED_OFF) {

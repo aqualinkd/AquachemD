@@ -8,13 +8,10 @@ Linux daemon to read pH, ORP, Temperature sensors, control chem feeders & GPIO. 
 
 # Currently in development, (Any release before V1.0.0 is development)
 ## ToDo before 1st release
-* Finish web config editor
-* Config file writebac (core dump)
-* Restart from UI not showing startup
-* Print stats on a reset.
 * Use averages for dosing.
 * MQTT Value Sensor time default to state vs value before MQTT message
 * Look at using SWG% to increase dose times.
+* Add sysfs sensors to mqtt discovery
 ---
 
 ## 🚀 Project Overview

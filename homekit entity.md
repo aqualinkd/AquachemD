@@ -51,3 +51,15 @@ Chlorine Doser,Faucet,"Supports ""Remaining Duration"" in minutes."
 Flow Sensor,Leak / Occupancy,"Triggers high-priority ""Status"" alerts in the Home App."
 Pump Interlock,Motion Sensor,"Easiest way to use a state as a ""Condition"" for HomeKit rules."
 
+-------------
+
+
+| Pool Metric | Real-World Range | Best HomeKit Target Sensor | Expected iOS Home App UI Output | Supported Decimals | Why This Configuration is Chosen |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **pH Balance** | 0.00 – 14.00 | **Light Level (Lux)** | **7.45 lux** | **2 Decimals** | Lux allows unscaled, exact decimal readouts without forced integer rounding. |
+| **Salt Levels** | 0 – 5,000+ PPM | **Generic Number / Template** | **3,200 ppm** | **0 Decimals** | Stripping the CO₂ device class retains the `ppm` unit label while completely blocking critical iOS alarms. |
+| **ORP (Sanitizer)**| 0 – 1,000 mV | **Generic Number / Template** | **650 ppm** | **0 Decimals** | Leverages the `ppm` unit text for rapid scanning while keeping the device completely silent. |
+| **Filter Pressure**| 0 – 60+ PSI | **Light Level (Lux)** | **24.5 lux** | **1 Decimal** | Bypasses the native HAP mandatory Celsius-to-Fahrenheit UI conversion bug. |
+| **Pump Efficiency**| 0% – 200%+ | **Light Level (Lux)** | **115 lux** | **1–2 Decimals**| Avoids the strict 100% cap hardcoded into native HomeKit Humidity sensor tiles. |
+
+

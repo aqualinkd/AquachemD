@@ -1057,6 +1057,7 @@
           tile.classList.add("flash"); tile.classList.remove("on"); text = "Delay";
           if (status_text == status) status_text = "Delay";
           // If we have the duration, print it.
+          // Should move this into getTileExtraStatusText() function.
           let duration = _devices?.devices?.[id]?.delay_duration;
           if (duration > 0) {
             status_text += ' ' + formatDuration(duration);

@@ -197,6 +197,22 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                 icon = "mdi:lightning-bolt-outline";
                 break;
 
+            case ACD_TYPE_SYSFS_VALUE:
+                if (IS_UOM_TEMPERATURE(curr->uom)) {
+                  snprintf(extra_json, sizeof(extra_json), 
+                    ",\"unit_of_measurement\":\"%s\",\"device_class\":\"temperature\",\"state_class\":\"measurement\"",
+                    uom_to_str(curr->uom));
+                    icon = "mdi:thermometer";
+                } else {
+                   snprintf(extra_json, sizeof(extra_json), 
+                    ",\"unit_of_measurement\":\"%s\",\"state_class\":\"measurement\"",
+                    uom_to_str(curr->uom));
+                    icon = "mdi:chemical-weapon";
+                }
+
+                icon = "mdi:thermometer";
+                break;
+
             case ACD_TYPE_MQTT_COND:
                 if (!_acdconfig_.mqtt_repost_sensors) {
                     should_publish = false;

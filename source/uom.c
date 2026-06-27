@@ -75,7 +75,8 @@ acd_uom_t parse_uom(const char *str) {
 
     // If a string was provided but didn't match any pre-defined metric,
     // tag it as a custom dynamic unit.
-    return UOM_CUSTOM;
+    //return UOM_CUSTOM;
+    return UOM_NONE;
 }
 
 /**
@@ -94,8 +95,16 @@ const char* uom_to_str(acd_uom_t uom) {
         case UOM_SECONDS:    return "s";
         case UOM_MINUTES:    return "min";
         case UOM_RATIO:      return "ratio";
-        case UOM_CUSTOM:     return "custom";
+        //case UOM_CUSTOM:     return "custom";
         case UOM_NONE:       
         default:             return "";
     }
+}
+
+const char* uom_to_display_str(acd_uom_t uom) {
+  if (uom == UOM_PH) {
+    return UOM_NONE;
+  }
+  
+  return uom_to_str(uom);
 }

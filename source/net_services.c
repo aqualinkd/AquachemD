@@ -370,7 +370,7 @@ void serve_file(struct mg_connection *nc, struct mg_http_message *http_msg)
   }
 }
 
-typedef enum {uActioned, uBad, uDevices, uConfig, uSaveConfig, uSaveWebConfig, uSaveSchedules,  uSchedules, uACDmanager, uDoseStats, uCalibrate, uInstantReading} uriAtype;
+typedef enum {uActioned, uBad, uDevices, uHomebridgeDevices, uConfig, uSaveConfig, uSaveWebConfig, uSaveSchedules,  uSchedules, uACDmanager, uDoseStats, uCalibrate, uInstantReading} uriAtype;
 
 #define NO_DEVICE         "No matching Device found"
 #define INVALID_VALUE     "Invalid value"
@@ -405,8 +405,8 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
     return uDevices;
   //} else if (strncmp(ri1, "status", 6) == 0) {
   //  return uStatus;
-  //} else if (strncmp(ri1, "homebridge", 10) == 0) {
-  //  return uHomebridge;
+  } else if (strncmp(ri1, "homebridge", 10) == 0) {
+    return uHomebridgeDevices;
   } else if (strncmp(ri1, "schedules/set", 13) == 0) {
     return uSaveSchedules;
   } else if (strncmp(ri1, "schedules", 9) == 0) {
@@ -523,6 +523,7 @@ void action_web_request(struct mg_connection *nc, struct mg_http_message *http_m
         mg_http_reply(nc, 200, CONTENT_TEXT, GET_RTN_OK);
         break;
       case uDevices:
+      case uHomebridgeDevices:
         const char* devices_json = get_devices_json(_aquachemd_data);
         mg_http_reply(nc, 200, CONTENT_JSON, devices_json);
         break;

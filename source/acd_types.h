@@ -8,6 +8,7 @@
 #include "1wire.h"
 #include "gpio.h"
 #include "sysfs.h"
+#include "uom.h"
 
 /*
 typedef enum {
@@ -151,7 +152,7 @@ typedef struct acd_key_t {
     uint8_t err_cnt;
     
     float value; // sensor uses for current value, pump uses for value of ph/orp when turned on.
-    //acd_uom_t uom;
+    acd_uom_t uom;
 
     union {
       float flow_rate;      // Pumps     = ml per second rate for pumps

@@ -26,8 +26,10 @@ char *cleanwhitespace(char *str);
 
 bool parse_bool(const char *str);
 const char *bool_to_str(bool val);
+
 gpio_active_t parse_gpio_active(char *str);
 const char *gpio_active_to_str(gpio_active_t val);
+
 gpio_req_t parse_gpio_req(char *str);
 const char *gpio_req_to_str(gpio_req_t val);
 
