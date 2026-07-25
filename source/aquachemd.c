@@ -412,7 +412,8 @@ int main(int argc, char *argv[])
 
   // Setup master key/button
   acddata.keys = malloc(sizeof(acd_key_t));
-  acddata.keys->ID = "AquachemD";
+  //acddata.keys->ID = "AquachemD";
+  acddata.keys->ID = ACD_MASTER_ID;
   acddata.keys->type = ACD_TYPE_MASTER;
   acddata.keys->label = "AquachemD";
   acddata.keys->state = ACD_LED_ENABLED;
@@ -456,7 +457,7 @@ reload_configuration:
       curr->state = ACD_LED_DISABLED; // DON'T use setKeyLed() here, startup need to force to enabled.
       if (isMASKSET(curr->flags,CALC_AVERAGE)) {
         pthread_mutex_init(&curr->stats.lock, NULL);
-        reset_sensor_average(&curr->stats);
+        reset_sensor_average(curr);
       }
     } else if (IS_OUTPUT(curr->type)) {
       // GPIO status will be set from sync_pump_state() above

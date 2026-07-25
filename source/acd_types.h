@@ -17,6 +17,8 @@ typedef enum {
 } acd_period_t;   // Just used for metrics at the moment.
 */
 
+#define ACD_MASTER_ID "AquachemD"
+
 typedef enum {
   ACD_STARTING,
   ACD_KEEPRUNNING,
@@ -134,7 +136,8 @@ typedef struct {
     time_t last_sample_time;
     float min;
     float max;
-    float tau_seconds;
+    uint32_t sample_count;   // replaces tau_seconds' role in the calc
+    float tau_seconds;       // Probably need to remove in future
     pthread_mutex_t lock;
 } sensor_stats_t;
 

@@ -1168,13 +1168,25 @@
     }
 
     // 2. Output the summary data
-    update_log_message(`${currentPump} ${total.pump_name} TOTAL: ${total.sum_dose_ml.toFixed(2)} ml over ${total.sum_runtime_s}s`);
+    update_log_message(`${currentPump} ${total.pump_name} TOTAL: ${total.sum_dose_ml.toFixed(2)}ml (${mlToGallons(total.sum_dose_ml).toFixed(2)}gal) over ${total.sum_runtime_s}s`);
     update_log_message(`Stats Window Tracking Covers: Last ${durationString}\n`);
 
     update_log_message(`============================================================`);
     update_log_message(" ");
    }
   }
+
+  /**
+ * Converts milliliters to US liquid gallons
+ * @param {number} ml - The volume in milliliters
+ * @returns {number} The volume in gallons
+ */
+function mlToGallons(ml) {
+  const ML_PER_GALLON = 3785.41;
+  return ml / ML_PER_GALLON;
+}
+
+
   /*
   function showDoseHistory(data) {
 

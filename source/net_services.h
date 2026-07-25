@@ -26,7 +26,7 @@ void post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml);
 #define MQTT_TL_DOSE_PH  "total_acid_ml"
 #define MQTT_TL_DOSE_ORP "total_chlorine_ml"
 #define MQTT_TL_DOSE_UNKNOWN "total_dose_ml"
-
+#define MQTT_TL_AVERAGE  "average"
 
 //#define MQTT_TEMP_TOPIC "temp"
 //#define MQTT_PH_TOPIC "ph"

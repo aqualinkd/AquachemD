@@ -605,7 +605,8 @@ ph_reading_t ph_get_reading_compensated(float temp_c)
 {
   simulate_read_time();
   (void)temp_c;
-  return (ph_reading_t){ 7.20f + dummy_drift(0.10f), EZO_SUCCESS };
+  // between 7.1 and 8.1 = Use 7.6 as the base, and 0.5 as the range
+  return (ph_reading_t){ 7.60f + dummy_drift(0.5f), EZO_SUCCESS };
 }
 
 ph_reading_t ph_get_reading_filtered()

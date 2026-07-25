@@ -241,7 +241,7 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
   // last condition met ( Update master to on and turn everything to enabled, only if master is enabled)
   //  master off (turn sensors to disabled)
 
-  LOG(LOG_DEBUG, "Request to set %s to %s (current state: %s)", key->label, acd_state_to_str(state), acd_state_to_str(key->state));
+  LOG(LOG_DEBUG, "Request to set %s to %s (current state: %s) with value %d", key->label, acd_state_to_str(state), acd_state_to_str(key->state), value);
 
   if (state == key->state) {
     LOG(LOG_DEBUG, "%s is already %s, no state change needed", key->label, acd_state_to_str(state));

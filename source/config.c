@@ -1236,7 +1236,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "sysfs_sensor_uom");
+                cJSON_AddStringToObject(f_item, "key", "mqtt_sensor_uom");
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_UOM_LIST));
@@ -1398,6 +1398,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddStringToObject(df_item, "value", "No");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
+    cJSON_AddItemToArray(df_arr, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "temp_sensor_uom");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_UOM_TEMPERATURE));
     cJSON_AddItemToArray(df_arr, df_item);
     cJSON_AddItemToArray(available_drivers, drv);
 
@@ -1602,12 +1610,12 @@ void check_print_config (struct aquachemdata *acdata)
 
   if (_acdconfig_.ph_step_count > 0) {
     for (int s = 0; s < _acdconfig_.ph_step_count; s++) {
-      LOG(LOG_NOTICE, "%-*s = >= %.1f (%ds)\n",MAX_PRINTLEN, "pH Dosing Range", _acdconfig_.ph_steps[s].threshold, _acdconfig_.ph_steps[s].seconds);
+      LOG(LOG_NOTICE, "%-*s = >= %.2f (%ds)\n",MAX_PRINTLEN, "pH Dosing Range", _acdconfig_.ph_steps[s].threshold, _acdconfig_.ph_steps[s].seconds);
     }
   }
   if (_acdconfig_.orp_step_count > 0) {
     for (int s = 0; s < _acdconfig_.orp_step_count; s++) {
-      LOG(LOG_NOTICE, "%-*s = <= %.1f (%ds)\n",MAX_PRINTLEN, "ORP Dosing Range", _acdconfig_.orp_steps[s].threshold, _acdconfig_.orp_steps[s].seconds);
+      LOG(LOG_NOTICE, "%-*s = <= %.2f (%ds)\n",MAX_PRINTLEN, "ORP Dosing Range", _acdconfig_.orp_steps[s].threshold, _acdconfig_.orp_steps[s].seconds);
     }
   }
 

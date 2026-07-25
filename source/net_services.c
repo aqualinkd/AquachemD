@@ -435,13 +435,22 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
     } */
   // Handle "aquachemd/reset_stats" at moment aquachemd can be anything as we don;t check.
   } else if (ri2 != NULL && strncmp(ri2, "reset_stats", 11) == 0) {
-    if ( reset_sensors_average_by_hours(_aquachemd_data, value) ) {
-      return uActioned;
-    }
+      for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+        if (uri_strcmp(ri1, curr->ID)) {
+          // If aquachemd is the ID then expect value and use reset by any matching values.
+          if (ACD_TYPE_MASTER == curr->type) {
+            reset_sensors_average_by_hours(_aquachemd_data, value);
+          } else {
+            reset_sensor_average(curr);
+          }
+          return uActioned;
+        }
+      }
   } else if (ri2 != NULL && (strncasecmp(ri2, "set", 3) == 0)) {
     for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
       if (uri_strcmp(ri1, curr->ID) && (value == ACD_LED_OFF || value == ACD_LED_ON || value == ACD_LED_ENABLED)) {
         LOG(LOG_INFO, "Request to set '%s' to '%s'", curr->label, acd_state_to_str(value));
+        curr->is_dirty = true; // Force an update to be sent to the device, even if the state is already set to the requested value.
         if (state_change_request(_aquachemd_data, curr, value)) {
           return uActioned;
         } else {
@@ -454,6 +463,7 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
     for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
       if (uri_strcmp(ri1, curr->ID) && (value > 0)) {
         LOG(LOG_INFO, "Request to set '%s' to run for %f seconds", curr->label, value);
+        curr->is_dirty = true; // Force an update to be sent to the device, even if the state is already set to the requested value.
         if (state_change_request_extended(_aquachemd_data, curr, ACD_LED_ON, (uint32_t)value)) {
           return uActioned;
         } else {
@@ -547,7 +557,7 @@ void action_websocket_request(struct mg_connection *nc, struct mg_ws_message *wm
   char *msg = NULL;
   //char message[2048];
   //char message[8192];
-  char message[16384];
+  char message[32768];
 
   log_mg_str(LOG_DEBUG, "WS: Websocket message", wm->data);
 
@@ -948,6 +958,15 @@ void send_mqtt_float_msg(struct mg_connection *nc, char *ID, float value) {
   send_mqtt(nc, mqtt_pub_topic, msg);
 }
 
+void send_mqtt_average_float_msg(struct mg_connection *nc, char *ID, float value) {
+  static char mqtt_pub_topic[MQTT_PUB_TOPIC_SIZE+2];
+  static char msg[11];
+
+  sprintf(msg, "%.2f", value);
+  sprintf(mqtt_pub_topic, "%s/%s/%s", _acdconfig_.mqtt_aquachemd_topic, ID, MQTT_TL_AVERAGE);
+  send_mqtt(nc, mqtt_pub_topic, msg);
+}
+
 /*
 // replaced with send_mqtt_acd_state_msg()
 void send_mqtt_key_status_msg(struct mg_connection *nc, acd_key_t *key) {
@@ -989,13 +1008,13 @@ void send_mqtt_string_msg(struct mg_connection *nc, const char *ID, const char *
   send_mqtt(nc, mqtt_pub_topic, msg);
 }
 
-
+/*
 void send_mqtt_temp_msg(struct mg_connection *nc, char *ID, float value)
 {
   // Incase we need to do degc to f conversion, we can do it here.
   send_mqtt_float_msg(nc, ID, (float)value);
 }
-
+*/
 
 void mqtt_broadcast_aquachemdstate(struct mg_connection *nc, bool force_all)
 {
@@ -1029,6 +1048,9 @@ void mqtt_broadcast_aquachemdstate(struct mg_connection *nc, bool force_all)
       send_mqtt_acd_state_msg(nc, curr->ID, curr->state);
       if (curr->state == ACD_LED_ON) {
         send_mqtt_float_msg(nc, curr->ID, curr->value);
+        if (isMASKSET(curr->flags,CALC_AVERAGE) ) {
+          send_mqtt_average_float_msg(nc, curr->ID, curr->stats.average);
+        }
       }
     }
     CLEAR_DIRTY(curr->is_dirty);

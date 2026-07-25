@@ -13,6 +13,7 @@
  * TEMPLATES
  */
 
+
 static const char *HASS_DEVICE_TEMPLATE = 
     "\"device\":{"
         "\"identifiers\":[\"" AQUACHEMD_NAME "\"],"
@@ -119,8 +120,11 @@ static const char *HASS_DOSE_TEMPLATE =
 
 
 void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *nc) {
-    char device_json[512], avail_json[256], final_msg[JSON_DISCOVERY_SIZE];
-    char connections[128], topic[250];
+    char device_json[512];
+    char connections[128];
+
+    char avail_json[256], final_msg[JSON_DISCOVERY_SIZE], topic[250];
+    
 
     const net_iface *iface = get_first_valid_interface();
 
@@ -140,7 +144,6 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
 
     // 2. Iterate through keys
     for (acd_key_t *curr = acdata->keys; curr != NULL; curr = curr->next) {
-        
         char extra_json[256] = ""; 
         const char *hass_type   = "sensor";
         const char *icon        = "mdi:gauge";
@@ -288,12 +291,207 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
 
                 send_mqtt(nc, topic, final_msg);
             }
+
+            // IF has Average calculation, also publish the Average Sensor
+            // Create a dummy device 
+            if (isMASKSET(curr->flags, CALC_AVERAGE)) {
+                char id[16];
+                char label[32];
+                char sensor_topic[32];
+                snprintf(id, 16, "%s_average", curr->ID);
+                snprintf(label, 32, "%s (average)", curr->label);
+                snprintf(sensor_topic, 32, "%s/average", curr->ID);
+
+                snprintf(avail_json, sizeof(avail_json), HASS_AVAIL_TEMPLATE, _acdconfig_.mqtt_aquachemd_topic);
+
+                snprintf(topic, sizeof(topic), "%s/sensor/aquachemd/aquachemd_%s/config", 
+                         _acdconfig_.mqtt_discovery_topic, id);
+
+                snprintf(final_msg, sizeof(final_msg), HASS_SENSOR_TEMPLATE,
+                         device_json, avail_json,
+                         id, label,
+                         _acdconfig_.mqtt_aquachemd_topic, sensor_topic,
+                        icon, extra_json);
+
+                send_mqtt(nc, topic, final_msg);
+            }
         }
     }
 }
 
+/*
+void publish_mqtt_discovery_device(struct aquachemdata *acdata, struct mg_connection *nc, acd_key_t *device, const char *device_json)
+{
+  char avail_json[256], final_msg[JSON_DISCOVERY_SIZE], topic[250];
 
+  char extra_json[256] = "";
+  const char *hass_type = "sensor";
+  const char *icon = "mdi:gauge";
+  const char *options = "";
+  const char *state_mapper = "";
+  bool should_publish = true;
 
+  if (IS_INPUT(device->type) && _acdconfig_.mqtt_strict_avail)
+  {
+    snprintf(avail_json, sizeof(avail_json), HASS_AVAIL_SENSOR_TEMPLATE, _acdconfig_.mqtt_aquachemd_topic, _acdconfig_.mqtt_aquachemd_topic, device->ID);
+  }
+  else if (IS_OUTPUT(device->type) && _acdconfig_.mqtt_strict_avail)
+  {
+    snprintf(avail_json, sizeof(avail_json), HASS_AVAIL_PUMP_TEMPLATE, _acdconfig_.mqtt_aquachemd_topic, _acdconfig_.mqtt_aquachemd_topic, device->ID);
+  }
+  else
+  {
+    snprintf(avail_json, sizeof(avail_json), HASS_AVAIL_TEMPLATE, _acdconfig_.mqtt_aquachemd_topic);
+  }
+
+  switch (device->type)
+  {
+    case ACD_TYPE_MASTER:
+        hass_type = "select";
+        icon = "mdi:shield-check";
+        options = "\"off\",\"enabled\"";
+        state_mapper = "{% set mapper = {'0':'off','1':'enabled','2':'enabled','3':'off'} %}{{ mapper[value] if value in mapper else 'off' }}";
+        break;
+
+    case ACD_TYPE_GPIO_PMP:
+    case ACD_TYPE_EZO_PMP:
+        hass_type = "select";
+        icon = "mdi:pump";
+        options = "\"off\",\"on\",\"enabled\"";
+        // Mapping: 0->off, 1->on, 2->enabled, 3->off
+        state_mapper = "{% set mapper = {'0':'off','1':'on','2':'enabled','3':'off'} %}{{ mapper[value] if value in mapper else 'off' }}";
+        break;
+
+    case ACD_TYPE_MQTT_TEMP:
+        if (!_acdconfig_.mqtt_repost_sensors)
+        {
+            should_publish = false;
+            break;
+        }
+    case ACD_TYPE_EZO_TEMP:
+    case ACD_TYPE_D1W_TEMP:
+        snprintf(extra_json, sizeof(extra_json),
+                 ",\"unit_of_measurement\":\"°C\",\"device_class\":\"temperature\",\"state_class\":\"measurement\"");
+        icon = "mdi:thermometer";
+        break;
+
+    case ACD_TYPE_EZO_PH:
+        snprintf(extra_json, sizeof(extra_json),
+                 ",\"device_class\":\"ph\",\"state_class\":\"measurement\"");
+        icon = "mdi:flask-outline";
+        break;
+
+    case ACD_TYPE_EZO_ORP:
+        snprintf(extra_json, sizeof(extra_json),
+                 ",\"unit_of_measurement\":\"mV\",\"state_class\":\"measurement\"");
+        icon = "mdi:lightning-bolt-outline";
+        break;
+
+    case ACD_TYPE_SYSFS_VALUE:
+        if (IS_UOM_TEMPERATURE(device->uom))
+        {
+            snprintf(extra_json, sizeof(extra_json),
+                     ",\"unit_of_measurement\":\"%s\",\"device_class\":\"temperature\",\"state_class\":\"measurement\"",
+                     uom_to_str(device->uom));
+            icon = "mdi:thermometer";
+        }
+        else
+        {
+            snprintf(extra_json, sizeof(extra_json),
+                     ",\"unit_of_measurement\":\"%s\",\"state_class\":\"measurement\"",
+                     uom_to_str(device->uom));
+            icon = "mdi:chemical-weapon";
+        }
+
+        icon = "mdi:thermometer";
+        break;
+
+    case ACD_TYPE_MQTT_COND:
+        if (!_acdconfig_.mqtt_repost_sensors)
+        {
+            should_publish = false;
+            break;
+        }
+
+    case ACD_TYPE_GPIO_COND:
+        // Flow / Level alert
+        hass_type = "binary_sensor";
+        snprintf(extra_json, sizeof(extra_json), ",\"device_class\":\"problem\"");
+        // snprintf(extra_json, sizeof(extra_json), "");
+        icon = "mdi:alert-circle-outline";
+        // FIXED: Icon cannot be "", use a fallback icon
+        break;
+
+    default:
+        should_publish = false;
+        break;
+    }
+
+    if (should_publish)
+    {
+        if (strcmp(hass_type, "select") == 0)
+        {
+            snprintf(final_msg, sizeof(final_msg), HASS_SELECT_TEMPLATE,
+                     device_json, avail_json,
+                     device->ID, device->label,
+                     _acdconfig_.mqtt_aquachemd_topic, device->ID,
+                     _acdconfig_.mqtt_aquachemd_topic, device->ID,
+                     options, state_mapper, icon);
+        }
+        else if (strcmp(hass_type, "binary_sensor") == 0)
+        {
+            snprintf(final_msg, sizeof(final_msg), HASS_BINARY_SENSOR_TEMPLATE,
+                     device_json, avail_json,
+                     device->ID, device->label,
+                     _acdconfig_.mqtt_aquachemd_topic, device->ID,
+                     icon, extra_json);
+        }
+        else
+        {
+            snprintf(final_msg, sizeof(final_msg), HASS_SENSOR_TEMPLATE,
+                     device_json, avail_json,
+                     device->ID, device->label,
+                     _acdconfig_.mqtt_aquachemd_topic, device->ID,
+                     icon, extra_json);
+        }
+        // Discovery topic path
+        snprintf(topic, sizeof(topic), "%s/%s/aquachemd/aquachemd_%s/config",
+                 _acdconfig_.mqtt_discovery_topic, hass_type, device->ID);
+
+        send_mqtt(nc, topic, final_msg);
+
+        // IF it's a Pump, also publish the Timer Sensor, and Dose sensor
+        if (device->type == ACD_TYPE_GPIO_PMP || device->type == ACD_TYPE_EZO_PMP)
+        {
+            snprintf(avail_json, sizeof(avail_json), HASS_AVAIL_TEMPLATE, _acdconfig_.mqtt_aquachemd_topic);
+            // Timer
+            snprintf(topic, sizeof(topic), "%s/sensor/aquachemd/aquachemd_%s_timer/config",
+                     _acdconfig_.mqtt_discovery_topic, device->ID);
+
+            snprintf(final_msg, sizeof(final_msg), HASS_TIMER_TEMPLATE,
+                     device_json, avail_json,
+                     device->ID, device->label,
+                     _acdconfig_.mqtt_aquachemd_topic, device->ID);
+
+            send_mqtt(nc, topic, final_msg);
+
+            // Doser
+            const char *dose_suffix = ((device->flags & PH_PUMP) ? MQTT_TL_DOSE_PH : (device->flags & ORP_PUMP) ? MQTT_TL_DOSE_ORP
+                                                                                                            : MQTT_TL_DOSE_UNKNOWN);
+
+            snprintf(topic, sizeof(topic), "%s/sensor/aquachemd/aquachemd_%s_dose/config",
+                     _acdconfig_.mqtt_discovery_topic, device->ID);
+
+            snprintf(final_msg, sizeof(final_msg), HASS_DOSE_TEMPLATE,
+                     device_json, avail_json,
+                     device->ID, device->label,
+                     _acdconfig_.mqtt_aquachemd_topic, device->ID, dose_suffix);
+
+            send_mqtt(nc, topic, final_msg);
+        }
+    }
+}
+*/
 #ifdef DO_NOT_COMPILE2
 
 

@@ -217,6 +217,8 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
         if (isMASKSET(curr->flags,CALC_AVERAGE) ) {
           // statistical_sensor
           cJSON *stats = cJSON_CreateObject();
+          snprintf(buf, 15, "%s_stats", curr->ID);
+          cJSON_AddStringToObject(stats, "id", buf);
           cJSON_AddNumberToObject(stats, "avg", curr->stats.average);
           cJSON_AddNumberToObject(stats, "max", curr->stats.max);
           cJSON_AddNumberToObject(stats, "min", curr->stats.min);
@@ -224,9 +226,10 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
           duration_seconds_to_string(curr->stats.tau_seconds, buf, sizeof(buf));
           cJSON_AddStringToObject(stats, "duration", buf);
           cJSON_AddItemToObject(device, "stats", stats);
-
+          
           cJSON *attributes = cJSON_CreateArray();
           cJSON_AddItemToArray(attributes, cJSON_CreateString("stats"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_stats"));
           cJSON_AddItemToObject(device, "attributes", attributes);
         } 
       }
@@ -479,6 +482,10 @@ struct pump_stats *_find_pump_stats(struct pump_stats stats[], int *count, const
   return NULL;
 }
 
+
+#define MAX_HISTORY_EVENTS 150  // Tune this to fit in 16384
+
+
 /**
  * Retrieves pump dosing summaries and optionally a detailed history from the systemd journal.
  * @param days      Number of days to look back.
@@ -487,6 +494,196 @@ struct pump_stats *_find_pump_stats(struct pump_stats stats[], int *count, const
  * @param buf_size  Size of the provided buffer.
  * @return          true if successful and fit in buffer, false otherwise.
  */
+bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_size)
+{
+  sd_journal *j;
+  struct pump_stats stats[MAX_PUMPS] = {0};
+  int pump_count = 0;
+  bool success = false;
+
+  // Ring buffer for history events
+  cJSON *event_ring[MAX_HISTORY_EVENTS];
+  int ring_head = 0;
+  int ring_count = 0;
+
+  // 1. Initialize cJSON root
+  cJSON *root = cJSON_CreateObject();
+  if (!root)
+    return false;
+
+  cJSON_AddStringToObject(root, "type", "dose_history");
+  cJSON *history = detailed ? cJSON_AddArrayToObject(root, "history") : NULL;
+
+  // 2. Calculate start time in microseconds
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  uint64_t since_usec = ((uint64_t)tv.tv_sec * 1000000) - ((uint64_t)days * 24 * 3600 * 1000000);
+
+  // 3. Open Journal and Filter
+  if (sd_journal_open(&j, SD_JOURNAL_LOCAL_ONLY) < 0)
+  {
+    cJSON_Delete(root);
+    return false;
+  }
+
+  // Filter by our specific 128-bit Pump Event Message ID
+  sd_journal_add_match(j, "MESSAGE_ID=" SD_PUMP_EVENT_ID, 0);
+  sd_journal_seek_realtime_usec(j, since_usec);
+
+  // 4. Iterate through log entries
+  SD_JOURNAL_FOREACH(j)
+  {
+    const char *data;
+    size_t len;
+    char p_id[32] = "unknown";
+    char p_name[32] = "unknown";
+    char p_type[32] = "unknown";
+    uint32_t sec = 0;
+    float ml = 0.0;
+    float reading = 0.0;
+
+    // Parse PUMP_ID
+    if (sd_journal_get_data(j, "PUMP_ID", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        snprintf(p_id, sizeof(p_id), "%s", val + 1);
+    }
+
+    // Parse PUMP_NAME
+    if (sd_journal_get_data(j, "PUMP_NAME", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        snprintf(p_name, sizeof(p_name), "%s", val + 1);
+    }
+
+    // Parse PUMP_TYPE
+    if (sd_journal_get_data(j, "PUMP_TYPE", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        snprintf(p_type, sizeof(p_type), "%s", val + 1);
+    }
+
+    // Parse SENSOR_VAL
+    if (sd_journal_get_data(j, "SENSOR_VAL", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        reading = strtof(val + 1, NULL);
+    }
+
+    // Parse RUNTIME_SEC
+    if (sd_journal_get_data(j, "RUNTIME_SEC", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        sec = (uint32_t)strtoul(val + 1, NULL, 10);
+    }
+
+    // Parse DOSE_ML
+    if (sd_journal_get_data(j, "DOSE_ML", (const void **)&data, &len) >= 0)
+    {
+      const char *val = strchr(data, '=');
+      if (val)
+        ml = strtof(val + 1, NULL);
+    }
+
+    // Update totals regardless of detailed mode
+    struct pump_stats *p = _find_pump_stats(stats, &pump_count, p_id, p_name);
+    if (p)
+    {
+      p->total_seconds += sec;
+      p->total_ml += ml;
+
+      // Build ring buffer of history events, overwriting oldest when full
+      if (detailed)
+      {
+        uint64_t timestamp;
+        sd_journal_get_realtime_usec(j, &timestamp);
+        time_t epoch = timestamp / 1000000;
+        char time_buf[26];
+        ctime_r(&epoch, time_buf);
+        time_buf[24] = '\0'; // Remove trailing newline
+
+        cJSON *event = cJSON_CreateObject();
+        if (event)
+        {
+          cJSON_AddStringToObject(event, "timestamp", time_buf);
+          cJSON_AddStringToObject(event, "pump_id", p_id);
+          cJSON_AddStringToObject(event, "pump_name", p_name);
+          cJSON_AddStringToObject(event, "pump_type", p_type);
+          cJSON_AddNumberToObject(event, "reading", reading);
+          cJSON_AddNumberToObject(event, "seconds", sec);
+          cJSON_AddNumberToObject(event, "ml", ml);
+
+          // If slot already occupied, free the old event before overwriting
+          if (ring_count == MAX_HISTORY_EVENTS)
+            cJSON_Delete(event_ring[ring_head]);
+          else
+            ring_count++;
+
+          event_ring[ring_head] = event;
+          ring_head = (ring_head + 1) % MAX_HISTORY_EVENTS;
+        }
+      }
+    }
+  }
+  sd_journal_close(j);
+
+  LOG(LOG_INFO, "Processed %d pump events from logs", ring_count);
+  // 5. Drain ring buffer into history array in chronological order
+  if (detailed && history)
+  {
+    // When ring is full, head points to oldest; otherwise start at 0
+    int start = (ring_count == MAX_HISTORY_EVENTS) ? ring_head : 0;
+    for (int i = 0; i < ring_count; i++)
+    {
+      int idx = (start + i) % MAX_HISTORY_EVENTS;
+      cJSON_AddItemToArray(history, event_ring[idx]);
+    }
+  }
+
+  // 6. Add Totals to the JSON
+  cJSON *totals_arr = cJSON_AddArrayToObject(root, "totals");
+  for (int i = 0; i < pump_count; i++)
+  {
+    cJSON *item = cJSON_CreateObject();
+    if (item)
+    {
+      cJSON_AddStringToObject(item, "pump_id", stats[i].pump_id);
+      cJSON_AddStringToObject(item, "pump_name", stats[i].pump_name);
+      cJSON_AddNumberToObject(item, "sum_runtime_s", stats[i].total_seconds);
+      cJSON_AddNumberToObject(item, "sum_dose_ml", stats[i].total_ml);
+      cJSON_AddItemToArray(totals_arr, item);
+    }
+  }
+
+  // 7. Print to the pre-allocated buffer
+  if (cJSON_PrintPreallocated(root, buffer, (int)buf_size, 0))
+  {
+    success = true;
+  }
+  else
+  {
+    snprintf(buffer, buf_size, "%s", JSON_ERROR_OVERFLOW);
+    success = false;
+  }
+
+  cJSON_Delete(root);
+  return success;
+}
+
+/**
+ * Retrieves pump dosing summaries and optionally a detailed history from the systemd journal.
+ * @param days      Number of days to look back.
+ * @param detailed  If true, includes the "history" array of individual events.
+ * @param buffer    Pointer to the char array where the JSON string will be stored.
+ * @param buf_size  Size of the provided buffer.
+ * @return          true if successful and fit in buffer, false otherwise.
+ */
+/*
 bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_size)
 {
   sd_journal *j;
@@ -642,6 +839,6 @@ bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_s
   return success;
 }
 
-
+*/
 
 

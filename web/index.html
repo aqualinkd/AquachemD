@@ -124,7 +124,8 @@
       display: flex;
       flex-direction: column;
       min-width: 660px;
-      max-width: 680px;
+      max-width: 700px;
+      /*max-width: 680px; */
       max-height: 85vh;
       /* Prevents overflow off screen */
       padding: 15px;
@@ -255,6 +256,9 @@
     .tile_name_1line {
       height: var(--tile_name-height1line);
       line-height: var(--tile_name-lineheight);
+      white-space: nowrap; /* Prevents text wrapping onto a second line */
+      overflow: hidden;    /* Clips any overflow */
+      width: 100%;         /* Or fixed width, e.g., 120px */
     }
 
     .tile_status {
@@ -434,7 +438,7 @@
 
     .cs_commandcell {
       background-color: var(--csinputcell_background);
-      width: 60px !important;
+      width: 80px !important;
       overflow: hidden;
       -webkit-appearance: none;
       padding: 0;
@@ -586,7 +590,7 @@
       VALUE: 'value',
       TEMPERATURE: 'temperature',
       SENSOR: 'sensor',
-      AVERAGE: 'average',
+      AVERAGE: 'average',        // One we use, not from AquachemD
       CONTROLLER: 'controller'
     });
 
@@ -845,14 +849,14 @@
       div.appendChild(title_subdiv);
 
       if (attributes?.includes(_DeviceAttributes.VSP) || _devices.devices[id]?.type == _DeviceTypes.AVERAGE) {
-        if (name.length <= _tile_line_char_limit) {
+        //if (name.length <= _tile_line_char_limit+1) {
           subdiv = document.createElement('div');
           subdiv.setAttribute('class', 'tile_status');
           subdiv.setAttribute('id', id + '_status_line2');
           div.appendChild(subdiv);
           title_subdiv.classList.add("tile_name_1line");
           title_subdiv.classList.remove("tile_name");
-        }
+        //}
       }
       subdiv = document.createElement('div');
       subdiv.setAttribute('class', 'tile_status');
@@ -864,10 +868,29 @@
       document.getElementById('wrapper').appendChild(div);
     }
 
+    function trimString(str, maxLength) {
+      // Return if the string is invalid, empty, or already short enough
+      if (!str || str.length <= maxLength) {
+        return str;
+      }
+      // Slice down to the maximum allowed length
+      const truncated = str.slice(0, maxLength);
+      // Find the last space inside the truncated portion
+      const lastSpaceIndex = truncated.lastIndexOf(' ');
+      // If a space exists, cut neatly at the word boundary
+      if (lastSpaceIndex > 0) {
+          return truncated.slice(0, lastSpaceIndex);
+      }
+
+      return truncated;
+    }
+
     function cutContentTextLength(text, lines) {
+      //LOG("cutContentTextLength() :- text: " + text + ", lines: " + countLines(text, _tile_line_char_limit - 1));
       if (countLines(text, _tile_line_char_limit - 1) > lines) {
         text = text.replace(/\bChemistry\b/, "Chem");
       }
+      //LOG("cutContentTextLength() :- text: " + text + ", lines: " + lines);
       return text;
     }
 
@@ -971,7 +994,9 @@
       if (text != '') setTileOnText(id, text);
     }
 
-    function setTileUOM(id, uom) { try { document.getElementById(id).setAttribute('UOM', uom); } catch (e) { } }
+    function setTileUOM(id, uom) { 
+      try { document.getElementById(id).setAttribute('UOM', uom); } catch (e) { } 
+    }
 
     function setTileOnText(id, text) {
       try {
@@ -984,7 +1009,9 @@
 
     function setTileOnTextLine2(id, text) {
       try {
-        if (document.getElementById(id).getAttribute('status') == 'on') {
+        //if (document.getElementById(id).getAttribute('status') == 'on') {
+        var tile = document.getElementById(id);
+        if (["on", "enabled", "rangeoptimal", "rangewarning", "rangecritical"].includes(tile.getAttribute('status'))) {
           setElementHTML(id + '_status_line2', text);
           return true;
         }
@@ -1225,15 +1252,15 @@
       // 2. Get selected radio state
       const selectedRadio = document.querySelector(`input[name="state_toggle_${id}"]:checked`);
       const selectedState = selectedRadio ? parseInt(selectedRadio.value, 10) : device.int_status;
+      const currentState = device.int_status;
 
-      // 3. Send commands ONLY on close
-      if (device.type === _DeviceTypes.SWITCH) {
-        // Always send the state change
-        send_command(id, selectedState);
-
-        // If user switched to ON and set a timer, send that too
+      // Send commands ONLY on close
+      if (currentState != selectedState && device.type === _DeviceTypes.SWITCH) {
+        // If user switched to ON and set a timer, send that
         if (selectedState === 1 && onTime > 0) {
           send_switch_timer(id, onTime);
+        } else {
+          send_command(id, selectedState);
         }
       }
 
@@ -1241,9 +1268,9 @@
     }
 
     function buildStateToggle(device) {
-      const hasOff = device.attributes?.includes("set_off");
-      const hasOn = device.attributes?.includes("set_on");
-      const hasEnabled = device.attributes?.includes("set_enabled");
+      const hasOff = device.attributes?.includes(_DeviceAttributes.OFF);
+      const hasOn = device.attributes?.includes(_DeviceAttributes.ON);
+      const hasEnabled = device.attributes?.includes(_DeviceAttributes.ENABLED);
 
       // Determine if the device is currently disabled
       const isCurrentlyDisabled = (device.int_status === 3); // 3 = DISABLED
@@ -1532,7 +1559,17 @@
           if (device == obj.id) {
             option += '<option selected value="' + obj.id + '">' + obj.label + '</option>';
             subOption = cs_getDeviceOptions(obj, subdev, value);
-          } else { option += '<option value="' + obj.id + '">' + obj.label + '</option>'; }
+          } else { 
+            option += '<option value="' + obj.id + '">' + obj.label + '</option>'; 
+          }
+        } else if (obj.type == _DeviceTypes.SENSOR && obj.attributes?.includes(_DeviceAttributes.RESET_STATS)) {
+          //LOG("Device:"+device+" obj:"+obj.id+" subdev:"+subdev+" value:"+value);
+          if (device == obj.id ) {
+            option += '<option selected value="' + obj.id + '">' + obj.label + '</option>';
+            subOption = cs_getDeviceOptions(obj, subdev, value);
+          } else { 
+            option += '<option value="' + obj.id + '">' + obj.label + '</option>'; 
+          }
         }
       });
 
@@ -1571,13 +1608,19 @@
           } else if (deviceobj.attributes?.includes(_DeviceAttributes.TIMER)) {
             html += '<option value="' + V_TIMER + '" ' + cs_isSelected("timer", val1, val2) + '>Timer</option>';
           } else if (deviceobj.attributes?.includes(_DeviceAttributes.RESET_STATS)) {
-            html += '<option value="' + V_RESET_STATS + '" ' + cs_isSelected("reset_stats", val1, val2) + '>Stats</option>';
+            html += '<option value="' + V_RESET_STATS + '" ' + cs_isSelected("reset_stats", val1, val2) + '>Reset Stats</option>';
           }
           break;
         case _DeviceTypes.CONTROLLER:
           if (deviceobj.attributes?.includes(_DeviceAttributes.HEATER) || deviceobj.attributes?.includes(_DeviceAttributes.CHILLER)) html += '<option value="' + V_SETPOINT + '" ' + cs_isSelected("setpoint", val1, val2) + '>Temp</option>';
           else if (deviceobj.attributes?.includes(_DeviceAttributes.SWG)) html = '<option value="' + V_PERCENT + '">Percent</option>';
           else if (deviceobj.attributes?.includes(_DeviceAttributes.FREEZE)) html = '<option value="' + V_SETPOINT + '">Temp</option>';
+          break;
+        case _DeviceTypes.SENSOR:
+          if (deviceobj.attributes?.includes(_DeviceAttributes.RESET_STATS)) {
+            // Don't use += since there is no on / off, also only option so select it.
+            html = '<option value="' + V_RESET_STATS + '" "selected">Reset Stats</option>';
+          }
           break;
       }
       return html;
@@ -1596,7 +1639,15 @@
 
     function cs_commandChange(caller) {
       let value = caller.parentNode.parentNode.querySelector('#value');
-      value.type = caller.value >= 2 ? "text" : "hidden";
+      let device = caller.parentNode.parentNode.querySelector('#device')?.value;
+      //value.type = caller.value >= 2 ? "text" : "hidden";
+      //LOG("cs_commandChange: caller.value=" + caller.value + " device=" + device + " device type=" + _devices.devices[device]?.type);
+      if (caller.value < 2 || (caller.value == V_RESET_STATS && _devices.devices[device]?.type == _DeviceTypes.SENSOR)) {
+        value.type = "hidden";
+      } else {
+        value.type = "text";
+      }
+      
     }
 
     function cs_deleteschedule(caller) {
@@ -1630,6 +1681,9 @@
               } else if (obj.attributes?.includes(_DeviceAttributes.TIMER) && commandID == V_TIMER) return "/timer";
               else if (obj.attributes?.includes(_DeviceAttributes.RESET_STATS) && commandID == V_RESET_STATS) return "/reset_stats";
               break;
+            case _DeviceTypes.SENSOR:
+              if (obj.attributes?.includes(_DeviceAttributes.RESET_STATS) && commandID == V_RESET_STATS) return "/reset_stats";
+              break;
           }
         }
       }
@@ -1643,20 +1697,32 @@
         let enabled = Number(row.querySelector('#enabled')?.checked).toString();
         let min = row.querySelector('#min')?.value, hour = row.querySelector('#hour')?.value, daym = row.querySelector('#daym')?.value;
         let month = row.querySelector('#month')?.value, dayw = row.querySelector('#dayw')?.value;
-        let device = row.querySelector('#device')?.value, command = row.querySelector('#command')?.value, value = row.querySelector('#value')?.value;
+        let device = row.querySelector('#device')?.value, command = row.querySelector('#command')?.value; 
+        let value = row.querySelector('#value')?.value;
+
+        if (command == V_RESET_STATS && _devices.devices[device]?.type == _DeviceTypes.SENSOR ) {
+          // If the command is to reset stats and the device is a sensor, set value to "1" to indicate reset
+          value = "1";
+        }
+
         if (min && hour && daym && month && dayw && device && command) {
           if (command >= 2) {
             command = cs_getExtraCommand(device, command);
-            if (isNaN(value)) {
+            //if (isNaN(value)) {
+            if (value === null || value.trim() === "" || isNaN(value)) {
+              LOG("Invalid value for command: " + command + " Value: " + value);
               row.querySelector('#value').classList.add("cs_error");
               setElementHTML("crontext", "<span class='cs_crontext'>&nbsp;<font color='red'>FIX ERROR</font>&nbsp;</span>");
               return false;
             }
-          } else { value = command; command = ""; }
+          } else { 
+            value = command; command = ""; 
+          }
           json.devices.push({ "enabled": enabled, "min": min, "hour": hour, "daym": daym, "month": month, "dayw": dayw, "url": "/api/" + device + command + "/set", "value": value });
         }
       }
       set_schedules(json);
+      showTileOptions(false);
       return true;
     }
 
@@ -1685,12 +1751,12 @@
       physicalDeviceIds.forEach(id => {
         const device = data.devices[id];
         device.status = device.status.toLowerCase();
-        if (device.attributes?.includes("stats")) {
-          const statsId = `${id}_stats`;
+        if (device.attributes?.includes(_DeviceAttributes.STATS)) {
+          const statsId = device.stats?.id || `${id}_stats`;
           if (!data.devices[statsId]) {
             data.devices[statsId] = {
               id: statsId,
-              label: `Avg ${device.label}${device.stats?.duration ? `/${device.stats.duration}` : ''}`,
+              label: `Avg ${trimString(device.label, (_tile_line_char_limit-5))}${device.stats?.duration ? `/${device.stats.duration}` : ''}`,
               status: device.status,
               int_status: device.int_status,
               type: _DeviceTypes.AVERAGE,
@@ -1700,7 +1766,15 @@
               max: device.stats?.max || 0,
               min: device.stats?.min || 0,
               duration: device.stats?.duration || 0,
+              ...(device?.uom ? { uom: device.uom } : {}),  // Only add uom if it exists in the stats
             };
+          }
+
+          // Check if we have an existing display configuration for the physical device but not for the stats device, and copy it if necessary
+          if (_config?.devices?.[id] && !_config.devices[statsId]) {
+            const copiedDevice = structuredClone(_config.devices[id]);
+            copiedDevice.id = statsId;
+            _config.devices[statsId] = copiedDevice;
           }
         }
       });
@@ -1863,7 +1937,7 @@
               <td>Month</td>
               <td>Day</td>
               <td>Device</td>
-              <td>Cmd</td>
+              <td>Command</td>
               <td>Value</td>
               <td>Del</td>
               <td>&nbsp;&nbsp;&nbsp;</td>
@@ -1886,7 +1960,7 @@
                 <font size="-2">Week</font>
               </td>
               <td>Device</td>
-              <td>Cmd</td>
+              <td>Command</td>
               <td>Value</td>
               <td>Del</td>
               <td></td>
@@ -1904,7 +1978,7 @@
               <td>Month</td>
               <td>Day</td>
               <td>Device</td>
-              <td>Cmd</td>
+              <td>Command</td>
               <td>Value</td>
               <td>Del</td>
             </tr>
@@ -1916,7 +1990,7 @@
             onclick="cs_addschedule(1,0,0,'*','*','*','','','');">
           &nbsp;&nbsp;&nbsp;&nbsp;
           <input type="button" class="options_button" id="scheduler_options_close" value="Save"
-            onclick="cs_createJSON();showTileOptions(false);">
+            onclick="cs_createJSON();">
         </div>
 
         <div id="cronhelp" style="flex: none;"></div>

@@ -10,7 +10,7 @@
 #include "config.h"
 #include "utils.h"
 
-#define WEBCONFIGFILE "/config-tmp.json"
+#define WEBCONFIGFILE "/config.json"
 
 int save_web_config_json(const char* inBuf, int inSize, char* outBuf, int outSize, struct aquachemdata *acdata)
 {
