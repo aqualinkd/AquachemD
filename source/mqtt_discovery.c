@@ -102,6 +102,24 @@ static const char *HASS_TIMER_TEMPLATE =
         "\"icon_template\":\"{{ 'mdi:timer-sand' if states(entity_id)|int > 0 else 'mdi:timer-outline' }}\""
     "}";
 
+// Template for the settable Timer Duration (number slider) - lets HA both set
+// and reflect the dose duration, in sync with any other interface (web/mqtt/HomeKit)
+static const char *HASS_NUMBER_TEMPLATE = 
+    "{"
+        "%s,%s,"
+        "\"type\":\"number\","
+        "\"unique_id\":\"aquachemd_%s_timer_set\","
+        "\"name\":\"%s Timer\","
+        "\"command_topic\":\"%s/%s/" MQTT_TL_TIMER "/set\","
+        "\"state_topic\":\"%s/%s/" MQTT_TL_TIMER "/" MQTT_TL_DURATION "\","
+        "\"min\":0,"
+        "\"max\":%d,"
+        "\"step\":1,"
+        "\"unit_of_measurement\":\"s\","
+        "\"mode\":\"slider\","
+        "\"icon\":\"mdi:timer-outline\""
+    "}";
+
 
 // Template for dosing events - FIXED STATE_CLASS
 static const char *HASS_DOSE_TEMPLATE = 
@@ -275,6 +293,21 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                          curr->ID, curr->label,
                          _acdconfig_.mqtt_aquachemd_topic, curr->ID);
 
+                send_mqtt(nc, topic, final_msg);
+
+                // Timer (settable number/slider) - shares the same duration state_topic
+                // as the sensor above, so it stays in sync no matter which interface
+                // (HA, web, raw MQTT, HomeKit) last set the value
+                snprintf(topic, sizeof(topic), "%s/number/aquachemd/aquachemd_%s_timer_set/config", 
+                         _acdconfig_.mqtt_discovery_topic, curr->ID);
+ 
+                snprintf(final_msg, sizeof(final_msg), HASS_NUMBER_TEMPLATE,
+                         device_json, avail_json,
+                         curr->ID, curr->label,
+                         _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+                         _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+                         (curr->flags & PH_PUMP) ? _acdconfig_.ph_max_dose_range : _acdconfig_.orp_max_dose_range );
+ 
                 send_mqtt(nc, topic, final_msg);
 
                 // Doser

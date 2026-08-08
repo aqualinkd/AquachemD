@@ -186,7 +186,7 @@ typedef struct runtime_range_t{
 
 
 
-#define MAX_DOSING_RANGES 8
+#define MAX_DOSING_RANGES 10
 
 // For special_mask in acd_key
 #define TIMER_ACTIVE           (1 << 0)

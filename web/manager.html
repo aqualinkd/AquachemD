@@ -10,7 +10,7 @@
   <meta name='apple-mobile-web-app-status-bar-style' content='black'>
   <link href="aquadaemon.png" rel="apple-touch-icon">
   <link href="aquadaemon.png" rel="icon">
-  <script type="text/javascript" src="confighelp.js"></script>
+  <!-- <script type="text/javascript" src="confighelp.js"></script> -->
   <style>
   :root {
     --max-config-height: 870px;
@@ -702,7 +702,7 @@
   }
 
   function update_log_message(message) {
-    LOG("message='"+message+"'");
+    //LOG("message='"+message+"'");
     if(_log_div_pressed == -1) {
       document.getElementById("logs").addEventListener("mousedown", function(e) {
         _log_div_pressed = true;
@@ -1537,7 +1537,7 @@ function mlToGallons(ml) {
 
     var eCommands = document.getElementById("loglevels");
     for(var obj in data['loglevels']) {
-      LOG("Loglevel="+data['loglevels'][obj].name);
+      //LOG("Loglevel="+data['loglevels'][obj].name);
       var element_id = "loglevel_" + data['loglevels'][obj].id;
       var element = document.getElementById(element_id);
       if(!element) {
@@ -1602,7 +1602,7 @@ function startWebsockets() {
     if (!window.reconnectTimer) {
       update_status_message('  !!! Connection error !!!  ', true);
       
-      LOG("Scheduling reconnection attempt in 5s...");
+      //LOG("Scheduling reconnection attempt in 5s...");
       window.reconnectTimer = setTimeout(() => {
         window.reconnectTimer = null;
         startWebsockets();
@@ -1612,14 +1612,14 @@ function startWebsockets() {
 
   try {
     const wsUrl = get_appropriate_ws_url();
-    LOG(`Attempting WebSocket connection to: ${wsUrl}`);
+    //LOG(`Attempting WebSocket connection to: ${wsUrl}`);
     
     _socket_di = new WebSocket(wsUrl);
 
     // 2. Set up the connection handshake timeout
     window.connTimeout = setTimeout(() => {
       if (_socket_di && _socket_di.readyState !== WebSocket.OPEN) {
-        LOG("Connection handshake timed out. Forcing close.");
+        //LOG("Connection handshake timed out. Forcing close.");
         _socket_di.close();
       }
     }, 5000);
@@ -1627,7 +1627,7 @@ function startWebsockets() {
     // 3. Attach handlers immediately after construction
     _socket_di.onopen = function () {
       if (window.connTimeout) { clearTimeout(window.connTimeout); window.connTimeout = null; }
-      LOG("WebSocket Connected Successfully!");
+      //LOG("WebSocket Connected Successfully!");
       start_manager();
       update_status_message('');
     };
@@ -1657,7 +1657,7 @@ function startWebsockets() {
 
     _socket_di.onclose = function (event) {
       if (window.connTimeout) { clearTimeout(window.connTimeout); window.connTimeout = null; }
-      LOG(`WebSocket Closed. Code: ${event.code}, Reason: ${event.reason}`);
+      //LOG(`WebSocket Closed. Code: ${event.code}, Reason: ${event.reason}`);
       _socket_di = null;
       queueReconnect();
     };

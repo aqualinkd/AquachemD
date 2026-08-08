@@ -1,6 +1,15 @@
 # AquachemD  
 Linux daemon to read pH, ORP, Temperature sensors, control chem feeders & GPIO. Provides MQTT client. Compatible with most Home control systems including Apple HomeKit, Home Assistant, Samsung, Alexa, Google, etc.
 
+<!--
+TODO
+
+UI, timer on minutes looks funny for acid.  Maybe just min and sec (not hours)
+test HA on doser & times
+UI default dose (maybe remove default to 0)
+config dosing UI only shows 1 decimal place
+-->
+
 
 # AquaChemD: Autonomous Pool Chemistry Management System
 

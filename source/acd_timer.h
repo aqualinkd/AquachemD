@@ -6,6 +6,7 @@
 
 void start_timer(struct aquachemdata *acddata, acd_key_t *key, int duration_min, uint32_t duration_sec);
 void start_delay(struct aquachemdata *acddata, acd_key_t *key, int duration_min, uint32_t duration_sec);
+//void start_dose_timer_catchup(struct aquachemdata *acddata, acd_key_t *key, int duration_min, uint32_t duration_sec);
 
 int get_timer_left(acd_key_t *key);
 uint32_t get_timer_left_sec(acd_key_t *key);

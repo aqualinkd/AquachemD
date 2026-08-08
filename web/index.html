@@ -56,6 +56,8 @@
       --tile_icon_background_color_disabled: rgb(110, 110, 110);
 
       --tile_off_opacity: 0.95;
+
+      --dosing-table_height: 100px;
     }
 
     div {
@@ -528,6 +530,34 @@
       padding-top: 5px;
       padding-right: 5px;
     }
+
+    .dosing-table-scroll {
+      max-height: 100px;   /* adjust to show however many rows you want */
+      max-height: var(--dosing-table_height);
+      overflow-y: auto;
+      overflow-x: hidden;
+      /*width: 100%;*/
+      width: 260px;
+    }
+    .dosing-table-scroll table {
+      border-collapse: collapse;
+      width: 100%;
+      /*table-layout: fixed;*/  /* locks column widths, stops reflow/wrapping */
+    }
+    .dosing-table-scroll thead td {
+      position: sticky;
+      top: 0;
+      /*background: #fff;*/   /* must be opaque or scrolling rows will show through */
+      background: var(--options_pane_background);
+      z-index: 1;
+    }/*
+    .dosing-table-scroll th,
+    .dosing-table-scroll td {
+      white-space: nowrap;      
+      overflow: hidden;
+      text-overflow: ellipsis;  
+    }*/
+
   </style>
 
   <script type='text/javascript'>
@@ -709,6 +739,8 @@
       var w = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
       var h = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
 
+      LOG("Window size: " + w + "x" + h);
+
       if ((w * h) > 370000) {
         _aq_display_tile_size = "large";
         document.documentElement.style.setProperty('--tile-width', '125px');
@@ -721,6 +753,12 @@
         document.documentElement.style.setProperty('--tile_name-lineheight', '1.4');
       } else {
         _aq_display_tile_size = "small";
+      }
+
+      if (h > 500) {
+        document.documentElement.style.setProperty('--dosing-table_height', '200px');
+      } else {
+        document.documentElement.style.setProperty('--dosing-table_height', '100px');
       }
 
       _landscape = (w > h);
@@ -956,7 +994,7 @@
         }
       }
 
-      if (_config?.tile_settings?.disply_temp_in_f && (ext.toLowerCase() == "°c" || ext.toLowerCase() == "&deg;c")) {
+      if (_config?.tile_settings?.display_temp_in_f && (ext.toLowerCase() == "°c" || ext.toLowerCase() == "&deg;c")) {
         value = (value * 9 / 5) + 32; ext = "°f";
       }
 
@@ -1133,7 +1171,7 @@
         else tile_icon.classList.remove(cls);
       }
     }
-
+/*
     function formatDuration(totalSeconds) {
       if (totalSeconds < 0) totalSeconds = 0;
       if (totalSeconds >= 60) {
@@ -1143,6 +1181,24 @@
         return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
       }
       return `00:${Math.floor(totalSeconds % 60).toString().padStart(2, '0')}s`;
+    }
+*/
+    function formatDuration(totalSeconds) {
+      if (totalSeconds < 0) totalSeconds = 0;
+        totalSeconds = Math.floor(totalSeconds);
+
+        if (totalSeconds >= 3600) {
+        // Hours present: round to nearest minute, show HH:MM
+        const roundedSeconds = Math.round(totalSeconds / 60) * 60;
+        const h = Math.floor(roundedSeconds / 3600);
+        const m = Math.floor((roundedSeconds % 3600) / 60);
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}m`;
+      }
+
+      // Under an hour: show MM:SS (exact, no rounding)
+      const m = Math.floor(totalSeconds / 60);
+      const s = totalSeconds % 60;
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}s`;
     }
 
     function padToTwoDigits(num) { return num.toString().padStart(2, "0"); }
@@ -1358,8 +1414,10 @@
         footer.insertAdjacentHTML('beforebegin', timerSlider);
         let tm_slider = document.getElementById("timer_slider_range");
         tm_slider.min = _config?.slider_range?.timer_slider_min || 0;
-        tm_slider.max = _config?.slider_range?.timer_slider_max || 60;
+        //tm_slider.max = _config?.slider_range?.timer_slider_max || 60;
         tm_slider.step = _config?.slider_range?.timer_slider_step || 1;
+        tm_slider.max = _devices.devices[id]?.timer_max_runtime ?? _config?.slider_range?.timer_slider_max ?? 60;
+        tm_slider.value = _devices.devices[id]?.timer_default_runtime ?? 0;
       }
 
       if (_devices.devices[id].attributes?.includes(_DeviceAttributes.DOSESTATS)) {
@@ -1418,16 +1476,20 @@
       let tableHtml = `
     <tr class="dynamic-option-row">
       <td colspan="2" style="padding: 5px 0;">
-        <table style="width: 100%; font-size: 0.75rem; border-collapse: collapse; text-align: center;">
+       <div class="dosing-table-scroll">
+        <table style="width: 100%; font-size: 0.75rem; border-collapse: collapse; text-align: center; ; overflow: hidden;">
+         <thead>
           <tr style="border-bottom: 1px solid #ccc; font-weight: bold;">
             <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc;">Time</td>
             <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc; text-align: right;">Sensor</td>
             <td style="padding: 0 2px 0 2px; border-right: 1px solid #ccc; text-align: right;">Runtime</td>
             <td style="padding: 0 2px 0 2px; text-align: right;">Dose</td>
-          </tr>`;
+          </tr>
+         </thead>
+         <tbody>`;
 
       // Get last 5 items
-      const start = Math.max(0, filteredHistory.length - 5);
+      const start = Math.max(0, filteredHistory.length - 50);
       for (let i = start; i < filteredHistory.length; i++) {
         const item = filteredHistory[i];
         tableHtml += `
@@ -1439,8 +1501,14 @@
       </tr>`;
       }
 
-      tableHtml += `</table></td></tr>`;
+      tableHtml += `<tbody></table></div></td></tr>`;
       footer.insertAdjacentHTML('beforebegin', tableHtml);
+
+      // Scroll the dosing table to the bottom (most recent entry)
+      const scrollDiv = tile_option.querySelector('.dosing-table-scroll');
+      if (scrollDiv) {
+        scrollDiv.scrollTop = scrollDiv.scrollHeight;
+      }
     }
 
 
@@ -1832,7 +1900,7 @@
     }
 
     function get_devices() { _socket_di.send(JSON.stringify({ uri: "devices" })); }
-    function get_dosestats() { _socket_di.send(JSON.stringify({ uri: "dosestats" })); }
+    function get_dosestats() { _socket_di.send(JSON.stringify({ uri: "dosestats" , value: 1 })); }
     function get_schedules() { _socket_di.send(JSON.stringify({ uri: "schedules" })); }
     function set_schedules(msg) { msg.uri = "schedules/set"; _socket_di.send(JSON.stringify(msg)); }
 

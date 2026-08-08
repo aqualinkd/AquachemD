@@ -39,7 +39,7 @@ int save_web_config_json(const char* inBuf, int inSize, char* outBuf, int outSiz
         return sprintf(outBuf, "{\"error\":\"Internal allocation error\"}");
     }
 
-    fp = fopen(configfile, "r");
+    fp = fopen(configfile, "w");
     
     if (fp == NULL) {
         LOG(LOG_ERR, "Open config file failed '%s'\n", configfile);
@@ -52,6 +52,8 @@ int save_web_config_json(const char* inBuf, int inSize, char* outBuf, int outSiz
     fputc('\n', fp);
     
     fclose(fp);
+    
+    LOG(LOG_INFO, "Web config saved successfully to %s\n", configfile);
 
     cJSON_free(formatted_json);
     cJSON_Delete(envelope); // Automatically deletes child elements too

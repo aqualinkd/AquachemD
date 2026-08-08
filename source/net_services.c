@@ -608,6 +608,7 @@ void action_websocket_request(struct mg_connection *nc, struct mg_ws_message *wm
       ws_send(nc, message);
       break;
     case uDoseStats:
+      if (val < 1) val = 1; // Minimum 1 day
       get_pump_summaries_json(val, true, message, sizeof(message));
       ws_send(nc, message);
       break;

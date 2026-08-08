@@ -58,6 +58,8 @@ struct acdconfig
 
   uint32_t ph_default_dose_time;
   uint32_t orp_default_dose_time;
+  uint32_t ph_max_dose_range;
+  uint32_t orp_max_dose_range;
 
   bool ph_average_dose_calc;
   bool orp_average_dose_calc;

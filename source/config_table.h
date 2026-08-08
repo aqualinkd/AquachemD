@@ -49,11 +49,13 @@ CFG_ENTRY( "ph_reading_temp_max",    ph_reading_temp_max,    60,                
 /* --- 6. DOSING RANGES (Restored CFG_CUSTOM) --- */
 CFG_ENTRY( "ph_dose_range",          ph_steps,               NULL,                 CFG_CUSTOM,  CFG_MULTIPLE,                       0,                NULL )
 CFG_ENTRY( "ph_default_dose_time",   ph_default_dose_time,   20,                   CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "ph_max_dose_range",      ph_max_dose_range,      60,                   CFG_INT,     0,                                  0,                NULL )
 CFG_ENTRY( "ph_average_dose_calc",   ph_average_dose_calc,   false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
 
 CFG_ENTRY( "orp_dose_range",         orp_steps,              NULL,                 CFG_CUSTOM,  CFG_MULTIPLE,                       0,                NULL )
-CFG_ENTRY( "orp_default_dose_time",  orp_default_dose_time,  1500,                 CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "orp_default_dose_time",  orp_default_dose_time,  60,                   CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "orp_max_dose_range",     orp_max_dose_range,     300,                  CFG_INT,     0,                                  0,                NULL )
 CFG_ENTRY( "orp_average_dose_calc",  orp_average_dose_calc,  false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
 /* --- 7. SECURITY / TLS (Conditional) --- */

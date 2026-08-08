@@ -201,9 +201,11 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
         cJSON_AddNumberToObject(device, "timer_duration", remaining_sec);
         if (isMASKSET(curr->flags, PH_PUMP)) {
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.ph_default_dose_time);
+          cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.ph_max_dose_range);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("ph_pump"));
         } else if (isMASKSET(curr->flags, ORP_PUMP)) {
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.orp_default_dose_time);
+          cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.orp_max_dose_range);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("orp_pump"));
         }
         
@@ -506,7 +508,7 @@ bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_s
   int ring_head = 0;
   int ring_count = 0;
 
-  // 1. Initialize cJSON root
+  // Initialize cJSON root
   cJSON *root = cJSON_CreateObject();
   if (!root)
     return false;
@@ -514,7 +516,7 @@ bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_s
   cJSON_AddStringToObject(root, "type", "dose_history");
   cJSON *history = detailed ? cJSON_AddArrayToObject(root, "history") : NULL;
 
-  // 2. Calculate start time in microseconds
+  // Calculate start time in microseconds
   struct timeval tv;
   gettimeofday(&tv, NULL);
   uint64_t since_usec = ((uint64_t)tv.tv_sec * 1000000) - ((uint64_t)days * 24 * 3600 * 1000000);
@@ -530,8 +532,9 @@ bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_s
   sd_journal_add_match(j, "MESSAGE_ID=" SD_PUMP_EVENT_ID, 0);
   sd_journal_seek_realtime_usec(j, since_usec);
 
-  // 4. Iterate through log entries
-  SD_JOURNAL_FOREACH(j)
+  // Iterate through log entries
+  int r;
+  while ((r = sd_journal_next(j)) > 0)
   {
     const char *data;
     size_t len;
@@ -630,7 +633,14 @@ bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_s
       }
     }
   }
+  if (r < 0) {
+    LOG(LOG_ERR, "sd_journal_next failed: %d (%s)\n", r, strerror(-r));
+  }
+
   sd_journal_close(j);
+
+  LOG(LOG_DEBUG, "since_usec=%llu now_sec=%ld days=%d\n",
+    (unsigned long long)since_usec, (long)tv.tv_sec, days);
 
   LOG(LOG_INFO, "Processed %d pump events from logs", ring_count);
   // 5. Drain ring buffer into history array in chronological order

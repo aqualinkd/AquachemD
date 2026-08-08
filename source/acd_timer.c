@@ -15,6 +15,8 @@
 #include "state_manager.h"
 #include "acd_types.h"
 
+#define GRANULAR_TIMER_UPDATE // Update MQTT / WebSocket every second instead of every minute when timer is running. This is more accurate but more CPU intensive.
+
 struct timerthread {
   //pthread_t thread_id;
   //pthread_mutex_t thread_mutex;
@@ -280,6 +282,7 @@ void *timer_worker(void *ptr)
     if (remaining_sec <= 0) break;
 
     SET_DIRTY(tmthread->acddata->is_dirty);
+    SET_DIRTY(tmthread->key->is_dirty);
     
     if (remaining_sec >= 60) {
       LOG(LOG_INFO, "Time left for '%s': %ldm %lds\n", tmthread->key->label, remaining_sec / 60, remaining_sec % 60);
@@ -289,8 +292,19 @@ void *timer_worker(void *ptr)
 
     tmthread->timeout = now;
     //tmthread->timeout.tv_sec += (remaining_sec > 60) ? 60 : remaining_sec; // Wakes exactly when done if < 60s
-    //tmthread->timeout.tv_sec += (remaining_sec >= 60) ? 60 : 1; // Wake ever second if under 1 minute left on timer
-    tmthread->timeout.tv_sec += (remaining_sec > 60) ? (remaining_sec - 60) : 1; // Wake ever second if under 1 minute left on timer
+    //tmthread->timeout.tv_sec += (remaining_sec >= 60) ? 60 : 1; // Wake ever minute, then every second if under 1 minute left on timer
+    //tmthread->timeout.tv_sec += (remaining_sec > 60) ? (remaining_sec - 60) : 1; // Wake every second if under 1 minute left on timer
+
+#ifdef GRANULAR_TIMER_UPDATE
+    tmthread->timeout.tv_sec += 1; // Always wake every second
+#else
+    if (remaining_sec > 60) {
+      long rem = remaining_sec % 60;
+      tmthread->timeout.tv_sec += (rem != 0) ? rem : 60; // align to minute boundary first, then sleep in full minutes
+    } else {
+      tmthread->timeout.tv_sec += 1; // under a minute left: wake every second
+    }
+#endif
 
     retval = pthread_cond_timedwait(&tmthread->control.cond, &tmthread->control.mutex, &tmthread->timeout);
 

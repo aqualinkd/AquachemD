@@ -914,7 +914,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 if (_cfgParams[i].value_ptr == &_acdconfig_.ph_steps) {
                   step_cnt = _acdconfig_.ph_step_count;
                   steps = _acdconfig_.ph_steps;
-                  decimal = 1;
+                  decimal = 2;
                 } else {
                   step_cnt = _acdconfig_.orp_step_count;
                   steps = _acdconfig_.orp_steps;
