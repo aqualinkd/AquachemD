@@ -517,9 +517,26 @@ bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_s
   cJSON *history = detailed ? cJSON_AddArrayToObject(root, "history") : NULL;
 
   // Calculate start time in microseconds
+  //struct timeval tv;
+  //gettimeofday(&tv, NULL);
+  //uint64_t since_usec = ((uint64_t)tv.tv_sec * 1000000) - ((uint64_t)days * 24 * 3600 * 1000000);
+
+  // Calculate start time: beginning of the day, `days` days back
+  // days=1 -> start of today, days=2 -> start of yesterday, etc.
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  uint64_t since_usec = ((uint64_t)tv.tv_sec * 1000000) - ((uint64_t)days * 24 * 3600 * 1000000);
+
+  time_t now_sec = tv.tv_sec;
+  struct tm tm_start;
+  localtime_r(&now_sec, &tm_start);   // use gmtime_r instead if you want UTC-based "day" boundaries
+
+  tm_start.tm_hour = 0;
+  tm_start.tm_min  = 0;
+  tm_start.tm_sec  = 0;
+  tm_start.tm_mday -= (days - 1);     // step back whole days; mktime() normalizes this
+
+  time_t start_sec = mktime(&tm_start);
+  uint64_t since_usec = (uint64_t)start_sec * 1000000ULL;
 
   // 3. Open Journal and Filter
   if (sd_journal_open(&j, SD_JOURNAL_LOCAL_ONLY) < 0)

@@ -7,6 +7,9 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <string.h>
+#include <strings.h> // For strncasecmp
+
+
 
 #define CONFIG_C
 #include "config.h"
@@ -17,6 +20,7 @@
 #include "uom.h"
 
 void set_config_defaults();
+char* replace_or_append_suffix(const char *orig, const char *suffixes[], const char *append_text);
 
 #define SET_VAL_CFG_STRING(field, def)  _acdconfig_.field = def
 #define SET_VAL_CFG_INT(field, def)     _acdconfig_.field = def
@@ -88,6 +92,7 @@ void add_sensor_ezo(const acd_staging_t *st);
 void add_sensor_d1w(const acd_staging_t *st);
 void add_sensor_mqtt(const acd_staging_t *st);
 void add_sensor_sysfs(const acd_staging_t *st);
+void add_sensor_i2c(const acd_staging_t *st);
 /*
 void add_condition_mqtt(const char *label, const char *topic, const char *value, bool is_global);
 void add_condition_gpio(const char *label, int pin, gpio_active_t pin_mode, gpio_req_t pin_state, bool is_global);
@@ -169,6 +174,9 @@ void action_staging() {
             break;
         case ACD_TYPE_MQTT_VALUE:
             add_sensor_mqtt(&_staging);
+            break;
+        case ACD_TYPE_I2C_PRS:
+            add_sensor_i2c(&_staging);
             break;
         case ACD_TYPE_EZO_PMP:
             LOG(LOG_ERR, "EZO Pump not supported yet, Ignoring %s", _staging.label);
@@ -282,17 +290,23 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                             //if (strncasecmp(param, "ph", 2) == 0) setMASK(_staging.flags, PH_PUMP);
                             //else if (strncasecmp(param, "orp", 2) == 0) setMASK(_staging.flags, ORP_PUMP);
                         }
-                    } 
+                    }
                     else if (strcasecmp(value, "d1w") == 0) _staging.pending_type = ACD_TYPE_D1W_TEMP;
                     else if (strcasecmp(value, "mqtt") == 0) _staging.pending_type = ACD_TYPE_MQTT_TEMP;
                     else if (strcasecmp(value, "gpio") == 0) {}
                     else if (strstr(param, "doser_type")) {
-                            _staging.pending_type = ACD_TYPE_GPIO_PMP;
-                            setMASK(_staging.flags, parse_pump_type(value));
+                        _staging.pending_type = ACD_TYPE_GPIO_PMP;
+                        setMASK(_staging.flags, parse_pump_type(value));
                             //if (strncasecmp(param, "ph", 2) == 0) setMASK(_staging.flags, PH_PUMP);
                             //else if (strncasecmp(param, "orp", 2) == 0) setMASK(_staging.flags, ORP_PUMP);
                         
                     }
+                    else if (strcasecmp(value, "PTE7300") == 0) {
+                      _staging.pending_type = ACD_TYPE_I2C_PRS;
+                      _staging.pin_mode = I2C_SENSOR_PTE7300;
+                      _staging.address = PTE7300_ADDR_DEFAULT;
+                    }
+                    
                 }
                 else if (strncasecmp(param, "mqtt_condition_topic", 20) == 0) {
                     _staging.pending_type = ACD_TYPE_MQTT_COND;
@@ -384,6 +398,12 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 }
                 else if (strncasecmp(param, "sysfs_sensor_offset", 19) == 0) {
                     _staging.value = strtof(value, NULL);
+                }
+                else if (strncasecmp(param, "prs_sensor_min_value", 20) == 0) {
+                    _staging.value2 = strtof(value, NULL);
+                }
+                else if (strncasecmp(param, "prs_sensor_max_value", 20) == 0) {
+                    _staging.value3 = strtof(value, NULL);
                 }
                 return true;
             }
@@ -783,6 +803,13 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                     case ACD_TYPE_SYSFS_VALUE: fprintf(fp, "sysfs_sensor_label=%s\n", lbl); break;
                     case ACD_TYPE_GPIO_PMP:    fprintf(fp, "gpio_doser_label=%s\n", lbl); break;
                     case ACD_TYPE_MQTT_VALUE:  fprintf(fp, "mqtt_sensor_label=%s\n", lbl); break;
+                    case ACD_TYPE_I2C_PRS:
+                      { 
+                        // THIS WILL NEED SOME IF IN FUTURE    
+                        fprintf(fp, "i2c_sensor_label=%s\ni2c_sensor_type=%s\n", lbl, "PTE7300"); 
+                      }    
+                    break;
+                    
                     default: break;
                 }
             }
@@ -1638,6 +1665,10 @@ void check_print_config (struct aquachemdata *acdata)
       case ACD_TYPE_MQTT_TEMP:   type_str = "sensor (MQTT Temp)"; break;
       case ACD_TYPE_SYSFS_VALUE: type_str = "sensor (System File)"; break;
       case ACD_TYPE_MQTT_VALUE:  type_str = "sensor (MQTT Value)"; break;
+      case ACD_TYPE_I2C_PRS:     
+        type_str = "sensor (I2C Pressure)";
+        snprintf(buffer, sizeof(buffer), "(%s)", curr->data.i2c.type == I2C_SENSOR_PTE7300 ? "PTE7300" : "UNKNOWN");
+        break;
       case ACD_TYPE_GPIO_PMP:
         type_str = "pump (GPIO)";
         snprintf(buffer, sizeof(buffer), "(%s)", role);
@@ -1735,12 +1766,14 @@ void generate_sensor_id(acd_key_t *node) {
             node->index = count_orp++;
             break;
         case ACD_TYPE_EZO_PRS:
+        case ACD_TYPE_I2C_PRS:
             prefix = "PRS";
             node->index = count_prs++;
             break;
         case ACD_TYPE_EZO_TEMP:
         case ACD_TYPE_MQTT_TEMP:
         case ACD_TYPE_D1W_TEMP:
+        case ACD_TYPE_I2C_TEMP:
             prefix = "TEMP";
             node->index = count_temp++;
             break;
@@ -1800,6 +1833,9 @@ char *generate_label(const char *base, acd_label_type_t type, const char *label)
       break;
     case ACD_LABEL_SYSFS:
       snprintf(buf, sizeof(buf), "SYS_%s", base);
+      break;
+    case ACD_FLAG_VIRTUAL:
+      snprintf(buf, sizeof(buf), "VIR_%s", base);
       break;
     //case ACD_LABEL_MQTT:
     //  snprintf(buf, sizeof(buf), "MQT_%s", base);
@@ -1925,7 +1961,9 @@ void add_sensor_mqtt(const acd_staging_t *st) {
     new_node->type = st->pending_type;
     new_node->label = generate_label(st->topic_path, ACD_LABEL_MQTT, st->label);
     new_node->data.mqtt.topic = strdup(st->topic_path);
-    new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+
+    //new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+    new_node->scope = ACD_SCOPE_LOCAL;
 
     generate_sensor_id(new_node);
 
@@ -2020,6 +2058,124 @@ void add_sensor_sysfs(const acd_staging_t *st) {
     generate_sensor_id(new_node);
 
     append_to_key_list(new_node);
+}
+
+
+// Specialized function for i2c input
+void add_sensor_i2c(const acd_staging_t *st) {
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
+    if (!new_node) return;
+  
+    new_node->type = st->pending_type;
+    new_node->label = generate_label(hex_to_str(st->address), ACD_LABEL_PRS, st->label);
+    
+    new_node->data.i2c.type = st->pin_mode;
+
+    if (new_node->data.i2c.type != I2C_SENSOR_PTE7300) {
+        // SOME ERROR
+        // return.
+    }  
+    new_node->data.i2c.address = st->address;
+    new_node->data.i2c.min_value = st->value2;
+    new_node->data.i2c.max_value = st->value3;
+
+    //new_node->scope = ACD_SCOPE_LOCAL;
+    new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+
+    new_node->uom = UOM_PSI;
+
+    //new_node->uom = st->uom;
+    /*
+    new_node->data.gpio.pin = st->pin;
+    new_node->data.gpio.active = st->pin_mode;
+    new_node->data.gpio.required = st->pin_state;
+    new_node->flow_rate = st->value; // Mapped from _staging.value (ml_ps)
+    */
+    if (st->flags != 0) {
+        new_node->flags = st->flags;
+    }
+  
+    generate_sensor_id(new_node);
+    append_to_key_list(new_node);
+
+    if (new_node->data.i2c.type == I2C_SENSOR_PTE7300) {
+      // Add the appropiate temperature sensor for the PTE7300 if it doesn't already exist in the list.
+      acd_key_t *new_i2c_temp = malloc(sizeof(acd_key_t));
+      if (!new_i2c_temp) return;
+
+      *new_i2c_temp = *new_node; // Copy all value fields, enums, unions, and flags in one step
+
+      // Set to NULL if the copy shouldn't share the same linked list/child relations
+      new_i2c_temp->child = NULL; 
+      new_i2c_temp->next  = NULL;
+      new_node->child = new_i2c_temp; // Link the temperature sensor as a child of the pressure sensor
+
+      new_i2c_temp->flags = ACD_FLAG_VIRTUAL;
+      new_i2c_temp->type = ACD_TYPE_I2C_TEMP;
+      new_i2c_temp->uom = UOM_CELSIUS;
+
+      char *new_i2c_temp_label = replace_or_append_suffix(
+        st->label, 
+        (const char*[]){"pressure", "psi", "bar", NULL}, 
+        " Temperature"
+      );
+
+      new_i2c_temp->label = generate_label(hex_to_str(st->address), ACD_FLAG_VIRTUAL, new_i2c_temp_label);
+      generate_sensor_id(new_i2c_temp);
+      append_to_key_list(new_i2c_temp);
+
+      LOG(LOG_NOTICE, "Added I2C Temperature Sensor: %s, from I2C Pressure Sensor: %s, Address: 0x%02x", new_i2c_temp->label, new_node->label, new_node->data.i2c.address);
+    
+      free(new_i2c_temp_label); // Free the temporary label string after use
+
+      //LOG(LOG_NOTICE, "Added I2C Pressure Sensor: %s, Address: 0x%02x, Min: %.2f, Max: %.2f", new_node->label, new_node->data.i2c.address, new_node->data.i2c.min_value, new_node->data.i2c.max_value);
+    }
+}
+
+
+char* replace_or_append_suffix(const char *orig, const char *suffixes[], const char *append_text) {
+    if (!orig || !append_text) return NULL;
+
+    size_t orig_len = strlen(orig);
+    size_t base_len = orig_len;
+
+    // 1. Search for a matching suffix at the end of orig (case-insensitive)
+    if (suffixes) {
+        for (size_t i = 0; suffixes[i] != NULL; i++) {
+            size_t suf_len = strlen(suffixes[i]);
+            if (orig_len >= suf_len) {
+                if (strncasecmp(orig + (orig_len - suf_len), suffixes[i], suf_len) == 0) {
+                    base_len = orig_len - suf_len;
+                    break; // Stop after the first matching suffix
+                }
+            }
+        }
+    }
+
+    // 2. Trim trailing whitespace left on the base string (e.g., "Filter " -> "Filter")
+    while (base_len > 0 && isspace((unsigned char)orig[base_len - 1])) {
+        base_len--;
+    }
+
+    // 3. Skip leading space in append_text if the base string ended up empty
+    const char *append_ptr = append_text;
+    if (base_len == 0) {
+        while (*append_ptr && isspace((unsigned char)*append_ptr)) {
+            append_ptr++;
+        }
+    }
+
+    // 4. Allocate memory and construct the result string
+    size_t append_len = strlen(append_ptr);
+    char *new_str = malloc(base_len + append_len + 1);
+    if (!new_str) return NULL;
+
+    if (base_len > 0) {
+        memcpy(new_str, orig, base_len);
+    }
+    strcpy(new_str + base_len, append_ptr);
+
+    return new_str;
 }
 
 /*

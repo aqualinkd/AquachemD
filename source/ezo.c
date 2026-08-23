@@ -10,6 +10,7 @@
 
 #include "ezo.h"
 #include "utils.h"
+#include "i2c.h"
 
 // ─── Real implementation ──────────────────────────────────────────────────────
 // All code in this block is compiled only when DUMMY_SENSORS is NOT defined.
@@ -188,8 +189,13 @@ void ezo_i2cdetect()
     else if (known)
       printf("  0x%02x  likely:    %-6s  (by default address, unconfirmed)\n",
         addr, known);
-    else
-      printf("  0x%02x  unknown device\n", addr);
+    else {
+      const char *known = i2c_name_from_addr(addr);
+      if (known)
+        printf("  0x%02x  likely: %s (by default address, unconfirmed)\n", addr, known);
+      else
+        printf("  0x%02x  unknown device\n", addr);
+    }
   }
   printf("\n");
 }

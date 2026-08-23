@@ -103,6 +103,10 @@ CFG_ENTRY( "prs_sensor_type",        keys,                   NULL,              
 CFG_ENTRY( "prs_sensor_address",     keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_scope_global",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_statistics",  keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+// For I2C (not EZO)
+CFG_ENTRY( "prs_sensor_min_value",   keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "prs_sensor_max_value",   keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
 
 CFG_ENTRY( "mqtt_sensor_label",       keys,                  NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_sensor_topic",       keys,                  NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -129,6 +133,16 @@ CFG_ENTRY( "gpio_doser_address",       keys,                   NULL,            
 CFG_ENTRY( "gpio_doser_pin_mode",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_required_state",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_ml_per_second",  keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
+/*
+CFG_ENTRY( "i2c_prs_sensor_label",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "i2c_prs_sensor_type",        keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "i2c_prs_sensor_address",     keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "i2c_prs_sensor_scope_global",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "i2c_prs_sensor_statistics",  keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "i2c_prs_sensor_min_value",   keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "i2c_prs_sensor_max_value",   keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+*/
 
 /*
 CFG_ENTRY( "ph_doser_label",         keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )

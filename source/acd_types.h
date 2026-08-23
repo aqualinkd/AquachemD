@@ -8,6 +8,7 @@
 #include "1wire.h"
 #include "gpio.h"
 #include "sysfs.h"
+#include "i2c.h"
 #include "uom.h"
 
 /*
@@ -69,6 +70,8 @@ typedef enum {
     ACD_TYPE_EZO_ORP,
     ACD_TYPE_EZO_TEMP,
     ACD_TYPE_EZO_PRS,
+    ACD_TYPE_I2C_PRS,
+    ACD_TYPE_I2C_TEMP,
     ACD_TYPE_MQTT_TEMP,
     ACD_TYPE_D1W_TEMP,
     ACD_TYPE_SYSFS_VALUE,
@@ -118,6 +121,42 @@ typedef enum {
     ACD_LED_DELAY // Condition has a delay before turning on.
 } acd_state_t;
 
+// acd_scope_t is reused by two different kinds of nodes, and means something
+// slightly different on each. It is set by the various "*_scope_global" config
+// options (e.g. mqtt_condition_scope_global, gpio_condition_scope_global,
+// ph_sensor_scope_global, orp_sensor_scope_global, prs_sensor_scope_global,
+// temp_sensor_scope_global). All of these options are simple true/false, and
+// map true -> ACD_SCOPE_GLOBAL, false -> ACD_SCOPE_LOCAL. ACD_SCOPE_ALLOW is
+// never set by config; it only ever appears on the master key.
+//
+// On a CONDITION (mqtt_condition / gpio_condition, an interlock like
+// "Filter Pump Running" or "Flow Switch"), scope controls how severely a
+// failed/unmet condition affects the whole system:
+//   scope_global = false (LOCAL)  -> Soft Limit.
+//       Failing this condition disables/stops the dosing pumps (outputs)
+//       only. All sensors keep sampling and reporting normally.
+//       e.g. "tank running low -> pause dosing, but keep monitoring".
+//   scope_global = true  (GLOBAL) -> Hard Interlock.
+//       Failing this condition forces the whole system into BLOCK: any
+//       running dosing pump is shut off immediately, all outputs are
+//       disabled, AND any sensor that is itself scope_global=true also
+//       stops being polled. Sensors marked scope_global=false keep
+//       reading even through a hard interlock.
+//       e.g. "no flow -> don't dose, and don't bother reading the
+//       flow-dependent probes either".
+// The master's scope is always the worst (highest) of all its conditions'
+// scopes - a single GLOBAL condition failing overrides any LOCAL ones.
+//
+// On a SENSOR (ph/orp/prs/temp/etc.), scope only matters once some
+// condition has already put the master into a degraded state:
+//   scope_global = false (LOCAL)  -> This sensor keeps reporting values
+//       no matter what, even during a hard (GLOBAL) interlock shutdown.
+//       Useful for e.g. an externally-fed MQTT reading you still want
+//       visible in Home Assistant while dosing is halted.
+//   scope_global = true  (GLOBAL) -> This sensor is paused/disabled
+//       whenever a GLOBAL condition trips the master into BLOCK.
+// Sensor scope has no effect while the master is ALLOW or LIMIT - all
+// sensors read normally in those states regardless of their own scope.
 
 typedef enum {
     ACD_SCOPE_ALLOW  = 0, // Default / No restriction (ONLY FOR MASTER)
@@ -151,7 +190,7 @@ typedef struct acd_key_t {
     char *label;
     char *ID;
     uint8_t index; //values from 0 to 255
-    uint8_t flags; // Any bitmasks (like timer active, pump type, global interlock)
+    uint16_t flags; // Any bitmasks (like timer active, pump type, global interlock)
     uint8_t err_cnt;
     
     float value; // sensor uses for current value, pump uses for value of ph/orp when turned on.
@@ -165,7 +204,7 @@ typedef struct acd_key_t {
 
     union {
       bool met;    // For conditions, met or not.
-      bool ison;   // For output pump,  
+      bool ison;   // For output pump,
     };
 
     union {
@@ -174,8 +213,10 @@ typedef struct acd_key_t {
         w1_sensor_t    w1;
         mqtt_sensor_t  mqtt;
         sysfs_sensor_t sysfs;  
+        i2c_sensor_t   i2c;
     } data;
 
+    struct acd_key_t *child;  // Virtual key if sensor has multiple outputs (like PTE7300 with pressure and temperature)
     struct acd_key_t *next;
 } acd_key_t;
 
@@ -200,6 +241,9 @@ typedef struct runtime_range_t{
 #define CALC_AVERAGE           (1 << 6)
 
 #define CONDITION_NOTIFIED     (1 << 7)
+
+#define ACD_FLAG_VIRTUAL       (1 << 8)
+
 // CAN'T ADD ANY MORE wuthout changeing uint8_t to uint16_t 
 //#define CONDITION_SCOPE_GLOBAL (1 << 3) // For conditions Set if global interlock, clear if local restriction
 //#define CONDITION_SCOPE_LOCAL  (1 << 4) // ONLY for master key, if on and this is set, then re can read sensors but not dose.

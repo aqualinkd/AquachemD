@@ -1,3 +1,4 @@
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,6 +7,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <time.h>
+#include <math.h>
 
 #include "i2c.h"
 #include "utils.h"
@@ -28,6 +30,7 @@
 // If the pressure reading only makes sense with the two data bytes swapped,
 // flip this to 0.
 #define PTE7300_LITTLE_ENDIAN 1
+
 
 // ─── Generic transport ────────────────────────────────────────────────────────
 
@@ -128,10 +131,11 @@ typedef struct {
 
 static const i2c_addr_map_t i2c_known_devices[] = {
   { PTE7300_ADDR_DEFAULT, "PTE7300 pressure (non-CRC)" },
+  { PTE7300_ADDR_CRC,     "PTE7300 pressure (CRC)" },
   { 0,                    NULL                          }
 };
 
-static const char *i2c_name_from_addr(int addr)
+const char *i2c_name_from_addr(int addr)
 {
   for (int i = 0; i2c_known_devices[i].name != NULL; i++)
     if (i2c_known_devices[i].addr == addr)
@@ -194,13 +198,96 @@ void i2c_generic_detect(const char *bus_path)
 
 static float i2c_scale(long raw, long min_counts, long max_counts, float min_value, float max_value)
 {
+  if (max_counts == min_counts) return NAN;   // misconfigured sensor (e.g. init never ran) — never silently return ±inf
   return min_value + (float)(raw - min_counts) * (max_value - min_value) / (float)(max_counts - min_counts);
 }
 
+
+
 // ─── PTE7300 pressure sensor ──────────────────────────────────────────────────
+
+
+// ─── CRC4/CRC8 (ported from Sensata's official PTE7300_I2C Arduino library) ──
+// Bit-serial CRC exactly as in their reference implementation — translated
+// line-for-line from PTE7300_I2C.cpp's calc_crc4()/calc_crc8(), not
+// reverse-engineered, so the framing matches what the ASIC's CRC-protected
+// command channel actually expects.
+
+static unsigned char pte7300_crc4(unsigned char polynom, unsigned char init,
+                                   const unsigned char *data, unsigned int len)
+{
+  unsigned char shifter = init;
+  for (unsigned int i = 0; i < len; i++) {
+    for (int j = 7; j >= 0; j--) {
+      if (i >= len - 1 && j < 4) break;
+      if (((shifter >> 3) & 0x01) != ((data[i] >> j) & 0x01))
+        shifter = (unsigned char)((shifter << 1) ^ polynom);
+      else
+        shifter = (unsigned char)(shifter << 1);
+      shifter &= 0x0F;
+    }
+  }
+  return shifter & 0x0F;
+}
+
+static unsigned char pte7300_crc8(unsigned char polynom, unsigned char init,
+                                   const unsigned char *data, unsigned int len)
+{
+  unsigned char shifter = init;
+  for (unsigned int i = 0; i < len; i++) {
+    for (int j = 7; j >= 0; j--) {
+      if (((shifter >> 7) & 0x01) != ((data[i] >> j) & 0x01))
+        shifter = (unsigned char)((shifter << 1) ^ polynom);
+      else
+        shifter = (unsigned char)(shifter << 1);
+    }
+  }
+  return shifter;
+}
+
+// CRC-protected command write — mirrors writeRegisterCRC() from Sensata's
+// library for the single-word command case (number=1). Their library
+// defaults CRC mode ON for everything; our working hypothesis is the ASIC
+// requires it specifically for command-channel writes, even though it's
+// been accepting plain non-CRC reads fine.
+static int pte7300_write_cmd_crc(i2c_sensor_t *s, unsigned int cmd)
+{
+  unsigned char lo, hi;
+#if PTE7300_LITTLE_ENDIAN
+  lo = (unsigned char)(cmd & 0xFF);
+  hi = (unsigned char)((cmd >> 8) & 0xFF);
+#else
+  hi = (unsigned char)(cmd & 0xFF);
+  lo = (unsigned char)((cmd >> 8) & 0xFF);
+#endif
+
+  // node byte: 7-bit address shifted into an 8-bit form with read=0, crc=1 —
+  // this is where the datasheet's "0xDA including CRC" comes from: for
+  // s->address=0x6C, this evaluates to exactly 0xDA.
+  unsigned char node = (unsigned char)(((s->address << 1) & 0xFC) | 0x02);
+
+  unsigned char header[2] = { PTE7300_REG_CMD, 0x10 };   // 0x10 = ((1 word * 2)-1)<<4
+  unsigned char crc4 = pte7300_crc4(0x03, 0x0F, header, 2);
+  unsigned char len_crc4_byte = (unsigned char)(0x10 | (crc4 & 0x0F));
+
+  unsigned char all[5] = { node, PTE7300_REG_CMD, len_crc4_byte, lo, hi };
+  unsigned char crc8 = pte7300_crc8(0xD5, 0xFF, all, sizeof(all));
+
+  // Wire frame after the CRC-mode slave address (0x6D): [reg][len/crc4][lo][hi][crc8]
+  unsigned char payload[4] = { len_crc4_byte, lo, hi, crc8 };
+
+  return i2c_write_reg(I2C_GENERIC_BUS, PTE7300_ADDR_CRC, PTE7300_REG_CMD, payload, sizeof(payload));
+}
+
+
+
+#define PTE7300_USE_CRC_COMMANDS 1   // set to 0 to fall back to plain (non-CRC) command writes
 
 static int pte7300_write_cmd(i2c_sensor_t *s, unsigned int cmd)
 {
+#if PTE7300_USE_CRC_COMMANDS
+  return pte7300_write_cmd_crc(s, cmd);
+#else
   unsigned char data[2];
 #if PTE7300_LITTLE_ENDIAN
   data[0] = (unsigned char)(cmd & 0xFF);
@@ -210,9 +297,8 @@ static int pte7300_write_cmd(i2c_sensor_t *s, unsigned int cmd)
   data[1] = (unsigned char)(cmd & 0xFF);
 #endif
   return i2c_write_reg(I2C_GENERIC_BUS, s->address, PTE7300_REG_CMD, data, 2);
-}
-
-static int pte7300_read_i16(i2c_sensor_t *s, unsigned char reg, short *out)
+#endif
+}static int pte7300_read_i16(i2c_sensor_t *s, unsigned char reg, short *out)
 {
   unsigned char data[2];
   int status = i2c_read_reg(I2C_GENERIC_BUS, s->address, reg, data, 2);
@@ -240,7 +326,60 @@ static int pte7300_read_u16(i2c_sensor_t *s, unsigned char reg, unsigned short *
   return I2C_SUCCESS;
 }
 
-void i2c_sensor_init_pte7300(i2c_sensor_t *s, int address, float min_value, float max_value)
+int pte7300_validate_status(unsigned short raw_status)
+{
+  // Extract the system layer and the device state layer
+  uint8_t i2c_status_flags = (raw_status >> 14) & 0x03; // Top 2 bits
+  uint8_t internal_diagnostic = raw_status & 0xFF;       // Lower 8 bits
+
+  if (i2c_status_flags == 0x03) {
+    // 0x03 (11b) is expected when reading register space 0x36
+    if (internal_diagnostic == 0x0E || internal_diagnostic == 0x1E) {
+        // Sensor is perfectly healthy.
+        // 0x1E simply means an internal measurement cycle was active during the read.
+        return I2C_SUCCESS;
+    } else {
+        // Handle unexpected lower-byte fault flags here if they occur
+        return I2C_ERROR;
+    }
+  }
+  return I2C_ERROR;
+}
+
+// Logging-only — see NOTE ON STATUS BITS in i2c.h. Nothing gates on this.
+static void pte7300_decode_status(unsigned short status)
+{
+  LOG(LOG_DEBUG, "--- PTE7300 STATUS DECODER (Raw: 0x%04X) ---", status);
+
+  if (status == 0x0000 || status == 0x0001) {
+    LOG(LOG_INFO, "  [OK] System Normal - No diagnostic faults latched");
+    return;
+  }
+
+  // --- High Byte System & DSP Diagnostics (Bits 15..8) ---
+  if (status & 0x8000) LOG(LOG_ERR,   "  [!] Bit 15 (0x8000): GLOBAL DIAGNOSTIC FAULT - ASIC in error state");
+  if (status & 0x4000) LOG(LOG_ERR,   "  [!] Bit 14 (0x4000): COMMAND ERROR - Invalid command or bad sequence");
+  if (status & 0x2000) LOG(LOG_NOTICE,   "  [*] Bit 13 (0x2000): DSP BUSY - Conversion actively in progress");
+  if (status & 0x1000) LOG(LOG_ERR,   "  [!] Bit 12 (0x1000): EEPROM/RAM FAULT - Memory CRC parity error");
+  if (status & 0x0800) LOG(LOG_ERR,   "  [!] Bit 11 (0x0800): EXECUTION REJECTED - Command ignored by state machine");
+  if (status & 0x0400) LOG(LOG_ERR,   "  [!] Bit 10 (0x0400): SUPPLY VOLTAGE FAULT - VDD under-voltage drop");
+  if (status & 0x0200) LOG(LOG_ERR,   "  [!] Bit  9 (0x0200): THERMAL WARNING - Silicon temp exceeds operating limit");
+  if (status & 0x0100) LOG(LOG_ERR,   "  [!] Bit  8 (0x0100): MATH FAULT - DSP raw count overflow/underflow");
+
+  // --- Low Byte Analog Front-End & Sensor Element (Bits 7..0) ---
+  if (status & 0x0080) LOG(LOG_ERR,   "  [!] Bit  7 (0x0080): INTERNAL DIAGNOSTIC - Reserved ASIC flag");
+  if (status & 0x0040) LOG(LOG_ERR,   "  [!] Bit  6 (0x0040): BRIDGE DRIVE FAULT - Strain-gauge supply failure");
+  if (status & 0x0020) LOG(LOG_ERR,   "  [!] Bit  5 (0x0020): SENSOR DIE FAULT - Open/Short circuit on element");
+  if (status & 0x0010) LOG(LOG_ERR,   "  [!] Bit  4 (0x0010): PRESSURE AFE FAULT - Pressure ADC signal out-of-bounds");
+  if (status & 0x0008) LOG(LOG_ERR,   "  [!] Bit  3 (0x0008): TEMP AFE FAULT - Diode ADC signal out-of-bounds");
+  if (status & 0x0004) LOG(LOG_ERR,   "  [!] Bit  2 (0x0004): CALIBRATION FAULT - Factory EEPROM trim unreadable");
+  if (status & 0x0002) LOG(LOG_NOTICE,   "  [*] Bit  1 (0x0002): MODE - Continuous/Cyclic mode active");
+  if (status & 0x0001) LOG(LOG_NOTICE,   "  [*] Bit  0 (0x0001): STATE - Measurement ready / Run state active");
+
+  LOG(LOG_DEBUG, "---------------------------------------------");
+}
+
+int i2c_sensor_init_pte7300(i2c_sensor_t *s, int address, float min_value, float max_value)
 {
   s->type       = I2C_SENSOR_PTE7300;
   s->address    = address;
@@ -248,21 +387,43 @@ void i2c_sensor_init_pte7300(i2c_sensor_t *s, int address, float min_value, floa
   s->max_value  = max_value;
   s->min_counts = -16000;   // fixed by hardware, not part-dependent
   s->max_counts =  16000;
+
+  // RESET's own write result isn't checked here — the ASIC power-cycles
+  // itself immediately on receiving it and may NACK the transaction's STOP
+  // phase as a side effect of that, which isn't a real failure. The
+  // meaningful check is whether the sensor responds afterward.
+  pte7300_write_cmd(s, PTE7300_CMD_RESET);
+  usleep(50000);   // boot delay: give the ASIC time to reload EEPROM trim data
+
+  unsigned short status_reg = 0;
+  int ret = pte7300_read_u16(s, PTE7300_REG_STATUS, &status_reg);
+
+  if (ret != I2C_SUCCESS) {
+    LOG(LOG_ERR, "PTE7300 init failed: sensor at 0x%02X not responding post-reset", s->address);
+    return I2C_ERROR;
+  }
+
+  if ( pte7300_validate_status(status_reg) != I2C_SUCCESS ) {
+    LOG(LOG_ERR, "PTE7300 init failed: sensor at 0x%02X returned error status post-reset: 0x%04X", s->address, status_reg);
+    pte7300_decode_status(status_reg);
+    return I2C_ERROR;
+  }
+  
+  LOG(LOG_INFO, "PTE7300 init success at 0x%02X (post-reset status: 0x%04X)", s->address, status_reg);
+  return I2C_SUCCESS;
+  
 }
+
+
 
 static i2c_reading_t pte7300_get_reading(i2c_sensor_t *s)
 {
   i2c_reading_t result = { 0.0f, 0.0f, I2C_ERROR };
 
-  int status = pte7300_write_cmd(s, PTE7300_CMD_START);
-  if (status != I2C_SUCCESS) { result.status = status; return result; }
-
-  usleep(PTE7300_WAIT_MS * 1000);
-
   short raw_pressure = 0, raw_temp = 0;
   unsigned short raw_status = 0;
 
-  status = pte7300_read_i16(s, PTE7300_REG_PRESSURE, &raw_pressure);
+  int status = pte7300_read_i16(s, PTE7300_REG_PRESSURE, &raw_pressure);
   if (status != I2C_SUCCESS) { result.status = status; return result; }
 
   status = pte7300_read_i16(s, PTE7300_REG_TEMP, &raw_temp);
@@ -270,11 +431,24 @@ static i2c_reading_t pte7300_get_reading(i2c_sensor_t *s)
 
   pte7300_read_u16(s, PTE7300_REG_STATUS, &raw_status);   // best-effort, non-fatal
 
-  result.value   = i2c_scale(raw_pressure, s->min_counts, s->max_counts, s->min_value, s->max_value);
-  result.temp_c  = i2c_scale(raw_temp, -16000, 16000, -40.0f, 125.0f);
-  result.status  = I2C_SUCCESS;
+  if ( pte7300_validate_status(raw_status) != I2C_SUCCESS ) {
+    pte7300_decode_status(raw_status);
+    result.status = I2C_SUCCESS;
+    return result;
+  }
 
-  (void)raw_status;   // decode further here if you need CRC4/event bits later
+  result.value  = i2c_scale(raw_pressure, s->min_counts, s->max_counts, s->min_value, s->max_value);
+  result.temp_c = i2c_scale(raw_temp, -16000, 16000, -40.0f, 125.0f);
+
+  if (!isfinite(result.value) || !isfinite(result.temp_c)) {
+    LOG(LOG_ERR, "PTE7300 at 0x%02X: computed non-finite value (pressure=%f temp=%f) — "
+                 "sensor likely misconfigured (min_counts=%d max_counts=%d); check init call site",
+        s->address, result.value, result.temp_c, s->min_counts, s->max_counts);
+    result.status = I2C_ERROR;
+    return result;
+  }
+
+  result.status = I2C_SUCCESS;
   return result;
 }
 
@@ -345,6 +519,24 @@ static i2c_reading_t hsc_get_reading(i2c_sensor_t *s)
 }
 
 // ─── Generic dispatch ─────────────────────────────────────────────────────────
+
+int i2c_sensor_init(i2c_sensor_t *s, i2c_sensor_type_t type, int address, float min_value, float max_value)
+{
+  switch (type)
+  {
+    case I2C_SENSOR_PTE7300:
+      LOG(LOG_DEBUG, "i2c_sensor_init: PTE7300 at 0x%02x, %.2f-%.2f", address, min_value, max_value);
+      return i2c_sensor_init_pte7300(s, address, min_value, max_value);
+
+    case I2C_SENSOR_HSC:
+      LOG(LOG_DEBUG, "i2c_sensor_init: HSC at 0x%02x, %.2f-%.2f", address, min_value, max_value);
+      i2c_sensor_init_hsc_default(s, address, min_value, max_value);
+      return I2C_SUCCESS;
+
+    default:
+      return I2C_ERROR;
+  }
+}
 
 int i2c_sensor_is_connected(i2c_sensor_t *s)
 {
@@ -438,7 +630,7 @@ int i2c_probe_address(const char *bus_path, int address)
 
 // ─── Sensor instance setup (dummy) — same as real, no hardware touched ──────
 
-void i2c_sensor_init_pte7300(i2c_sensor_t *s, int address, float min_value, float max_value)
+int i2c_sensor_init_pte7300(i2c_sensor_t *s, int address, float min_value, float max_value)
 {
   s->type       = I2C_SENSOR_PTE7300;
   s->address    = address;
@@ -446,6 +638,7 @@ void i2c_sensor_init_pte7300(i2c_sensor_t *s, int address, float min_value, floa
   s->max_value  = max_value;
   s->min_counts = -16000;
   s->max_counts =  16000;
+  return I2C_SUCCESS;
 }
 
 void i2c_sensor_init_hsc(i2c_sensor_t *s, int address, float min_value, float max_value,
@@ -462,6 +655,16 @@ void i2c_sensor_init_hsc(i2c_sensor_t *s, int address, float min_value, float ma
 void i2c_sensor_init_hsc_default(i2c_sensor_t *s, int address, float min_value, float max_value)
 {
   i2c_sensor_init_hsc(s, address, min_value, max_value, HSC_COUNTS_MIN_DEFAULT, HSC_COUNTS_MAX_DEFAULT);
+}
+
+int i2c_sensor_init(i2c_sensor_t *s, i2c_sensor_type_t type, int address, float min_value, float max_value)
+{
+  switch (type)
+  {
+    case I2C_SENSOR_PTE7300: return i2c_sensor_init_pte7300(s, address, min_value, max_value);
+    case I2C_SENSOR_HSC:     i2c_sensor_init_hsc_default(s, address, min_value, max_value); return I2C_SUCCESS;
+    default:                 return I2C_ERROR;
+  }
 }
 
 int i2c_sensor_is_connected(i2c_sensor_t *s) { (void)s; return 1; }

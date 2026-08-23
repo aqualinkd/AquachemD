@@ -67,6 +67,9 @@ int i2c_probe_address(const char *bus_path, int address);
 // name match from the internal table (see i2c_known_devices in i2c.c).
 void i2c_generic_detect(const char *bus_path);
 
+
+const char *i2c_name_from_addr(int addr);
+
 // ─── Unit conversion helpers ──────────────────────────────────────────────────
 #define I2C_BAR_TO_PSI(bar)   ((bar) * 14.5037738f)
 #define I2C_KPA_TO_PSI(kpa)   ((kpa) * 0.1450377f)
@@ -129,36 +132,61 @@ int i2c_sensor_reset(i2c_sensor_t *s);
 //   - A command word must be written to the CMD register to trigger a
 //     measurement before reading (i2c_sensor_get_reading() does this for you).
 //
-// NOTE ON BYTE ORDER: the datasheet excerpt available didn't spell out
-// register byte order in extractable text (it's shown in a diagram). This
-// driver assumes little-endian (LSB first) — the common convention for this
-// class of device. If your first real reading looks wildly wrong (e.g. not
-// near ~14.7 psi / 1013 mbar at atmospheric with the sensor open to air),
-// flip PTE7300_LITTLE_ENDIAN to 0 in i2c.c and re-test.
+// NOTE ON BYTE ORDER AND REGISTER MAP — CONFIRMED, not assumed:
+// Sensata's own datasheet PDF has a badly-extracted table that (incorrectly)
+// implied 0x2E=pressure/0x30=temperature and STATUS at 0x32. Cross-checked
+// against two independently hardware-tested reference drivers (Sensata's
+// official Arduino library, and EPFL Rocket Team's ported+tested STM32
+// driver) plus direct i2cset/i2cget bench testing on real hardware: byte
+// order is little-endian (LSB first), 0x2E is TEMPERATURE, 0x30 is
+// PRESSURE, and STATUS lives at 0x36. All confirmed below.
+//
+// NOTE ON STATUS BITS: pte7300_decode_status() in i2c.c logs a bit-by-bit
+// breakdown for visibility, but those bit *meanings* were never sourced
+// from Sensata — they're unverified. On real hardware the status word has
+// shown the identical "fault" pattern continuously, including while
+// pressure/temperature read out physically correct, so that decode is
+// logging-only and nothing gates on it. See i2c_sensor_get_reading()'s
+// plausibility check instead for the one thing we do have empirical
+// grounds to flag on.
 
 #define PTE7300_ADDR_DEFAULT   0x6C   // non-CRC protocol address
+#define PTE7300_ADDR_CRC       0x6D   // CRC protocol address
 
-#define PTE7300_REG_CMD         0x22   // write: trigger state transitions
-#define PTE7300_REG_PRESSURE    0x2E   // int16, ±16000 across configured span
-#define PTE7300_REG_TEMP        0x30   // int16, -40..125 C mapped to ±16000
-#define PTE7300_REG_STATUS      0x32   // uint16, status/event bits
-#define PTE7300_REG_SERIAL_LO   0x50   // uint32 serial, low word
-#define PTE7300_REG_SERIAL_HI   0x52   // uint32 serial, high word
+// ============================================================================
+// Sensata PTE7300 Registers
+// ============================================================================
+#define PTE7300_REG_CMD         0x22   // Write: Trigger command execution (16-bit LSB)
+#define PTE7300_REG_TEMP        0x2E   // int16: raw temperature counts, ±16000 = -40..125C
+#define PTE7300_REG_PRESSURE    0x30   // int16: raw pressure counts, ±16000 = min_value..max_value
+#define PTE7300_REG_STATUS      0x36   // uint16: status/fault word (see NOTE ON STATUS BITS above)
+#define PTE7300_REG_SERIAL_LO   0x50   // uint32: Serial number, lower 16 bits
+#define PTE7300_REG_SERIAL_HI   0x52   // uint32: Serial number, upper 16 bits
 
-#define PTE7300_CMD_IDLE    0x7BBA   // abort conversion, power state idle
-#define PTE7300_CMD_START   0x8B93   // start a measurement, power state run
-#define PTE7300_CMD_RESET   0xB169   // full power-up reset
-#define PTE7300_CMD_SLEEP   0x6C32   // enter sleep (6.5uA typical)
+// ============================================================================
+// Sensata PTE7300 Commands (Written to Register 0x22)
+// ============================================================================
+#define PTE7300_CMD_NOP         0x0000 // Clear command buffer / No operation
+#define PTE7300_CMD_SLEEP       0x6C32 // Enter low-power sleep mode (6.5µA typ)
+#define PTE7300_CMD_IDLE        0x7BBA // Force ASIC state machine to IDLE / abort active DSP cycle
+#define PTE7300_CMD_START       0x8B93 // Trigger single-shot measurement cycle (Run state)
+#define PTE7300_CMD_CONT        0x9A4C // Trigger continuous cyclic conversion mode
+#define PTE7300_CMD_RESET       0xB169 // Full ASIC software power-on reset (POR reboot)
 
-#define PTE7300_WAIT_MS      10   // response time is <1ms typical; generous margin
 
-// Initialise a PTE7300 instance.
+#define PTE7300_WAIT_MS      20   // response time is <1ms typical; generous margin
+
+// Initialise a PTE7300 instance. Issues a RESET and does a post-reset status
+// read to confirm the sensor is actually alive on the bus. Returns
+// I2C_SUCCESS if that post-reset read succeeded, I2C_ERROR otherwise (a
+// non-responding sensor, not the unverified status *content* — see NOTE ON
+// STATUS BITS above).
 //   address:   PTE7300_ADDR_DEFAULT unless you've changed it
 //   min_value: engineering-unit reading at the bottom of the sensor's span (usually 0)
 //   max_value: engineering-unit reading at the top of the sensor's span
 // e.g. for the -14DM-0B016SN (0-16 bar) reported in psi:
 //   i2c_sensor_init_pte7300(&s, PTE7300_ADDR_DEFAULT, 0.0f, I2C_BAR_TO_PSI(16.0f));
-void i2c_sensor_init_pte7300(i2c_sensor_t *s, int address, float min_value, float max_value);
+int i2c_sensor_init_pte7300(i2c_sensor_t *s, int address, float min_value, float max_value);
 
 // PTE7300-specific extras beyond the generic API above.
 int i2c_sensor_idle_pte7300(i2c_sensor_t *s);
@@ -212,5 +240,17 @@ void i2c_sensor_init_hsc(i2c_sensor_t *s, int address, float min_value, float ma
 
 // Convenience wrapper for the common "A" (10-90%) transfer function.
 void i2c_sensor_init_hsc_default(i2c_sensor_t *s, int address, float min_value, float max_value);
+
+
+// Generic init dispatcher — picks the right i2c_sensor_init_<family>() based
+// on `type`, which it also stores on `s`. Takes `type` explicitly rather
+// than reading s->type, since s hasn't been initialised yet at this point —
+// branching on an uninitialised struct field was a real bug in an earlier
+// version of this function. Returns I2C_SUCCESS/I2C_ERROR from the
+// family-specific init where that family reports one (PTE7300), or
+// I2C_SUCCESS unconditionally for families with no init-time bus check
+// (HSC/SSC).
+int i2c_sensor_init(i2c_sensor_t *s, i2c_sensor_type_t type, int address, float min_value, float max_value);
+
 
 #endif

@@ -437,7 +437,8 @@ void check_master(struct aquachemdata *acdata) {
   // Turn everything to disabled if master if off
   if ( acdata->keys->state == ACD_LED_OFF ) {
     for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
-      if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF /*&& curr->scope != ACD_SCOPE_LOCAL*/) {
+      //if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF /*&& curr->scope != ACD_SCOPE_LOCAL*/) {
+      if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF && curr->scope != ACD_SCOPE_LOCAL) {
         set_key_state(acdata, curr, ACD_LED_DISABLED);
         //LOG(LOG_ERR, "State Manager - set %s to disable\n",curr->label);
       } else {
@@ -538,6 +539,7 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
     case ACD_TYPE_D1W_TEMP:
     case ACD_TYPE_SYSFS_VALUE:
     case ACD_TYPE_MQTT_VALUE:
+    case ACD_TYPE_I2C_PRS:
     /*
       if (state != ACD_LED_ON && state != ACD_LED_DISABLED) {
         goodState = false;

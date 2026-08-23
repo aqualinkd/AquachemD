@@ -449,6 +449,9 @@ reload_configuration:
       w1_init_generic(&curr->data.w1, curr->data.w1.path, curr->data.w1.scale, curr->data.w1.offset);
     } else if (curr->type == ACD_TYPE_SYSFS_VALUE) {
       sysfs_init_sensor(&curr->data.sysfs);
+    } else if (curr->type == ACD_TYPE_I2C_PRS) {
+      //LOG(LOG_DEBUG,"Setting up I2C Pressure Sensor: %s, address 0x%02X\n", curr->label, curr->data.i2c.address);
+      i2c_sensor_init(&curr->data.i2c, curr->data.i2c.type, curr->data.i2c.address, curr->data.i2c.min_value, curr->data.i2c.max_value);
     }
 
     if (curr->type == ACD_TYPE_MASTER) {
@@ -555,6 +558,9 @@ reload_configuration:
         continue;
       } else if (key->state == ACD_LED_DISABLED) {
         LOG(LOG_DEBUG,"Sensor %s is disabled, skipping\n",key->label);
+        continue;
+      } else if (isMASKSET(key->flags,  ACD_FLAG_VIRTUAL)) {
+        LOG(LOG_DEBUG,"Sensor %s is a child/virtual sensor, skipping\n",key->label);
         continue;
       }
 
@@ -690,6 +696,32 @@ reload_configuration:
             sensor_read_error(&acddata, key);
           }
         } break;
+        case ACD_TYPE_I2C_PRS: {
+          i2c_reading_t reading = i2c_sensor_get_reading(&key->data.i2c);
+          if (reading.status == I2C_SUCCESS) {
+            LOG(reading_log_level,"%s : %.2f psi (%.2f Bar), Temperature %.1f C\n", key->label, I2C_BAR_TO_PSI(reading.value), reading.value, reading.temp_c);
+            ASSIGN_IF_CHANGED(key->value, I2C_BAR_TO_PSI(reading.value), acddata.is_dirty, key->is_dirty);
+            set_key_state(&acddata, key, ACD_LED_ON);
+            key->err_cnt=0;
+            update_sensor_average(key);
+            // If we have a child sensor (temp), update it as well
+            if (key->child && key->child->type == ACD_TYPE_I2C_TEMP && key->data.i2c.type == I2C_SENSOR_PTE7300) {
+              ASSIGN_IF_CHANGED(key->child->value, reading.temp_c, acddata.is_dirty, key->child->is_dirty);
+              set_key_state(&acddata, key->child, ACD_LED_ON);
+              key->child->err_cnt=0;
+              update_sensor_average(key->child);
+            }
+          } else {
+            LOG(LOG_WARNING, "I2C Sensor '%s' read failed (status %d)\n", key->label, reading.status);
+            update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+            sensor_read_error(&acddata, key);
+            if (key->child && key->child->type == ACD_TYPE_I2C_TEMP && key->data.i2c.type == I2C_SENSOR_PTE7300) {
+              LOG(LOG_WARNING, "I2C Sensor '%s' child temp read failed (status %d)\n", key->child->label, reading.status);
+              sensor_read_error(&acddata, key->child);  
+            }
+          }
+        } break;
+    
 
         case ACD_TYPE_GPIO_PMP:
         case ACD_TYPE_EZO_PMP:
