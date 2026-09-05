@@ -71,6 +71,9 @@
 		"PMP_2":	{
 			"display":	true
 		},
+		"PMP_3":	{
+			"display":	true
+		},
 		"TEMP_1":	{
 			"display":	true,
 			"____uom":	"&deg;C",
@@ -166,77 +169,32 @@
 			"display":	true,
 			"uom":	"&deg;",
 			"precision":	1
+		},
+		"TNK_1":	{
+			"display":	true,
+			"on_text":	"",
+			"thresholds":	{
+				"outofrange":	{
+					"min":	5,
+					"max":	101,
+					"maxtext":	"Fill Tank"
+				},
+				"attention":	{
+					"min":	15,
+					"max":	101,
+					"mintext":	"Low"
+				}
+			}
 		}
 	},
 	"slider_range":	{
-		"_heater_slider_min":	36,
-		"_heater_slider_max":	104,
 		"timer_slider_min":	0,
 		"timer_slider_max":	60,
 		"timer_slider_step":	1
 	},
-	"_OLD_tile_thresholds_DEPRECATED":	{
-		"_comment":	"UNUSED: Threshold configuration has been moved to per-device config under 'devices[id].thresholds'. Keeping for reference only.",
-		"SWG/PPM":	{
-			"outofrange":	{
-				"min":	2600,
-				"max":	3500,
-				"mintext":	"Add Salt"
-			},
-			"attention":	{
-				"min":	2700,
-				"max":	3400,
-				"mintext":	"Add Salt"
-			}
-		},
-		"CHEM/pH":	{
-			"outofrange":	{
-				"min":	7,
-				"max":	8
-			},
-			"attention":	{
-				"min":	7.2,
-				"max":	7.8,
-				"mintext":	"Low",
-				"maxtext":	"High"
-			}
-		},
-		"CHEM/ORP":	{
-			"outofrange":	{
-				"min":	560,
-				"max":	900
-			},
-			"attention":	{
-				"min":	650,
-				"max":	850,
-				"mintext":	"Low",
-				"maxtext":	"High"
-			}
-		}
-	},
-	"_swg_status_UNUSED":	{
-		"0":	"On",
-		"1":	"No flow",
-		"2":	"Low salt",
-		"4":	"High salt",
-		"8":	"Clean cell",
-		"9":	"Turning off",
-		"16":	"High current",
-		"32":	"Low volts",
-		"64":	"Low temp",
-		"128":	"Check PCB",
-		"253":	"General Fault",
-		"254":	"Unknown",
-		"255":	"Off",
-		"_comment":	"UNUSED: SWG (Salt Water Generator) is an AqualinkD-specific feature. Not used in AquachemD."
-	},
 	"tile_settings":	{
-		"_turn_off_sensortiles":	"UNUSED: Not referenced in current code",
-		"_show_vsp_gpm":	"UNUSED: VSP (Variable Speed Pump) is AqualinkD-specific",
-		"disable_off_icon_background":	"true",
-		"_light_program_use_dropdown":	"UNUSED: Light programs are AqualinkD-specific features",
-		"_link_spa_and_spa_heater":	"UNUSED: Spa heater is AqualinkD-specific",
 		"orp_runtime_in_minutes":	true,
+		"h2o_runtime_in_minutes":	true,
 		"display_temp_in_f":	true
 	}
 }

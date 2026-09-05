@@ -10,4 +10,6 @@ void sensor_read_error(struct aquachemdata *acddata, acd_key_t *key);
 
 void devices_emergency_stop();
 
+uint32_t caculate_dose_time(struct aquachemdata *acdata, acd_key_t *key);
+
 #endif

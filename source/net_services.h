@@ -22,11 +22,21 @@ void post_dosing_event(acd_key_t *key, uint32_t runtime, float total_ml);
 // Mqtt Topic Levels.
 #define MQTT_TL_STATE    "state"
 #define MQTT_TL_TIMER    "timer"
-#define MQTT_TL_DURATION "duration"
+#define MQTT_TL_DURATION "duration" // For timer
+#define MQTT_TL_DEFAULT  "default"  // For timer
+/*
 #define MQTT_TL_DOSE_PH  "total_acid_ml"
 #define MQTT_TL_DOSE_ORP "total_chlorine_ml"
+#define MQTT_TL_DOSE_H2O "total_water_ml"
 #define MQTT_TL_DOSE_UNKNOWN "total_dose_ml"
-#define MQTT_TL_AVERAGE  "average"
+*/
+#define MQTT_TL_LAST_DOSE "last_dose_ml"
+#define MQTT_TL_AVERAGE   "average"
+#define MQTT_TL_LEVEL     "level"
+
+// MQTT Topic Sub Levels.
+#define MQTT_TSL_REMAINING_VOLUME   "remaining"
+#define MQTT_TSL_TOTAL_VOLUME  "volume"
 
 //#define MQTT_TEMP_TOPIC "temp"
 //#define MQTT_PH_TOPIC "ph"

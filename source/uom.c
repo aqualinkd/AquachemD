@@ -32,6 +32,18 @@ static const uom_alias_map_t uom_parse_table[] = {
     { "mV",          UOM_MV },
     { "orp",         UOM_MV },
 
+    // Millilitre 
+    { "ml",          UOM_MILLILITERS },
+    { "milliliters", UOM_MILLILITERS },
+
+    { "liter",       UOM_LITERS },
+    { "liters",      UOM_LITERS },
+    { "l",           UOM_LITERS },
+    { "gallon",      UOM_GALLONS },
+    { "gallons",     UOM_GALLONS },
+    { "gal",         UOM_GALLONS },
+
+
     // Pressure Aliases
     { "psi",         UOM_PSI },
 
@@ -76,6 +88,7 @@ acd_uom_t parse_uom(const char *str) {
     // If a string was provided but didn't match any pre-defined metric,
     // tag it as a custom dynamic unit.
     //return UOM_CUSTOM;
+
     return UOM_NONE;
 }
 
@@ -88,15 +101,38 @@ const char* uom_to_str(acd_uom_t uom) {
         case UOM_FAHRENHEIT: return "°F";
         case UOM_PH:         return "pH";
         case UOM_MV:         return "mV";
-        case UOM_PSI:        return "PSI";
+        case UOM_PSI:        return "psi";
         case UOM_PERCENT:    return "%";
         case UOM_RPM:        return "RPM";
         case UOM_BYTES:      return "bytes";
         case UOM_SECONDS:    return "s";
         case UOM_MINUTES:    return "min";
         case UOM_RATIO:      return "ratio";
+        case UOM_MILLILITERS:return "ml";
+        case UOM_LITERS:     return "L";
+        case UOM_GALLONS:    return "gal";
         //case UOM_CUSTOM:     return "custom";
         case UOM_NONE:       
+        default:             return "";
+    }
+}
+
+const char* uom_to_fullstr(acd_uom_t uom) {
+    switch (uom) {
+        case UOM_CELSIUS:    return "celsius";
+        case UOM_FAHRENHEIT: return "fahrenheit";
+        case UOM_PH:         return "pH";
+        case UOM_MV:         return "mV";
+        case UOM_PSI:        return "psi";
+        case UOM_PERCENT:    return "percent";
+        case UOM_RPM:        return "RPM";
+        case UOM_BYTES:      return "bytes";
+        case UOM_SECONDS:    return "seconds";
+        case UOM_MINUTES:    return "minutes";
+        case UOM_RATIO:      return "ratio";
+        case UOM_MILLILITERS:return "milliliters";
+        case UOM_LITERS:     return "liters";
+        case UOM_GALLONS:    return "gallons";
         default:             return "";
     }
 }

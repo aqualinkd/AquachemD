@@ -80,6 +80,7 @@ typedef struct {
     acd_type_t pending_type;
     uint8_t flags;
     acd_uom_t uom;
+    acd_uom_t uom2;
 } acd_staging_t;
 
 static acd_staging_t _staging;
@@ -140,6 +141,7 @@ void clear_staging() {
     _staging.flags = 0;
     _staging.is_global = true;
     _staging.uom = UOM_NONE;
+    _staging.uom2 = UOM_NONE;
 }
 
 void action_staging() {
@@ -373,6 +375,15 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 else if (strncasecmp(param, "gpio_doser_pin", 14) == 0) {
                     _staging.pin = (int)strtoul(value, NULL, 10);
                 }
+                else if (strncasecmp(param, "gpio_doser_tank_size", 20) == 0) {
+                    _staging.value2 = strtof(value, NULL);
+                }
+                else if (strncasecmp(param, "gpio_doser_tank_size", 20) == 0) {
+                    _staging.value2 = strtof(value, NULL);
+                }
+                else if (strncasecmp(param, "gpio_doser_tank_uom", 19) == 0) {
+                    _staging.uom2 = parse_uom(value);
+                }
                 else if (strncasecmp(param, "mqtt_condition_value", 20) == 0) {
                     if (_staging.char_value) free(_staging.char_value);
                     _staging.char_value = strdup(value);
@@ -513,7 +524,7 @@ void free_config()
 // Helper: Checks if a value is valid for a given config parameter without mutating memory.
 static bool is_valid_config(const char *param, const char *value) {
     LOG(LOG_DEBUG, "Validating: '%s' option for '%s'", value, param);
-                
+    
     for (int i = 0; i < CFG_PARAM_COUNT; i++) {
         if (strcasecmp(param, _cfgParams[i].name) == 0) {
             
@@ -606,6 +617,38 @@ static bool get_config_val_str(const char *name, char *buf, size_t buf_size) {
     return false;
 }
 
+// Copies mode + ownership from the existing config file onto tmp_file,
+// so that when tmp_file replaces it via rename(), the live file's
+// permissions/ownership are preserved instead of reverting to whatever
+// tmp_file was created with. Call this after writing tmp_file's contents
+// and before rename(). Non-fatal on failure -- logs and lets the rename
+// proceed with tmp_file's own permissions rather than aborting the save.
+static void preserve_file_permissions(const char *existing_file, const char *tmp_file)
+{
+  struct stat st;
+
+  if (stat(existing_file, &st) != 0) {
+    if (errno == ENOENT) {
+      // First-ever write -- nothing to preserve, tmp_file's own mode stands.
+      return;
+    }
+    LOG(LOG_WARNING, "preserve_file_permissions: stat(%s) failed: %s",existing_file, strerror(errno));
+    return;
+  }
+
+  if (chmod(tmp_file, st.st_mode & 07777) != 0) {
+    LOG(LOG_WARNING, "preserve_file_permissions: chmod(%s) failed: %s",tmp_file, strerror(errno));
+  }
+
+  // chown to a different uid typically requires root/CAP_CHOWN -- if this
+  // process isn't privileged, this may legitimately fail. That's fine;
+  // log it rather than treat it as fatal.
+  if (chown(tmp_file, st.st_uid, st.st_gid) != 0) {
+    LOG(LOG_WARNING, "preserve_file_permissions: chown(%s) failed: %s",tmp_file, strerror(errno));
+  }
+}
+
+
 int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int outSize, struct aquachemdata *acdata) {
     cJSON *root = cJSON_ParseWithLength(inBuf, inSize);
     if (!root) {
@@ -627,65 +670,7 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
     }
 
     bool validation_failed = false;
-/*
-    // 1. PROCESS STANDARD GLOBAL FIELDS
-    cJSON *fields = cJSON_GetObjectItem(root, "fields");
-    if (cJSON_IsArray(fields)) {
-        fprintf(fp, "# Global System Parameters\n");
-        cJSON *field;
-        char last_k = '\n';
-        cJSON_ArrayForEach(field, fields) {
-            cJSON *k = cJSON_GetObjectItem(field, "key");
-            cJSON *v = cJSON_GetObjectItem(field, "value");
-            cJSON *t = cJSON_GetObjectItem(field, "type");
-            
-            if (!k || !v || !cJSON_IsString(k)) continue;
 
-            // save the first char of key, and if changes print new line
-            // Ensure the key string isn't empty before checking its first character
-            if (k->valuestring[0] != '\0') {
-                char current_first_char = k->valuestring[0]; // [0] is the first character in C
-                // If this isn't the first item, and the character has changed, print a newline
-                if (last_k != '\0' && current_first_char != last_k) {
-                    fprintf(fp, "\n");
-                }
-                // Update last_k to match the current first character
-                last_k = current_first_char;
-            }
-
-            // Handle array_text (Dosing ranges)
-            if (t && cJSON_IsString(t) && strcmp(t->valuestring, "array_text") == 0) {
-                if (cJSON_IsArray(v)) {
-                    cJSON *arr_item;
-                    cJSON_ArrayForEach(arr_item, v) {
-                        if (cJSON_IsString(arr_item)) {
-                            fprintf(fp, "%s=%s\n", k->valuestring, arr_item->valuestring);
-                        }
-                    }
-                }
-            } 
-            // Handle all standard types
-            else {
-                char val_str[256] = {0};
-                if (cJSON_IsString(v)) snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
-                else if (cJSON_IsNumber(v)) {
-                    if (v->valueint == v->valuedouble) snprintf(val_str, sizeof(val_str), "%d", v->valueint);
-                    else snprintf(val_str, sizeof(val_str), "%.6g", v->valuedouble);
-                } else if (cJSON_IsBool(v)) {
-                    //snprintf(val_str, sizeof(val_str), "%s", cJSON_IsTrue(v) ? "true" : "false");
-                    snprintf(val_str, sizeof(val_str), "%s", bool_to_str(cJSON_IsTrue(v)));
-                }
-
-                if (is_valid_config(k->valuestring, val_str)) {
-                    fprintf(fp, "%s=%s\n", k->valuestring, val_str);
-                } else {
-                    validation_failed = true;
-                    break;
-                }
-            }
-        }
-    }
-*/
     // 1. PROCESS STANDARD GLOBAL FIELDS
     cJSON *fields = cJSON_GetObjectItem(root, "fields");
     if (cJSON_IsArray(fields)) {
@@ -803,12 +788,7 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                     case ACD_TYPE_SYSFS_VALUE: fprintf(fp, "sysfs_sensor_label=%s\n", lbl); break;
                     case ACD_TYPE_GPIO_PMP:    fprintf(fp, "gpio_doser_label=%s\n", lbl); break;
                     case ACD_TYPE_MQTT_VALUE:  fprintf(fp, "mqtt_sensor_label=%s\n", lbl); break;
-                    case ACD_TYPE_I2C_PRS:
-                      { 
-                        // THIS WILL NEED SOME IF IN FUTURE    
-                        fprintf(fp, "i2c_sensor_label=%s\ni2c_sensor_type=%s\n", lbl, "PTE7300"); 
-                      }    
-                    break;
+                    case ACD_TYPE_I2C_PRS:     fprintf(fp, "prs_sensor_label=%s\n", lbl); break;
                     
                     default: break;
                 }
@@ -824,8 +804,9 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                     if (!k || !v || !cJSON_IsString(k)) continue;
 
                     char val_str[256] = {0};
-                    if (cJSON_IsString(v)) snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
-                    else if (cJSON_IsNumber(v)) {
+                    if (cJSON_IsString(v)) {
+                        snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
+                    } else if (cJSON_IsNumber(v)) {
                         if (v->valueint == v->valuedouble) snprintf(val_str, sizeof(val_str), "%d", v->valueint);
                         else snprintf(val_str, sizeof(val_str), "%.6g", v->valuedouble);
                     } else if (cJSON_IsBool(v)) {
@@ -834,8 +815,8 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                     }
                     
                     if (is_valid_config(k->valuestring, val_str)) {
-                        // Skip re-writing the label if the UI accidentally included it in the fields array
-                        if (strstr(k->valuestring, "_label") == NULL) {
+                        // Skip re-writing the label if the UI accidentally included it in the fields array, or if the value is empty
+                        if (strstr(k->valuestring, "_label") == NULL && strlen(val_str) > 0 ) {
                             fprintf(fp, "%s=%s\n", k->valuestring, val_str);
                         }
                     } else {
@@ -859,6 +840,7 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
         LOG(LOG_ERR, "Web UI config update rejected due to validation failure.");
         return -1;
     } else {
+        preserve_file_permissions(_acdconfig_.config_file, tmp_file);
         // Move temp file to actual config path (atomic operation on POSIX systems)
         if (rename(tmp_file, _acdconfig_.config_file) == 0) {
             snprintf(outBuf, outSize, "{\"status\":\"success\",\"message\":\"Configuration saved. Daemon is restarting...\"}");
@@ -977,6 +959,13 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
         cJSON *s_item;
         char tmp_buf[32];
 
+        // Any virtual device is created from another sensor, so ignore
+        if (isMASKSET(curr->flags, ACD_FLAG_VIRTUAL)) {
+            //LOG(LOG_DEBUG, "Device %s is virtual, ignoring for config\n",curr->label);
+            curr = curr->next;
+            continue;
+        }
+
         switch (curr->type) {
             case ACD_TYPE_MQTT_COND:
                 cJSON_AddStringToObject(block, "driver_type", "mqtt_condition");
@@ -1063,6 +1052,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "key", (curr->type == ACD_TYPE_EZO_PH) ? "ph_sensor_address" : 
                                                        (curr->type == ACD_TYPE_EZO_ORP) ? "orp_sensor_address" : 
                                                        (curr->type == ACD_TYPE_EZO_PRS) ? "prs_sensor_address" : "temp_sensor_address");
+
                 cJSON_AddStringToObject(f_item, "type", "text"); 
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 snprintf(tmp_buf, sizeof(tmp_buf), "0x%02x", curr->data.ezo.address);
@@ -1100,6 +1090,58 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(s_item, "value", curr->stats.tau_seconds > 0.0 ? tmp_buf : "");
                 cJSON_AddItemToArray(block_fields, s_item);
                 break;
+
+            case ACD_TYPE_I2C_PRS:
+                cJSON_AddStringToObject(block, "driver_type", "i2c_sensor");
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "prs_sensor_type");
+                cJSON_AddStringToObject(f_item, "type", "select");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", i2c_get_driver_name(curr->data.i2c.type));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_I2C_PRS_DRIVERS));
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "prs_sensor_address");
+                cJSON_AddStringToObject(f_item, "type", "text"); 
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                snprintf(tmp_buf, sizeof(tmp_buf), "0x%02x", curr->data.i2c.address);  
+                cJSON_AddStringToObject(f_item, "value", tmp_buf);
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "prs_sensor_scope_global");
+                cJSON_AddStringToObject(f_item, "type", "boolean");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
+                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "prs_sensor_statistics");
+                cJSON_AddStringToObject(f_item, "type", "text");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                duration_seconds_to_string(curr->stats.tau_seconds, tmp_buf, sizeof(tmp_buf));
+                cJSON_AddStringToObject(f_item, "value", curr->stats.tau_seconds > 0.0 ? tmp_buf : "");
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "prs_sensor_min_value");
+                cJSON_AddStringToObject(f_item, "type", "number");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddFloat(f_item, "value", curr->data.i2c.min_value);
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "prs_sensor_max_value");
+                cJSON_AddStringToObject(f_item, "type", "number");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddFloat(f_item, "value", curr->data.i2c.max_value);
+                cJSON_AddItemToArray(block_fields, f_item);
+                
+                break;
+            
 
             case ACD_TYPE_MQTT_TEMP:
                 cJSON_AddStringToObject(block, "driver_type", "mqtt_temp_sensor");
@@ -1180,7 +1222,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "value", pump_type_to_str(curr->flags));
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_PMP_TYPE));
                 cJSON_AddItemToArray(block_fields, f_item);
-                
+         
                 f_item = cJSON_CreateObject();
                 cJSON_AddStringToObject(f_item, "key", "gpio_doser_pin");
                 cJSON_AddStringToObject(f_item, "type", "number");
@@ -1208,8 +1250,28 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "key", "gpio_doser_ml_per_second");
                 cJSON_AddStringToObject(f_item, "type", "number");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddFloat(f_item, "value", curr->flow_rate);
+                cJSON_AddFloat(f_item, "value", curr->dose_stats.flow_rate);
                 cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                s_item = cJSON_CreateObject();
+
+                cJSON_AddStringToObject(f_item, "key", "gpio_doser_tank_size");
+                cJSON_AddStringToObject(f_item, "type", "number");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+
+                cJSON_AddStringToObject(s_item, "key", "gpio_doser_tank_uom");
+                cJSON_AddStringToObject(s_item, "type", "select");
+                cJSON_AddItemToObject(s_item, "options", cJSON_Parse(CFG_O_TANK_UOM));
+                cJSON_AddBoolToObject(s_item, "readonly", false);
+                if (curr->child && curr->child->type == ACD_TYPE_VIR_TANK) {
+                  cJSON_AddNumberToObject(f_item, "value", curr->child->data.tank.total_volume);
+                  cJSON_AddStringToObject(s_item, "value", uom_to_fullstr(curr->child->data.tank.uom));
+                } else {
+                  cJSON_AddStringToObject(s_item, "value", "");
+                }
+                cJSON_AddItemToArray(block_fields, f_item);
+                cJSON_AddItemToArray(block_fields, s_item);
                 break;
             
             case ACD_TYPE_SYSFS_VALUE:
@@ -1248,7 +1310,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_UOM_LIST));
-                cJSON_AddStringToObject(f_item, "value", uom_to_str(curr->uom));
+                cJSON_AddStringToObject(f_item, "value", uom_to_fullstr(curr->uom));
                 cJSON_AddItemToArray(block_fields, f_item);
                 break;
 
@@ -1267,7 +1329,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_UOM_LIST));
-                cJSON_AddStringToObject(f_item, "value", uom_to_str(curr->uom));
+                cJSON_AddStringToObject(f_item, "value", uom_to_fullstr(curr->uom));
                 cJSON_AddItemToArray(block_fields, f_item);
                 /*
                 f_item = cJSON_CreateObject();
@@ -1279,7 +1341,11 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);*/
                 break;
 
-            case ACD_TYPE_EZO_PMP: 
+            
+
+            case ACD_TYPE_VIR_TANK: // Virtual tank will never get here, but stop the compiler warning
+            case ACD_TYPE_I2C_TEMP: // This is only virtually supported at present, so shouldn't get here.
+            case ACD_TYPE_EZO_PMP:  // Not supported yet.
             case ACD_TYPE_NONE:
             case ACD_TYPE_MASTER:
                 break;
@@ -1539,9 +1605,145 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "gpio_doser_ml_per_second");
     cJSON_AddStringToObject(df_item, "type", "number");
-    cJSON_AddFloat(df_item, "value", 1.0);
+    //cJSON_AddFloat(df_item, "value", 1.0);
     cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "gpio_doser_tank_size");
+    cJSON_AddStringToObject(df_item, "type", "number");
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "gpio_doser_tank_uom");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_TANK_UOM));
+    cJSON_AddItemToArray(df_arr, df_item);
+
     cJSON_AddItemToArray(available_drivers, drv);
+
+
+
+    // Define: EZO ph
+    drv = cJSON_CreateObject();
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_EZO_PH);
+    cJSON_AddStringToObject(drv, "driver_type", "ezo");
+    cJSON_AddStringToObject(drv, "default_label", "New EZO pH sensor");
+    df_arr = cJSON_AddArrayToObject(drv, "fields");
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "ph_sensor_scope_global");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "Yes");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "ph_sensor_statistics");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    // Define: EZO ORP
+    drv = cJSON_CreateObject();
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_EZO_ORP);
+    cJSON_AddStringToObject(drv, "driver_type", "ezo");
+    cJSON_AddStringToObject(drv, "default_label", "New EZO ORP sensor");
+    df_arr = cJSON_AddArrayToObject(drv, "fields");
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "orp_sensor_scope_global");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "Yes");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "orp_sensor_statistics");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    // Define: EZO TEMP
+    drv = cJSON_CreateObject();
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_EZO_TEMP);
+    cJSON_AddStringToObject(drv, "driver_type", "ezo");
+    cJSON_AddStringToObject(drv, "default_label", "New EZO Temp sensor");
+    df_arr = cJSON_AddArrayToObject(drv, "fields");
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "temp_sensor_scope_global");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "Yes");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "temp_sensor_statistics");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    // Define: EZO PRS
+    drv = cJSON_CreateObject();
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_EZO_PRS);
+    cJSON_AddStringToObject(drv, "driver_type", "ezo");
+    cJSON_AddStringToObject(drv, "default_label", "New EZO Pressure sensor");
+    df_arr = cJSON_AddArrayToObject(drv, "fields");
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "prs_sensor_scope_global");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "Yes");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "prs_sensor_statistics");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    cJSON_AddItemToArray(available_drivers, drv);
+
+    
+    // Define: I2C PRS
+    drv = cJSON_CreateObject();
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_I2C_PRS);
+    cJSON_AddStringToObject(drv, "driver_type", "i2c sensor");
+    cJSON_AddStringToObject(drv, "default_label", "New I2C Pressure sensor");
+    df_arr = cJSON_AddArrayToObject(drv, "fields");
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "prs_sensor_type");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddBoolToObject(df_item, "readonly", false);
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_I2C_PRS_DRIVERS));
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "prs_sensor_scope_global");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "Yes");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "prs_sensor_statistics");
+    cJSON_AddStringToObject(df_item, "type", "text");
+    cJSON_AddStringToObject(df_item, "value", "");
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    cJSON_AddItemToArray(available_drivers, drv);
+
+
+
 
     // 3. RENDER TO MEMORY BUFFER
     bool success = cJSON_PrintPreallocated(root, buffer, (int)buf_size, 0);
@@ -1552,7 +1754,6 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_Delete(root);
     return success;
 }
-
 
 
 
@@ -1665,9 +1866,14 @@ void check_print_config (struct aquachemdata *acdata)
       case ACD_TYPE_MQTT_TEMP:   type_str = "sensor (MQTT Temp)"; break;
       case ACD_TYPE_SYSFS_VALUE: type_str = "sensor (System File)"; break;
       case ACD_TYPE_MQTT_VALUE:  type_str = "sensor (MQTT Value)"; break;
+      case ACD_TYPE_VIR_TANK:    type_str = "Virtual sensor (Tank)"; break;
       case ACD_TYPE_I2C_PRS:     
         type_str = "sensor (I2C Pressure)";
         snprintf(buffer, sizeof(buffer), "(%s)", curr->data.i2c.type == I2C_SENSOR_PTE7300 ? "PTE7300" : "UNKNOWN");
+        break;
+      case ACD_TYPE_I2C_TEMP:     
+        type_str = "sensor (I2C Temp)";
+        if (curr->data.i2c.type == I2C_SENSOR_PTE7300){ snprintf(buffer, sizeof(buffer), "(PTE7300)");}
         break;
       case ACD_TYPE_GPIO_PMP:
         type_str = "pump (GPIO)";
@@ -1716,7 +1922,8 @@ typedef enum {
   ACD_LABEL_D1W,
   ACD_LABEL_PMP,  // Doser
   ACD_LABEL_PRS,
-  ACD_LABEL_SYSFS
+  ACD_LABEL_SYSFS,
+  ACD_LABEL_VIRTUAL
 } acd_label_type_t;
 
 const char* hex_to_str(unsigned char c) {
@@ -1752,6 +1959,7 @@ void generate_sensor_id(acd_key_t *node) {
     static int count_prs = MASTER_ID;
     static int count_sysfs = MASTER_ID;
     static int count_mqtt = MASTER_ID;
+    static int count_vir = MASTER_ID;
 
     char buf[32]; 
     const char *prefix = "";
@@ -1786,13 +1994,17 @@ void generate_sensor_id(acd_key_t *node) {
             prefix = "SYS";
             node->index = count_sysfs++;
             break;
-         case ACD_TYPE_MQTT_VALUE:
+        case ACD_TYPE_MQTT_VALUE:
             prefix = "MQT";
             node->index = count_mqtt++;
             break;
+        case ACD_TYPE_VIR_TANK:
+            prefix = "TNK";
+            node->index = count_vir++;
+            break;
         default:
             prefix = "UNK";
-            node->index = 0;
+            node->index = count_vir++;
             break;
     }
 
@@ -1834,7 +2046,7 @@ char *generate_label(const char *base, acd_label_type_t type, const char *label)
     case ACD_LABEL_SYSFS:
       snprintf(buf, sizeof(buf), "SYS_%s", base);
       break;
-    case ACD_FLAG_VIRTUAL:
+    case ACD_LABEL_VIRTUAL:
       snprintf(buf, sizeof(buf), "VIR_%s", base);
       break;
     //case ACD_LABEL_MQTT:
@@ -2023,17 +2235,92 @@ void add_output_gpio(const acd_staging_t *st) {
     new_node->data.gpio.pin = st->pin;
     new_node->data.gpio.active = st->pin_mode;
     new_node->data.gpio.required = st->pin_state;
-    new_node->flow_rate = st->value; // Mapped from _staging.value (ml_ps)
+    new_node->dose_stats.flow_rate = st->value; // Mapped from _staging.value (ml_ps)
   
     if (st->flags != 0) {
         new_node->flags = st->flags;
     }
+
+    if isMASKSET(new_node->flags, PH_PUMP)       set_pump_default_duration(new_node,_acdconfig_.ph_default_dose_time);
+    else if isMASKSET(new_node->flags, ORP_PUMP) set_pump_default_duration(new_node,_acdconfig_.orp_default_dose_time);
+    else if isMASKSET(new_node->flags, H2O_PUMP) set_pump_default_duration(new_node,_acdconfig_.h2o_default_dose_time);
   
     generate_sensor_id(new_node);
     append_to_key_list(new_node);
+
+    // If we know the tank size, create a child key.
+    if (st->value2 > 0) {
+      // Add the appropiate temperature sensor for the PTE7300 if it doesn't already exist in the list.
+      acd_key_t *new_tank = malloc(sizeof(acd_key_t));
+      if (!new_tank) return;
+
+      //*new_tank = *new_node; // Copy all value fields, enums, unions, and flags in one step
+
+      // Set to NULL if the copy shouldn't share the same linked list/child relations
+      new_tank->child = NULL; 
+      new_tank->next  = NULL;
+      new_node->child = new_tank; // Link the temperature sensor as a child of the pressure sensor
+
+      new_tank->flags = new_node->flags;
+      setMASK(new_tank->flags, ACD_FLAG_VIRTUAL);
+      
+      new_tank->scope = ACD_SCOPE_LOCAL;
+
+      new_tank->type = ACD_TYPE_VIR_TANK;
+      new_tank->uom = UOM_PERCENT;
+
+      char *tank_label = isMASKSET(new_tank->flags, PH_PUMP)?"Acid Tank Level":"Chlorine Tank Level";
+
+      new_tank->data.tank.total_volume = st->value2;
+
+      printf("**** Tank uom2: %d, %s\n", st->uom2, uom_to_str(st->uom2));
+      if (st->uom2 == UOM_GALLONS) {
+        new_tank->data.tank.uom = st->uom2;
+      } else {
+        LOG(LOG_NOTICE, "Tank %s volume unit not specified or not in gallons, defaulting to liters.",tank_label);
+        new_tank->data.tank.uom = UOM_LITERS;
+      }
+
+      new_tank->label = generate_label(hex_to_str(st->address), ACD_LABEL_VIRTUAL, tank_label);
+      generate_sensor_id(new_tank);
+      append_to_key_list(new_tank);
+
+      LOG(LOG_NOTICE, "Added Virtual Tank Level Sensor: %s, from Doser : %s", new_tank->label, new_node->label);
+    
+    }
 }
+/*
+void create_child_key(acd_key_t key)
+{
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
+    if (!new_node) return;
 
+    *new_node = *key; // Copy all value fields, enums, unions, and flags in one step
 
+    // Set to NULL if the copy shouldn't share the same linked list/child relations
+    new_node->child = NULL; 
+    new_node->next  = NULL;
+    key->child = new_node; // Link the temperature sensor as a child of the pressure sensor
+
+    new_node->flags = ACD_FLAG_VIRTUAL;
+    new_node->type = ACD_TYPE_I2C_TEMP;
+    new_node->uom = UOM_CELSIUS;
+
+    char *new_node = replace_or_append_suffix(
+      st->label, 
+      (const char*[]){"pressure", "psi", "bar", NULL}, 
+      " Temperature"
+    );
+
+    new_node->label = generate_label(hex_to_str(st->address), ACD_FLAG_VIRTUAL, new_node);
+    generate_sensor_id(new_node);
+    append_to_key_list(new_node);
+
+    LOG(LOG_NOTICE, "Added I2C Temperature Sensor: %s, from I2C Pressure Sensor: %s, Address: 0x%02x", new_i2c_temp->label, new_node->label, new_node->data.i2c.address);
+    
+    free(new_node); // Free the temporary label string after use
+}
+*/
 void add_sensor_sysfs(const acd_staging_t *st) {
     acd_key_t *new_node = malloc(sizeof(acd_key_t));
     if (!new_node) return;
@@ -2120,7 +2407,7 @@ void add_sensor_i2c(const acd_staging_t *st) {
         " Temperature"
       );
 
-      new_i2c_temp->label = generate_label(hex_to_str(st->address), ACD_FLAG_VIRTUAL, new_i2c_temp_label);
+      new_i2c_temp->label = generate_label(hex_to_str(st->address), ACD_LABEL_VIRTUAL, new_i2c_temp_label);
       generate_sensor_id(new_i2c_temp);
       append_to_key_list(new_i2c_temp);
 

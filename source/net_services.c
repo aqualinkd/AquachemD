@@ -386,6 +386,7 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
   char *ri1 = (char *)URI;
   char *ri2 = NULL;
   char *ri3 = NULL;
+  char *ri4 = NULL;
 
   LOG(LOG_DEBUG, "URI Request '%.*s': value %.2f\n", uri_length, URI, value);
 
@@ -396,6 +397,8 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
         ri2 = (char *)&URI[++i];
       } else if (ri3 == NULL) {
         ri3 = (char *)&URI[++i];
+      } else if (ri4 == NULL) {
+        ri4 = (char *)&URI[++i];
         break;
       }
     }
@@ -434,7 +437,7 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
       return uActioned;
     } */
   // Handle "aquachemd/reset_stats" at moment aquachemd can be anything as we don;t check.
-  } else if (ri2 != NULL && strncmp(ri2, "reset_stats", 11) == 0) {
+  } else if (ri2 && strncmp(ri2, "reset_stats", 11) == 0) {
       for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
         if (uri_strcmp(ri1, curr->ID)) {
           // If aquachemd is the ID then expect value and use reset by any matching values.
@@ -446,7 +449,7 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
           return uActioned;
         }
       }
-  } else if (ri2 != NULL && (strncasecmp(ri2, "set", 3) == 0)) {
+  } else if (ri2 && (strncasecmp(ri2, "set", 3) == 0)) {
     for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
       if (uri_strcmp(ri1, curr->ID) && (value == ACD_LED_OFF || value == ACD_LED_ON || value == ACD_LED_ENABLED)) {
         LOG(LOG_INFO, "Request to set '%s' to '%s'", curr->label, acd_state_to_str(value));
@@ -458,8 +461,8 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
         }
       }
     }
-  } else if ((ri2 != NULL && (strncasecmp(ri2, "timer", 5) == 0) && 
-             (ri3 != NULL && (strncasecmp(ri3, "set", 3) == 0)))) {
+  } else if (ri2 && strncasecmp(ri2, "timer", 5) == 0 && 
+             ri3 && strncasecmp(ri3, "set", 3) == 0) {
     for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
       if (uri_strcmp(ri1, curr->ID) && (value > 0)) {
         LOG(LOG_INFO, "Request to set '%s' to run for %f seconds", curr->label, value);
@@ -471,6 +474,40 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
         }
       }
     }
+  } else if (ri2 && (strncasecmp(ri2, "timer", 5) == 0) && 
+             ri3 && (strncasecmp(ri3, "default", 7) == 0) && 
+             ri4 && (strncasecmp(ri4, "set", 3) == 0)) {
+    for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+      if (uri_strcmp(ri1, curr->ID) && (value > 0)) {
+        LOG(LOG_INFO, "Request to set '%s' default run time to %f seconds", curr->label, value);
+        set_pump_default_duration(curr, (uint32_t)value);
+        _aquachemd_data->is_dirty = true;
+        return uActioned;
+      }
+    }
+  } else if (ri2 != NULL && (strncasecmp(ri2, "level", 5) == 0)) {
+    for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+      if (uri_strcmp(ri1, curr->ID)) {
+        acd_uom_t uom = UOM_NONE;
+        if (ri3 != NULL && (strncasecmp(ri3, "set", 3) == 0)){
+          uom = UOM_PERCENT;
+        } else if (ri3 != NULL && (strncasecmp(ri3, "percent", 7) == 0) &&
+                  (ri4 != NULL && (strncasecmp(ri4, "set", 3) == 0))){
+          uom = UOM_PERCENT;
+        } else if (ri3 != NULL && (strncasecmp(ri3, "remaining", 9) == 0) &&
+                  (ri4 != NULL && (strncasecmp(ri4, "set", 3) == 0))){
+          uom = curr->data.tank.uom;
+        }
+
+        if (uom != UOM_NONE) {
+          LOG(LOG_INFO, "Request to set '%s' tank volume to %f%% %s", curr->label, value, uom_to_str(uom));
+          set_tank_volume(curr, uom, value);
+          _aquachemd_data->is_dirty = true; // Force an update to be sent to the device, even if the state is already set to the requested value.
+          return uActioned;
+        }
+      }
+    }
+    *rtnmsg = UNKNOWN_REQUEST;
   } else if (strncmp(ri1, "restart", 7) == 0 ) { // Only valid from websocket.
     LOG(LOG_NOTICE, "Received restart request!\n");
     raise(SIGRESTART);
@@ -968,6 +1005,15 @@ void send_mqtt_average_float_msg(struct mg_connection *nc, char *ID, float value
   send_mqtt(nc, mqtt_pub_topic, msg);
 }
 
+void send_mqtt_level_float_msg(struct mg_connection *nc, char *ID, char *subtopic, float value) {
+  static char mqtt_pub_topic[MQTT_PUB_TOPIC_SIZE+2];
+  static char msg[11];
+
+  sprintf(msg, "%.2f", value);
+  sprintf(mqtt_pub_topic, "%s/%s/%s/%s", _acdconfig_.mqtt_aquachemd_topic, ID, MQTT_TL_LEVEL, subtopic);
+  send_mqtt(nc, mqtt_pub_topic, msg);
+}
+
 /*
 // replaced with send_mqtt_acd_state_msg()
 void send_mqtt_key_status_msg(struct mg_connection *nc, acd_key_t *key) {
@@ -989,16 +1035,20 @@ void send_mqtt_acd_state_msg(struct mg_connection *nc, char *ID, acd_state_t sta
   send_mqtt(nc, mqtt_pub_topic, msg);
 }
 
-void send_mqtt_timer_state_msg(struct mg_connection *nc, char *ID, acd_state_t state, uint32_t duration)
+void send_mqtt_timer_state_msg(struct mg_connection *nc, char *ID, acd_state_t state, uint32_t duration, uint32_t default_duration)
 {
   static char mqtt_pub_topic[MQTT_PUB_TOPIC_SIZE];
   //static char msg[4];
 
-  sprintf(mqtt_pub_topic, "%s/%s/%s", ID, MQTT_TL_TIMER, MQTT_TL_STATE);
-  send_mqtt_int_msg(nc, mqtt_pub_topic, state);
-
   sprintf(mqtt_pub_topic, "%s/%s/%s", ID, MQTT_TL_TIMER, MQTT_TL_DURATION);
   send_mqtt_int_msg(nc, mqtt_pub_topic, duration);
+
+  sprintf(mqtt_pub_topic, "%s/%s/%s", ID, MQTT_TL_TIMER, MQTT_TL_DEFAULT);
+  send_mqtt_int_msg(nc, mqtt_pub_topic, default_duration);
+
+  // Homekit needs duration and remaining sent before state.
+  sprintf(mqtt_pub_topic, "%s/%s/%s", ID, MQTT_TL_TIMER, MQTT_TL_STATE);
+  send_mqtt_int_msg(nc, mqtt_pub_topic, state);
 }
 
 
@@ -1038,13 +1088,14 @@ void mqtt_broadcast_aquachemdstate(struct mg_connection *nc, bool force_all)
     if (IS_CONDITION(curr->type) && _acdconfig_.post_condition) {
       send_mqtt_acd_state_msg(nc, curr->ID, curr->met?ACD_LED_ON:ACD_LED_OFF);
     } else if (IS_OUTPUT(curr->type)) {
-      send_mqtt_acd_state_msg(nc, curr->ID, curr->state);
+      // For homekit, we need to set the timer information before the state information.
       if ( isMASKSET(curr->flags, TIMER_ACTIVE)) {
         uint32_t remaining_sec = get_timer_left_sec(curr);
-        send_mqtt_timer_state_msg(nc, curr->ID, (remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF), remaining_sec);
+        send_mqtt_timer_state_msg(nc, curr->ID, (remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF), remaining_sec, curr->default_duration);
       } else {
-        send_mqtt_timer_state_msg(nc, curr->ID, ACD_LED_OFF, 0);
+        send_mqtt_timer_state_msg(nc, curr->ID, ACD_LED_OFF, 0, caculate_dose_time(_aquachemd_data, curr));
       }
+      send_mqtt_acd_state_msg(nc, curr->ID, curr->state);
     } else {
       send_mqtt_acd_state_msg(nc, curr->ID, curr->state);
       if (curr->state == ACD_LED_ON) {
@@ -1052,6 +1103,11 @@ void mqtt_broadcast_aquachemdstate(struct mg_connection *nc, bool force_all)
         if (isMASKSET(curr->flags,CALC_AVERAGE) ) {
           send_mqtt_average_float_msg(nc, curr->ID, curr->stats.average);
         }
+      }
+      if (curr->type == ACD_TYPE_VIR_TANK) {
+        if (curr->uom)
+        send_mqtt_level_float_msg(nc, curr->ID, MQTT_TSL_REMAINING_VOLUME, curr->data.tank.remaining_volume);
+        send_mqtt_level_float_msg(nc, curr->ID, MQTT_TSL_TOTAL_VOLUME, curr->data.tank.total_volume);
       }
     }
     CLEAR_DIRTY(curr->is_dirty);
@@ -1095,11 +1151,14 @@ void mqtt_broadcast_aquachemd_dose_event(struct mg_connection *nc)
   LOG(LOG_INFO, "Broadcasting Aquachemd dose event to MQTT\n");
 
   if (!_dose_event.is_dirty) { return; }
-
+/*
   snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID, 
                           (_dose_event.key->flags & PH_PUMP)  ? MQTT_TL_DOSE_PH : 
-                          (_dose_event.key->flags & ORP_PUMP) ? MQTT_TL_DOSE_ORP : MQTT_TL_DOSE_UNKNOWN );
-  
+                          (_dose_event.key->flags & ORP_PUMP) ? MQTT_TL_DOSE_ORP :
+                          (_dose_event.key->flags & H2O_PUMP) ? MQTT_TL_DOSE_H2O : MQTT_TL_DOSE_UNKNOWN );
+  */
+  snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_LAST_DOSE);
+
   for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c)) {
     if (is_mqtt(c)) {
       LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",_dose_event.dose_ml,_acdconfig_.mqtt_aquachemd_topic,topic);

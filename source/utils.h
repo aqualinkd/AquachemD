@@ -14,6 +14,9 @@ void LOG(const int msg_level, const char * format, ...);
 void FORCE_LOG(const int msg_level, const char * format, ...);
 void LOG_SYSTEM_ERR(int errnum, const char *format, ...);
 void LOG_PUMP_EVENT(acd_key_t *key, uint32_t seconds, float reading, float ml);
+void LOG_TANK_LEVEL_SET_EVENT(acd_key_t *key);
+void LOG_TANK_LEVEL(acd_key_t *key);
+bool READ_LAST_TANK_LEVEL_EVENT(acd_key_t *key);
 void LOG_STARTUP_EVENT();
 
 bool is_running_under_systemd();

@@ -7,7 +7,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <math.h>
-
+#include <float.h>   // FLT_MAX
 
 #include "sensor_stats.h"
 #include "acd_types.h"
@@ -262,4 +262,157 @@ bool duration_seconds_to_string(float seconds, char *dest, size_t dest_len) {
     }
 
     return true;
+}
+
+void calculate_tank_volumes(acd_key_t *key)
+{
+
+  if ( READ_LAST_TANK_LEVEL_EVENT(key) ) {
+    LOG(LOG_NOTICE, "Restored %s tank level from journal: %.1f%% (%.1f %s remaining)",
+        key->label, key->data.tank.percent_full, key->data.tank.remaining_volume, uom_to_display_str(key->data.tank.uom));
+  } else {
+  // Blindly start at 50% for the moment.
+    key->data.tank.percent_full  = 50.0f;
+    key->data.tank.remaining_volume  = key->data.tank.total_volume * (key->data.tank.percent_full / 100.0f);
+    key->value     = key->data.tank.percent_full;
+    key->is_dirty  = true;
+    LOG(LOG_NOTICE, "No tank level found for %s from journal, initializing at : %.1f%% (%.1f %s remaining)",
+        key->label, key->data.tank.percent_full, key->data.tank.remaining_volume, uom_to_display_str(key->data.tank.uom));
+  }
+}
+
+
+void set_tank_volume(acd_key_t *key, acd_uom_t uom, float value)
+{
+    if (!key || key->data.tank.total_volume <= 0.0f) {
+        LOG(LOG_ERR, "set_tank_volume: invalid key or zero total volume for %s", key ? key->label : "NULL");
+        return;
+    }
+
+    float percent = 0.0f;
+
+    if (uom == UOM_PERCENT) {
+      percent = value;
+    } else {
+      percent = (value / key->data.tank.total_volume) * 100.0f;
+    }
+
+    // Clamp percentage bounds
+    if (percent < 0.0f)   percent = 0.0f;
+    if (percent > 100.0f) percent = 100.0f;
+
+    // Apply updates to node state
+    key->data.tank.percent_full = percent;
+    key->data.tank.remaining_volume    = key->data.tank.total_volume * (percent / 100.0f);
+    key->value                  = percent;
+    key->is_dirty               = true;
+
+    LOG_TANK_LEVEL_SET_EVENT(key);
+
+    LOG(LOG_INFO, "%s: tank volume set to %.1f%% (%.1f %s remaining)", 
+        key->label, percent, key->data.tank.remaining_volume, uom_to_str(key->data.tank.uom));
+}
+
+
+// Apply a dose (in ml) taken from a chemical tank -- call this whenever a
+// dosing pump actually runs against a tank you're tracking by volume
+// rather than a physical level sensor, so the tank's level stays in sync.
+void calculate_tank_volume_after_dose(acd_key_t *key, float dose_ml)
+{
+  if (!key) {
+    //LOG(LOG_ERR, "calculate_tank_volume_after_dose: key is NULL");
+    // Tank hasn't been setup for this pump
+    return;
+  }
+  if (key->data.tank.total_volume <= 0.0f) {
+    LOG(LOG_ERR, "%s: total_volume is not set (%.1f) — cannot calculate tank level",
+        key->label, key->data.tank.total_volume);
+    return;
+  }
+
+  if (dose_ml <= 0.0f) {
+    return;   // nothing dosed (or bad input) -- leave the tank level untouched
+  }
+
+  float dose_in_uom = 0.0f;
+
+  if (key->data.tank.uom == UOM_GALLONS)
+    dose_in_uom = dose_ml / ML_PER_GALLON;
+  else 
+    dose_in_uom = dose_ml / ML_PER_LITER;
+
+  float new_remaining = key->data.tank.remaining_volume - dose_in_uom;
+
+  // Clamp so a dose that (per our accounting) would drain more than what's
+  // left doesn't go negative -- e.g. a refill that was never logged, or
+  // rounding drift accumulated over many small doses.
+  if (new_remaining < 0.0f) {
+    LOG(LOG_WARNING, "%s: dose of %.2f ml exceeds tracked remaining volume (%.2f %s) — clamping to 0",
+        key->label, dose_ml, key->data.tank.remaining_volume, uom_to_str(key->data.tank.uom));
+    new_remaining = 0.0f;
+  }
+
+  key->data.tank.remaining_volume = new_remaining;
+
+  float percent = (new_remaining / key->data.tank.total_volume) * 100.0f;
+
+  // remaining is already floor-clamped above; guard the top too in case
+  // total_volume is ever understated relative to an actual refill.
+  if (percent > 100.0f) percent = 100.0f;
+  if (percent < 0.0f)   percent = 0.0f;
+
+  key->data.tank.percent_full = percent;   // no rounding needed now that this is a float field
+  key->value    = percent;
+  key->is_dirty = true;
+
+  LOG_TANK_LEVEL(key);
+
+  LOG(LOG_INFO, "%s: dosed %.2f ml, remaining %.2f / %.1f %s (%.1f%% full)",
+      key->label, dose_ml, key->data.tank.remaining_volume,
+      key->data.tank.total_volume, uom_to_str(key->data.tank.uom), key->data.tank.percent_full);
+}
+
+void set_pump_default_duration(acd_key_t *key, uint32_t default_duration)
+{
+    if (!key) return;
+
+    uint32_t max_duration = 0;
+
+    if (isMASKSET(key->flags, PH_PUMP)) {
+        max_duration = _acdconfig_.ph_max_dose_time;
+    } else if (isMASKSET(key->flags, ORP_PUMP)) {
+        max_duration = _acdconfig_.orp_max_dose_time;
+    } else if (isMASKSET(key->flags, H2O_PUMP)) {
+        max_duration = _acdconfig_.h2o_max_dose_time;
+    } else {
+        LOG(LOG_ERR, "set_pump_default_duration: unknown pump flags for %s", key->label ? key->label : "NULL");
+        return;
+    }
+
+    if (default_duration > max_duration) {
+        key->default_duration = max_duration;
+        LOG(LOG_WARNING, "Pump %s duration can't be set to %u, using max (%u)\n", 
+            key->label, default_duration, max_duration);
+    } else {
+        key->default_duration = default_duration;
+    }
+    key->is_dirty = true;
+}
+
+void calculate_running_total(acd_key_t *key, float dose_ml)
+{
+  if (!key || key->dose_stats.running_total_max_ml <= 0) {
+    // Bad key, or running total not set.
+    return;
+  }
+
+  if (dose_ml > 0.0f && isfinite(dose_ml)) {
+    if (key->dose_stats.running_total_ml > FLT_MAX - dose_ml) {
+        // Would overflow - clamp instead of wrapping/going to inf
+        key->dose_stats.running_total_ml = FLT_MAX;
+        LOG(LOG_WARNING, "Running total overflow clamp for pump %s, please configure a reset\n", key->label);
+    } else {
+        key->dose_stats.running_total_ml += dose_ml;
+    }
+}
 }

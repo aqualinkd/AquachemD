@@ -611,7 +611,8 @@
       SWG: 'swg',
       FREEZE: 'freeze', CHILLER: 'chiller',
       STATS: 'stats',
-      DOSESTATS: 'dosestats'
+      DOSESTATS: 'dosestats',
+      ALT_VALUE: 'alt_value',
     });
 
     const _DeviceTypes = Object.freeze({
@@ -621,7 +622,8 @@
       TEMPERATURE: 'temperature',
       SENSOR: 'sensor',
       AVERAGE: 'average',        // One we use, not from AquachemD
-      CONTROLLER: 'controller'
+      CONTROLLER: 'controller',
+      LEVEL_SENSOR: 'level_sensor' // Tank level sensor
     });
 
     const _DeviceStates = Object.freeze({
@@ -886,7 +888,7 @@
       title_subdiv.textContent = cutContentTextLength(name, 2);
       div.appendChild(title_subdiv);
 
-      if (attributes?.includes(_DeviceAttributes.VSP) || _devices.devices[id]?.type == _DeviceTypes.AVERAGE) {
+      if (attributes?.includes(_DeviceAttributes.VSP) || _devices.devices[id]?.type == _DeviceTypes.AVERAGE /*|| _devices.devices[id]?.type == _DeviceTypes.LEVEL_SENSOR*/) {
         //if (name.length <= _tile_line_char_limit+1) {
           subdiv = document.createElement('div');
           subdiv.setAttribute('class', 'tile_status');
@@ -979,13 +981,16 @@
       return !isNaN(parseFloat(val)) && isFinite(val);
     }
 
-    function formatTileValue(id, value) {
-      var ext = '', type = null;
+    function formatTileValue(id, value, uomOverride) {
+      var ext = '';
+      var type = document.getElementById(id)?.getAttribute('type') ?? null;
+
       if (value == undefined || value == -999) {
         value = '--';
       } else {
         let uom;
-        if ((uom = document.getElementById(id).getAttribute('UOM')) != null) ext = uom;
+        if (uomOverride != null) ext = uomOverride;
+        else if ((uom = document.getElementById(id).getAttribute('UOM')) != null) ext = uom;
         else if ((type = document.getElementById(id).getAttribute('type')) != null) {
           if (type == _DeviceTypes.TEMPERATURE || _devices.devices[id]?.attributes?.includes(_DeviceAttributes.HEATER) ||
             _devices.devices[id]?.attributes?.includes(_DeviceAttributes.FREEZE) || _devices.devices[id]?.attributes?.includes(_DeviceAttributes.CHILLER)) ext = '&deg;';
@@ -1004,6 +1009,12 @@
         value = parseFloat(value).toFixed(0);
       } else if (isActuallyNumeric(value) && (type == 'sensor' || type == 'average') && id.startsWith('PH_')) {
         value = parseFloat(value).toFixed(2);
+      } else if (isActuallyNumeric(value) && type ==  _DeviceTypes.LEVEL_SENSOR) {
+        if (ext == '%') {
+          value = parseFloat(value).toFixed(1);
+        } else {
+          value = parseFloat(value).toFixed(2);
+        }
       }
       return reduct(value) + formatUOM(ext);
     }
@@ -1226,6 +1237,7 @@
         case _DeviceTypes.TEMPERATURE:
         case _DeviceTypes.SENSOR:
         case _DeviceTypes.AVERAGE:
+        case _DeviceTypes.LEVEL_SENSOR:
           add_tile(object.id, object.label, object.status, object.type, object.attributes);
           if (object.uom !== undefined) setTileUOM(object.id, object.uom);
           else if (_config.devices[object.id]?.uom) setTileUOM(object.id, _config.devices[object.id].uom);
@@ -1236,6 +1248,7 @@
           break;
       }
     }
+
 
     function updateTile(device) {
       if (device.type == _DeviceTypes.SENSOR) {
@@ -1248,7 +1261,18 @@
         setTileValue(device.id, device.value, device.status);
         setTileOnText(device.id, "Max : " + formatTileValue(device.id, device.max));
         setTileOnTextLine2(device.id, "Min : " + formatTileValue(device.id, device.min));
-      }
+      } else if (device.type == _DeviceTypes.LEVEL_SENSOR) {
+        setTileOn(device.id, device.status);
+        setTileValue(device.id, device.value, device.status);
+        // NSF Might want to check tile attributes for "rangewarning", "rangecritical" and append text vs replacing it below.
+        var tile = document.getElementById(device.id);
+        if (["rangewarning", "rangecritical"].includes(tile.getAttribute('status'))) {
+          let current = document.getElementById(`${device?.id}_status`)?.innerHTML ?? "";
+          setTileOnText(device.id, current + " " +formatTileValue(device.id, device.alt_value.value, device.alt_value.uom));
+        } else {
+          setTileOnText(device.id, formatTileValue(device.id, device.alt_value.value, device.alt_value.uom));
+        }
+      } 
     }
 
     function isTileOptionsOpen() {
@@ -1256,8 +1280,19 @@
       return !(tile_options?.classList.contains("hide") || tile_options?.style.display === 'none') ?? false;
     }
 
+    /*
     function useMinutesForRuntime(id) {
       return id.startsWith("PMP") && _devices.devices[id].attributes?.includes("orp_pump") && _config?.tile_settings?.orp_runtime_in_minutes;
+    }*/
+    function useMinutesForRuntime(id) {
+      if (!id?.startsWith("PMP")) return false;
+
+      const attrs = _devices.devices[id]?.attributes;
+
+      return (
+        (attrs?.includes("orp_pump") && Boolean(_config?.tile_settings?.orp_runtime_in_minutes)) ||
+        (attrs?.includes("h2o_pump") && Boolean(_config?.tile_settings?.h2o_runtime_in_minutes))
+      );
     }
 
     function SyncTileOptions() {
@@ -1416,8 +1451,17 @@
         tm_slider.min = _config?.slider_range?.timer_slider_min || 0;
         //tm_slider.max = _config?.slider_range?.timer_slider_max || 60;
         tm_slider.step = _config?.slider_range?.timer_slider_step || 1;
-        tm_slider.max = _devices.devices[id]?.timer_max_runtime ?? _config?.slider_range?.timer_slider_max ?? 60;
-        tm_slider.value = _devices.devices[id]?.timer_default_runtime ?? 0;
+        //tm_slider.max = _devices.devices[id]?.timer_max_runtime ?? _config?.slider_range?.timer_slider_max ?? 60;
+        //tm_slider.value = _devices.devices[id]?.timer_default_runtime ?? 0;
+        const divisor = useMinutesForRuntime(id) ? 60 : 1;
+        const device = _devices.devices[id];
+
+        tm_slider.max = (device?.timer_max_runtime != null ? device.timer_max_runtime / divisor : null)
+                        ?? _config?.slider_range?.timer_slider_max 
+                        ?? 60;
+
+        tm_slider.value = (device?.timer_default_runtime != null ? device.timer_default_runtime / divisor : null) 
+                        ?? 0;
       }
 
       if (_devices.devices[id].attributes?.includes(_DeviceAttributes.DOSESTATS)) {

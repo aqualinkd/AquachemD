@@ -24,6 +24,7 @@ struct acdconfig
   char *cert_dir;
   char *mqtt_cert_dir;
 #endif
+  bool singleton;
   char *main_label;
   char *config_file;
   char *listen_address;
@@ -58,8 +59,10 @@ struct acdconfig
 
   uint32_t ph_default_dose_time;
   uint32_t orp_default_dose_time;
-  uint32_t ph_max_dose_range;
-  uint32_t orp_max_dose_range;
+  uint32_t h2o_default_dose_time;
+  uint32_t ph_max_dose_time;
+  uint32_t orp_max_dose_time;
+  uint32_t h2o_max_dose_time;
 
   bool ph_average_dose_calc;
   bool orp_average_dose_calc;

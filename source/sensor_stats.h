@@ -18,4 +18,12 @@ bool reset_sensor_average(acd_key_t *key);
 float parse_duration_to_seconds(const char *str);
 bool duration_seconds_to_string(float seconds, char *dest, size_t dest_len);
 
+void calculate_tank_volumes(acd_key_t *key);
+void calculate_tank_volume_after_dose(acd_key_t *key, float dose_ml);
+void set_tank_volume(acd_key_t *key, acd_uom_t uom, float value);
+
+void calculate_running_total(acd_key_t *key, float dose_ml);
+
+void set_pump_default_duration(acd_key_t *key, uint32_t default_duration);
+
 #endif

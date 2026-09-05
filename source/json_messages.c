@@ -18,6 +18,7 @@
 #include "net_services.h"
 #include "acd_timer.h"
 #include "sensor_stats.h"
+#include "state_manager.h"
 
 #define MAX_JSON_BUFFER_SIZE 8192
 
@@ -192,8 +193,9 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
         cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_OFF)));
         cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ENABLED)));
         
-        if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP)) {
+        if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
           cJSON_AddItemToArray(attributes, cJSON_CreateString("dosestats"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("valve")); // For Homekit.
         }
         
         uint32_t remaining_sec = get_timer_left_sec(curr);
@@ -201,12 +203,16 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
         cJSON_AddNumberToObject(device, "timer_duration", remaining_sec);
         if (isMASKSET(curr->flags, PH_PUMP)) {
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.ph_default_dose_time);
-          cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.ph_max_dose_range);
+          cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.ph_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("ph_pump"));
         } else if (isMASKSET(curr->flags, ORP_PUMP)) {
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.orp_default_dose_time);
-          cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.orp_max_dose_range);
+          cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.orp_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("orp_pump"));
+        } else if (isMASKSET(curr->flags, H2O_PUMP)) {
+          cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.h2o_default_dose_time);
+          cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.h2o_max_dose_time);
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("h2o_pump"));
         }
         
         cJSON_AddItemToObject(device, "attributes", attributes);
@@ -233,7 +239,22 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
           cJSON_AddItemToArray(attributes, cJSON_CreateString("stats"));
           cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_stats"));
           cJSON_AddItemToObject(device, "attributes", attributes);
-        } 
+        }
+        
+        if (curr->type == ACD_TYPE_VIR_TANK ) {
+          cJSON_AddStringToObject(device, "type", "level_sensor");
+          cJSON *alt = cJSON_CreateObject();
+          snprintf(buf, 15, "%s_alt", curr->ID);
+          cJSON_AddStringToObject(alt, "id", buf);
+          cJSON_AddNumberToObject(alt, "value", curr->data.tank.remaining_volume);  
+          cJSON_AddStringToObject(alt, "uom", uom_to_display_str(curr->data.tank.uom));
+          cJSON_AddItemToObject(device, "alt_value", alt);
+
+          cJSON *attributes = cJSON_CreateArray();
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("alt_value"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("set_tank_level"));
+          cJSON_AddItemToObject(device, "attributes", attributes);
+        }
       }
     }
 
@@ -283,11 +304,19 @@ const char* get_devices_json(struct aquachemdata *acddata) {
           uint32_t remaining_sec = get_timer_left_sec(curr);
           cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "timer_active"), acd_state_to_str(remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF));
           cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "timer_duration"), remaining_sec);
+          if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
+            cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "timer_default_runtime"), caculate_dose_time(acddata, curr) );
+          }
         } else if ( IS_INPUT(curr->type) && (isMASKSET(curr->flags,CALC_AVERAGE)) ) {
           cJSON *stats = cJSON_GetObjectItemCaseSensitive(item, "stats");
           cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(stats, "avg"), curr->stats.average);
           cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(stats, "max"), curr->stats.max);
           cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(stats, "min"), curr->stats.min);
+        }
+        if (curr->type == ACD_TYPE_VIR_TANK ) {
+          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), curr->value);
+          cJSON *alt = cJSON_GetObjectItemCaseSensitive(item, "alt_value");
+          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(alt, "value"), curr->data.tank.remaining_volume);
         }
       } 
     }

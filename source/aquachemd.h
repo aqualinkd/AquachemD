@@ -74,13 +74,14 @@ void aquachemd_request_reload(void);
     })
 */
 
-
+/*
 typedef struct {
     sensor_stats_t ph_daily;
     sensor_stats_t ph_weekly;
     sensor_stats_t orp_daily;
     sensor_stats_t orp_weekly;
 } sensor_metrics_t;
+*/
 
 #define DISPLAY_MSG_SIZE 64
 
@@ -91,8 +92,9 @@ struct aquachemdata
 
   int open_websockets;
   bool acdManagerActive;
+  bool haveConditions;
 
-  sensor_metrics_t sensorMetrics;
+  //sensor_metrics_t sensorMetrics;
   //ph_reading_t ph_reading;
   //orp_reading_t orp_reading;
   //rtd_reading_t temp_reading;

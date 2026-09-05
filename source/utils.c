@@ -21,6 +21,7 @@
 #include "gpio.h"
 #include "version.h"
 
+
 #define LOG_BUFFER_SIZE 1024
 
 
@@ -153,7 +154,8 @@ void LOG_PUMP_EVENT(acd_key_t *key, uint32_t seconds, float reading, float ml)
 #ifdef USE_SYSTEMD
   if (_enable_journal) {
     const char *chem_type = (key->flags & PH_PUMP)  ? "ACID" : 
-                            (key->flags & ORP_PUMP) ? "CHLORINE" : "UNKNOWN";
+                            (key->flags & ORP_PUMP) ? "CHLORINE" :
+                            (key->flags & H2O_PUMP) ? "WATER" : "UNKNOWN";
 
     sd_journal_send("MESSAGE=Pump Dosing Event",
                     "MESSAGE_ID=%s", SD_PUMP_EVENT_ID,
@@ -167,6 +169,120 @@ void LOG_PUMP_EVENT(acd_key_t *key, uint32_t seconds, float reading, float ml)
                     "PRIORITY=%i", LOG_INFO,
                     NULL);
   }
+#endif
+}
+
+void LOG_TANK_LEVEL_SET_EVENT(acd_key_t *key)
+{
+    LOG(LOG_NOTICE, "Tank: %s level set to %.1f%%", key->ID, key->data.tank.percent_full);
+
+#ifdef USE_SYSTEMD
+  if (_enable_journal) {
+    const char *chem_type = (key->flags & PH_PUMP)  ? "ACID" : 
+                            (key->flags & ORP_PUMP) ? "CHLORINE" :
+                            (key->flags & H2O_PUMP) ? "WATER" : "UNKNOWN";
+
+    sd_journal_send("MESSAGE=Tank Level Event",
+                    "MESSAGE_ID=%s", SD_TANK_LEVEL_SET_EVENT_ID,
+                    "APP_EVENT=ACD-TANK-LEVEL-Event",
+                    "TANK_ID=%s", key->ID,
+                    "TANK_NAME=%s", key->label,
+                    "TANK_TYPE=%s", chem_type,
+                    "LEVEL_PERCENT=%f", key->data.tank.percent_full,
+                    "LEVEL_VOLUME=%f", key->data.tank.remaining_volume,
+                    NULL);
+  }
+#endif
+}
+
+void LOG_TANK_LEVEL(acd_key_t *key)
+{
+  // For the moment just use the same as LOG_TANK_LEVEL_SET_EVENT
+  LOG_TANK_LEVEL_SET_EVENT(key);
+}
+
+
+// sd_journal_get_data() returns "field=value" as a raw, length-delimited
+// blob -- it is NOT guaranteed to be null-terminated, so treating it as a
+// C string directly (e.g. via sscanf on it in place) is unsafe. Copy the
+// value portion into a small local buffer and null-terminate it first.
+static bool journal_get_float_field(sd_journal *j, const char *field, float *out)
+{
+  const void *data;
+  size_t length;
+
+  if (sd_journal_get_data(j, field, &data, &length) < 0) return false;
+
+  size_t prefix_len = strlen(field) + 1;   // "field="
+  if (length <= prefix_len) return false;
+
+  char buf[64];
+  size_t value_len = length - prefix_len;
+  if (value_len >= sizeof(buf)) value_len = sizeof(buf) - 1;
+  memcpy(buf, (const char *)data + prefix_len, value_len);
+  buf[value_len] = '\0';
+
+  char *endptr;
+  float val = strtof(buf, &endptr);
+  if (endptr == buf) return false;   // no digits parsed at all
+
+  *out = val;
+  return true;
+}
+
+bool READ_LAST_TANK_LEVEL_EVENT(acd_key_t *key)
+{
+#ifndef USE_SYSTEMD
+  (void)key;
+  return false;
+#else
+  if (!key) return false;
+  if (!_enable_journal) return false;
+
+  sd_journal *j = NULL;
+  int ret = sd_journal_open(&j, SD_JOURNAL_LOCAL_ONLY);
+  if (ret < 0) {
+    LOG(LOG_ERR, "READ_LAST_TANK_LEVEL_EVENT: failed to open journal: %s", strerror(-ret));
+    return false;
+  }
+
+  char match_id[128];
+  snprintf(match_id, sizeof(match_id), "MESSAGE_ID=%s", SD_TANK_LEVEL_SET_EVENT_ID);
+  sd_journal_add_match(j, match_id, 0);
+
+  char match_tank[256];
+  snprintf(match_tank, sizeof(match_tank), "TANK_ID=%s", key->ID);
+  sd_journal_add_match(j, match_tank, 0);
+  // Two add_match calls on different field names AND together -- this
+  // finds the intersection (this event type, for this specific tank).
+
+  sd_journal_seek_tail(j);
+  if (sd_journal_previous(j) <= 0) {
+    LOG(LOG_NOTICE, "READ_LAST_TANK_LEVEL_EVENT: no prior tank level event found for %s", key->ID);
+    sd_journal_close(j);
+    return false;
+  }
+
+  float percent_full = 0.0f, remaining = 0.0f;
+  bool got_level    = journal_get_float_field(j, "LEVEL_PERCENT", &percent_full);
+  bool got_level_ml = journal_get_float_field(j, "LEVEL_VOLUME", &remaining);
+
+  sd_journal_close(j);
+
+  if (!got_level || !got_level_ml) {
+    LOG(LOG_ERR, "READ_LAST_TANK_LEVEL_EVENT: found event for %s but couldn't parse level fields", key->ID);
+    return false;
+  }
+
+  key->data.tank.percent_full = percent_full;
+  key->data.tank.remaining_volume = remaining;
+  key->value    = percent_full;
+  key->is_dirty = true;
+
+  LOG(LOG_DEBUG, "READ_LAST_TANK_LEVEL_EVENT: restored %s to %.1f%% (%.1f %s) from journal",
+      key->label, percent_full, remaining, uom_to_display_str(key->data.tank.uom));
+
+  return true;
 #endif
 }
 
@@ -418,14 +534,28 @@ uint8_t parse_pump_type(char *str)
   str = cleanwhitespace(str);
   if (strcasecmp(str, "ph") == 0 || strcasecmp(str, "acid") == 0) {
     return PH_PUMP;
+  } else if (strcasecmp(str, "orp") == 0 || strcasecmp(str, "chlorine") == 0) {
+    return ORP_PUMP;
+  } else if (strcasecmp(str, "h2o") == 0 || strcasecmp(str, "water") == 0) {
+    return H2O_PUMP;
   }
-  return ORP_PUMP;
+
+  return PH_PUMP;
 }
 
 const char *pump_type_to_str(uint8_t val)
 {
   //return (val == PH_PUMP) ? "pH" : "ORP";
-  return (val & PH_PUMP) ? "pH" : "ORP";
+  //return (val & PH_PUMP) ? "pH" : "ORP";
+
+  if (isMASKSET(val, PH_PUMP))
+    return "pH";
+  else if (isMASKSET(val, ORP_PUMP))
+    return "ORP";
+  else if (isMASKSET(val, H2O_PUMP))
+    return "H2O";
+
+  return "";
 }
 
 /*

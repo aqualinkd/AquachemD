@@ -253,4 +253,6 @@ void i2c_sensor_init_hsc_default(i2c_sensor_t *s, int address, float min_value, 
 int i2c_sensor_init(i2c_sensor_t *s, i2c_sensor_type_t type, int address, float min_value, float max_value);
 
 
+const char* i2c_get_driver_name(i2c_sensor_type_t type);
+
 #endif

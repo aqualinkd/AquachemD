@@ -15,6 +15,8 @@
 
 CFG_ENTRY( "main_label",             main_label,             "AquachemD",          CFG_STRING,  0,                  0,                NULL )
 
+CFG_ENTRY( "single_instance",        singleton,               true,                CFG_BOOL,    0,                  0,                CFG_O_BOOL )
+
 /* --- 1. GLOBAL SYSTEM & LOGGING --- */
 CFG_ENTRY( "listen_address",         listen_address,         "http://0.0.0.0:80",  CFG_STRING,  CFG_ADVANCED, 0,                NULL )
 CFG_ENTRY( "log_level",              log_level,              LOG_NOTICE,           CFG_TXT_INT, 0,                                  0,                CFG_O_log_level )
@@ -49,14 +51,18 @@ CFG_ENTRY( "ph_reading_temp_max",    ph_reading_temp_max,    60,                
 /* --- 6. DOSING RANGES (Restored CFG_CUSTOM) --- */
 CFG_ENTRY( "ph_dose_range",          ph_steps,               NULL,                 CFG_CUSTOM,  CFG_MULTIPLE,                       0,                NULL )
 CFG_ENTRY( "ph_default_dose_time",   ph_default_dose_time,   20,                   CFG_INT,     0,                                  0,                NULL )
-CFG_ENTRY( "ph_max_dose_range",      ph_max_dose_range,      60,                   CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "ph_max_dose_time",       ph_max_dose_time,      60,                   CFG_INT,     0,                                  0,                NULL )
 CFG_ENTRY( "ph_average_dose_calc",   ph_average_dose_calc,   false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
 
 CFG_ENTRY( "orp_dose_range",         orp_steps,              NULL,                 CFG_CUSTOM,  CFG_MULTIPLE,                       0,                NULL )
 CFG_ENTRY( "orp_default_dose_time",  orp_default_dose_time,  60,                   CFG_INT,     0,                                  0,                NULL )
-CFG_ENTRY( "orp_max_dose_range",     orp_max_dose_range,     300,                  CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "orp_max_dose_time",      orp_max_dose_time,     300,                  CFG_INT,     0,                                  0,                NULL )
 CFG_ENTRY( "orp_average_dose_calc",  orp_average_dose_calc,  false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
+
+CFG_ENTRY( "h2o_default_dose_time",  h2o_default_dose_time,  300,                  CFG_INT,     0,                                  0,                NULL )
+CFG_ENTRY( "h2o_max_dose_time",      h2o_max_dose_time,     600,                  CFG_INT,     0,                                  0,                NULL )
+
 
 /* --- 7. SECURITY / TLS (Conditional) --- */
 #if MG_TLS > 0
@@ -132,7 +138,9 @@ CFG_ENTRY( "gpio_doser_pin",           keys,                   NULL,            
 CFG_ENTRY( "gpio_doser_address",       keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_pin_mode",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_required_state",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_doser_ml_per_second",  keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_ml_per_second", keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_tank_size",     keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_tank_uom",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 /*
 CFG_ENTRY( "i2c_prs_sensor_label",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -176,8 +184,12 @@ CFG_ENTRY( "sysfs_sensor_uom",        keys,                   NULL,             
 #define CFG_O_BOOL "[\"Yes\",\"No\"]"
 #define CFG_O_ONOFF "[\"on\",\"off\"]"
 #define CFG_O_ACTIVE "[\"Active High\",\"Active Low\"]"
-#define CFG_O_PMP_TYPE "[\"pH\",\"ORP\"]"
+#define CFG_O_PMP_TYPE "[\"pH\",\"ORP\",\"H2O\"]"
 
-#define CFG_O_UOM_LIST "[\"°C\",\"°F\",\"pH\",\"mV\",\"PSI\",\"%\",\"RPM\",\"bytes\",\"s\",\"min\",\"ratio\",\"\"]"
+#define CFG_O_UOM_LIST "[\"celsius\",\"fahrenheit\",\"pH\",\"mV\",\"psi\",\"percent\",\"RPM\",\"bytes\",\"seconds\",\"minutes\",\"ratio\",\"milliliters\",\"liters\",\"gallons\",\"\"]"
 #define CFG_O_UOM_TEMPERATURE "[\"°C\",\"°F\",\"\"]"
+
+#define CFG_O_TANK_UOM "[\"gallons\",\"liters\",\"\"]"
+
+#define CFG_O_I2C_PRS_DRIVERS "[\"PTE7300\",\"HSC/SSC\"]"
 //#define CFG_O_STATS "[\"None\",\"Daily\",\"Weekly\"]"

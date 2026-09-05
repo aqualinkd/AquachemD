@@ -73,6 +73,23 @@ static const char *HASS_BINARY_SENSOR_TEMPLATE =
         "%s" // Extra JSON (unit, device_class, state_class) injected here
     "}";
 
+static const char *HASS_NUMBER_TEMPLATE = 
+    "{"
+        "%s,%s,"
+        "\"type\":\"number\","
+        "\"unique_id\":\"aquachemd_%s\","
+        "\"name\":\"%s\","
+        "\"command_topic\":\"%s/%s/set\","
+        "\"state_topic\":\"%s/%s\","
+        "\"min\":%f,"
+        "\"max\":%f,"
+        "\"step\":%f,"
+        "\"unit_of_measurement\":\"%s\","
+        "\"state_class\":\"measurement\","
+        "\"mode\":\"slider\","
+        "\"icon\":\"%s\""
+    "}";
+
     // Template for Select entities - Now accepts a custom value_template
 static const char *HASS_SELECT_TEMPLATE = 
     "{"
@@ -104,7 +121,8 @@ static const char *HASS_TIMER_TEMPLATE =
 
 // Template for the settable Timer Duration (number slider) - lets HA both set
 // and reflect the dose duration, in sync with any other interface (web/mqtt/HomeKit)
-static const char *HASS_NUMBER_TEMPLATE = 
+
+static const char *HASS_NUMBER_TIMER_TEMPLATE = 
     "{"
         "%s,%s,"
         "\"type\":\"number\","
@@ -201,6 +219,7 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                 }
             case ACD_TYPE_EZO_TEMP:
             case ACD_TYPE_D1W_TEMP:
+            case ACD_TYPE_I2C_TEMP:
                 snprintf(extra_json, sizeof(extra_json), 
                     ",\"unit_of_measurement\":\"°C\",\"device_class\":\"temperature\",\"state_class\":\"measurement\"");
                 icon = "mdi:thermometer";
@@ -216,6 +235,18 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                 snprintf(extra_json, sizeof(extra_json), 
                     ",\"unit_of_measurement\":\"mV\",\"state_class\":\"measurement\"");
                 icon = "mdi:lightning-bolt-outline";
+                break;
+
+            case ACD_TYPE_I2C_PRS:
+                if (curr->uom && curr->uom != UOM_NONE) {
+                  snprintf(extra_json, sizeof(extra_json), 
+                    ",\"unit_of_measurement\":\"%s\",\"device_class\":\"pressure\",\"state_class\":\"measurement\"",
+                    uom_to_str(curr->uom));
+                } else {
+                  snprintf(extra_json, sizeof(extra_json), 
+                    ",\"device_class\":\"pressure\",\"state_class\":\"measurement\"");
+                }
+                icon = "mdi:gauge";
                 break;
 
             case ACD_TYPE_SYSFS_VALUE:
@@ -249,6 +280,14 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                 // FIXED: Icon cannot be "", use a fallback icon
                 break;
 
+            case ACD_TYPE_VIR_TANK:
+                // Level sensor
+                hass_type = "sensor";
+                snprintf(extra_json, sizeof(extra_json), 
+                    ",\"unit_of_measurement\":\"%%\",\"state_class\":\"measurement\"");
+                icon = "mdi:cup-water";
+                break;
+            
             default:
                 should_publish = false;
                 break;
@@ -301,27 +340,52 @@ void publish_mqtt_discovery(struct aquachemdata *acdata, struct mg_connection *n
                 snprintf(topic, sizeof(topic), "%s/number/aquachemd/aquachemd_%s_timer_set/config", 
                          _acdconfig_.mqtt_discovery_topic, curr->ID);
  
-                snprintf(final_msg, sizeof(final_msg), HASS_NUMBER_TEMPLATE,
+                snprintf(final_msg, sizeof(final_msg), HASS_NUMBER_TIMER_TEMPLATE,
                          device_json, avail_json,
                          curr->ID, curr->label,
                          _acdconfig_.mqtt_aquachemd_topic, curr->ID,
                          _acdconfig_.mqtt_aquachemd_topic, curr->ID,
-                         (curr->flags & PH_PUMP) ? _acdconfig_.ph_max_dose_range : _acdconfig_.orp_max_dose_range );
+                         (curr->flags & PH_PUMP) ? _acdconfig_.ph_max_dose_time : _acdconfig_.orp_max_dose_time);
  
                 send_mqtt(nc, topic, final_msg);
 
                 // Doser
+                /*
                 const char *dose_suffix = ((curr->flags & PH_PUMP)  ? MQTT_TL_DOSE_PH : 
                                            (curr->flags & ORP_PUMP) ? MQTT_TL_DOSE_ORP : MQTT_TL_DOSE_UNKNOWN );
-  
+                */
                 snprintf(topic, sizeof(topic), "%s/sensor/aquachemd/aquachemd_%s_dose/config", 
                                                 _acdconfig_.mqtt_discovery_topic, curr->ID);
 
                 snprintf(final_msg, sizeof(final_msg), HASS_DOSE_TEMPLATE,
                          device_json, avail_json,
                          curr->ID, curr->label,
-                         _acdconfig_.mqtt_aquachemd_topic, curr->ID, dose_suffix);
+                         _acdconfig_.mqtt_aquachemd_topic, curr->ID, MQTT_TL_LAST_DOSE);
 
+                send_mqtt(nc, topic, final_msg);
+            }
+
+            // For Tank also post a way to set the level.
+            if (curr->type == ACD_TYPE_VIR_TANK) {
+                char full_label[64];
+                snprintf(full_label, sizeof(full_label), "%s Remaining", curr->label);
+                char topic_label[64];
+                snprintf(topic_label, sizeof(topic_label), "%s/level/remaining", curr->ID);
+
+                snprintf(topic, sizeof(topic), "%s/number/aquachemd/aquachemd_%s_remaining/config", 
+                         _acdconfig_.mqtt_discovery_topic, curr->ID);
+ 
+                snprintf(final_msg, sizeof(final_msg), HASS_NUMBER_TEMPLATE,
+                         device_json, avail_json,
+                         curr->ID, full_label,
+                         _acdconfig_.mqtt_aquachemd_topic, topic_label,
+                         _acdconfig_.mqtt_aquachemd_topic, topic_label,
+                         0.0,
+                         curr->data.tank.total_volume,
+                         0.1,
+                         uom_to_str(curr->data.tank.uom),
+                        "mdi:cup-water");
+ 
                 send_mqtt(nc, topic, final_msg);
             }
 

@@ -12,6 +12,23 @@
 #include "i2c.h"
 #include "utils.h"
 
+
+
+const char* i2c_get_driver_name(i2c_sensor_type_t type)
+{
+  switch(type){
+    case I2C_SENSOR_PTE7300:
+      return "PTE7300";
+    break;
+    case I2C_SENSOR_HSC:
+      return "HSC/SSC";
+    break;
+    default:
+      return "";
+    break;
+  }
+}
+
 // ─── Real implementation ──────────────────────────────────────────────────────
 // All code in this block is compiled only when DUMMY_SENSORS is NOT defined.
 // To build with fake sensors: make dummy
@@ -328,6 +345,17 @@ static int pte7300_read_u16(i2c_sensor_t *s, unsigned char reg, unsigned short *
 
 int pte7300_validate_status(unsigned short raw_status)
 {
+
+  // Empirically observed on this unit alongside independently-verified
+  // correct pressure/temperature readings. NOT a decode of documented bit
+  // semantics -- Sensata's bit table for 0x36 remains unconfirmed, and even
+  // EPFL's hardware-tested driver doesn't attempt to interpret this register.
+  // Treat this as "seen good before," not "understood."
+  if (raw_status == 0xC00E || raw_status == 0xC01E) {
+    return I2C_SUCCESS;
+  }
+
+  /* This below is simply a guess, I can;t find any actual documentation on it......
   // Extract the system layer and the device state layer
   uint8_t i2c_status_flags = (raw_status >> 14) & 0x03; // Top 2 bits
   uint8_t internal_diagnostic = raw_status & 0xFF;       // Lower 8 bits
@@ -342,7 +370,7 @@ int pte7300_validate_status(unsigned short raw_status)
         // Handle unexpected lower-byte fault flags here if they occur
         return I2C_ERROR;
     }
-  }
+  }*/
   return I2C_ERROR;
 }
 

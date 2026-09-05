@@ -42,6 +42,10 @@ Usage:
 #include <pthread.h>
 #include <signal.h>
 
+#include <fcntl.h>
+#include <sys/file.h>
+#include <errno.h>
+
 #include "version.h"
 #include "aquachemd.h"
 #include "utils.h"
@@ -76,7 +80,8 @@ static acd_thread_t _thread_control = {
 };
 
 bool start_upgrade();
-
+bool acquire_singleton_lock(void);
+void release_singleton_lock(void);
 
 
 // 100% Async-Signal-Safe mapping function
@@ -253,7 +258,7 @@ double elapsed_ms(const struct timespec *start_time) {
 
 int main(int argc, char *argv[])
 {
-  struct aquachemdata acddata;
+  struct aquachemdata acddata = {0};
   struct timespec next_wake;
 
   snprintf(acddata.display_message, DISPLAY_MSG_SIZE, "Starting: %s v%s", AQUACHEMD_SHORT_NAME, AQUACHEMD_VERSION);
@@ -428,11 +433,18 @@ reload_configuration:
   parse_config_file(&acddata);
   acddata.keys->label = _acdconfig_.main_label; // Update main label from config
 
+  if (_acdconfig_.singleton && !acquire_singleton_lock()) {
+    //LOG(LOG_ERROR, "%s: another instance is already running\n", AQUACHEMD_SHORT_NAME); // This would also show the message in the other instance
+    fprintf(stderr, "%s: another instance is already running\n", AQUACHEMD_SHORT_NAME);
+    return EXIT_FAILURE;
+  }
+
   start_net_services(&acddata);
 
   // Setup any specifics for GPIO / D1W etc
   for (acd_key_t *curr = acddata.keys; curr != NULL; curr = curr->next) {
     if (curr->type == ACD_TYPE_GPIO_COND) {
+      acddata.haveConditions = true;
       LOG(LOG_DEBUG,"Setting up GPIO Condition: %s, pin %d\n", curr->label, curr->data.gpio.pin);
       if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_INPUT, curr->data.gpio.active) != 0) {
         LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
@@ -452,6 +464,9 @@ reload_configuration:
     } else if (curr->type == ACD_TYPE_I2C_PRS) {
       //LOG(LOG_DEBUG,"Setting up I2C Pressure Sensor: %s, address 0x%02X\n", curr->label, curr->data.i2c.address);
       i2c_sensor_init(&curr->data.i2c, curr->data.i2c.type, curr->data.i2c.address, curr->data.i2c.min_value, curr->data.i2c.max_value);
+    } else if (curr->type == ACD_TYPE_VIR_TANK) {
+      calculate_tank_volumes(curr);
+      curr->state = ACD_LED_ON;
     }
 
     if (curr->type == ACD_TYPE_MASTER) {
@@ -474,6 +489,9 @@ reload_configuration:
     // reset error count
     curr->err_cnt = 0;
   }
+
+  // If we don't have any conditions to test, set master to ON.
+  if (!acddata.haveConditions){acddata.keys->state = ACD_LED_ON;}
 
   start_gpio_monitor(&acddata);
 
@@ -788,6 +806,8 @@ next_wake:
   stop_net_services();
   stop_gpio_monitor();
   usleep(100000); // Wait 100ms
+
+  release_singleton_lock();
   /*
   pthread_t net_id = get_net_services_id();
   if (net_id != 0) {
@@ -872,6 +892,68 @@ bool start_upgrade(const char *version)
     LOG(LOG_NOTICE, "Upgrade pipeline completely detached. Handed over to system shell.");
     return true;
 }
+
+
+
+/**************************************************************
+# Probably a better option would be to use the below in the systemd service file
+[Service]
+RuntimeDirectory=aquachemd
+# Then use /run/aquachemd/aquachemd.pid as LOCK_FILE_PATH
+#
+**************************************************************/
+
+#define LOCK_FILE_PATH "/run/aquachemd.pid"
+
+static int _lock_fd = -1;   // kept open for the life of the process -- do not close early
+
+// Returns true if this is the only running instance (lock acquired),
+// false if another instance already holds the lock.
+bool acquire_singleton_lock(void)
+{
+  _lock_fd = open(LOCK_FILE_PATH, O_CREAT | O_RDWR, 0644);
+  if (_lock_fd < 0) {
+    LOG(LOG_ERR, "acquire_singleton_lock: could not open %s: %s", LOCK_FILE_PATH, strerror(errno));
+    return false;   // fail closed -- if we can't even open the lock file, don't proceed
+  }
+
+  if (flock(_lock_fd, LOCK_EX | LOCK_NB) != 0) {
+    if (errno == EWOULDBLOCK)
+      LOG(LOG_ERR, "acquire_singleton_lock: another instance is already running (lock held on %s)", LOCK_FILE_PATH);
+    else
+      LOG(LOG_ERR, "acquire_singleton_lock: flock() failed: %s", strerror(errno));
+
+    close(_lock_fd);
+    _lock_fd = -1;
+    return false;
+  }
+
+  // We hold the lock -- record our PID purely for diagnostics (cat /run/aquachemd.pid)
+  ftruncate(_lock_fd, 0);
+  char pidstr[32];
+  int len = snprintf(pidstr, sizeof(pidstr), "%d\n", getpid());
+  write(_lock_fd, pidstr, len);   // best-effort; not critical if this fails
+
+  return true;
+}
+
+// Optional at clean shutdown -- exiting the process (even via SIGKILL)
+// releases the flock automatically anyway, so this is just tidiness.
+void release_singleton_lock(void)
+{
+  if (_lock_fd >= 0) {
+    flock(_lock_fd, LOCK_UN);
+    close(_lock_fd);
+    _lock_fd = -1;
+  }
+}
+
+
+
+
+
+
+
 
 
 

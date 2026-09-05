@@ -88,6 +88,9 @@ typedef enum {
     ACD_TYPE_EZO_PMP,
     #define ACD_OUT_FIRST ACD_TYPE_GPIO_PMP
     #define ACD_OUT_LAST  ACD_TYPE_EZO_PMP
+
+    // Self managed
+    ACD_TYPE_VIR_TANK,
 } acd_type_t;
 
 /* Grouping Macros */
@@ -112,6 +115,15 @@ typedef struct {
   unsigned char address;
 } ezo_sensor_t;
 
+typedef struct {
+  float total_volume;
+  float remaining_volume;
+  float percent_full;
+  acd_uom_t uom;
+} tank_sensor_t;
+
+
+// These are hard coded in MQTT and UI, don't re-order.
 typedef enum {
     ACD_LED_UNKNOWN = -1,
     ACD_LED_OFF = 0,     // Maps to false
@@ -181,6 +193,13 @@ typedef struct {
 } sensor_stats_t;
 
 
+// For future replace "float flow_rate;" with this struct in acd_key_t
+typedef struct {
+  float flow_rate;            // Pump flow rate
+  float running_total_ml;     // Running total for period (day?)
+  float running_total_max_ml; // Maximum allowed for period (day?)
+} dose_stats_t;
+
 typedef struct acd_key_t {
     acd_type_t type;
     acd_state_t state;
@@ -197,7 +216,8 @@ typedef struct acd_key_t {
     acd_uom_t uom;
 
     union {
-      float flow_rate;      // Pumps     = ml per second rate for pumps
+      //float flow_rate;      // Pumps     = ml per second rate for pumps
+      dose_stats_t dose_stats;
       uint32_t delay_on;    // Condition = used for a delay before setting to on.
       sensor_stats_t stats; // Sensor    = used for statics.
     };
@@ -208,12 +228,17 @@ typedef struct acd_key_t {
     };
 
     union {
+      uint32_t default_duration;  // Pumps use for default duration, mainly for homekit.
+    };
+
+    union {
         ezo_sensor_t   ezo;
         gpio_handle_t  gpio;
         w1_sensor_t    w1;
         mqtt_sensor_t  mqtt;
         sysfs_sensor_t sysfs;  
         i2c_sensor_t   i2c;
+        tank_sensor_t  tank;
     } data;
 
     struct acd_key_t *child;  // Virtual key if sensor has multiple outputs (like PTE7300 with pressure and temperature)
@@ -234,15 +259,16 @@ typedef struct runtime_range_t{
 #define DELAY_ACTIVE           (1 << 1)
 #define PH_PUMP                (1 << 2) 
 #define ORP_PUMP               (1 << 3)
+#define H2O_PUMP               (1 << 4)
 
-#define ACD_FLAG_FAULTED       (1 << 4)   
-#define ACD_FLAG_ACTIVE        (1 << 5)   // not used at present
+#define ACD_FLAG_FAULTED       (1 << 5)   
+#define ACD_FLAG_ACTIVE        (1 << 6)   // not used at present
 
-#define CALC_AVERAGE           (1 << 6)
+#define CALC_AVERAGE           (1 << 7)
 
-#define CONDITION_NOTIFIED     (1 << 7)
+#define CONDITION_NOTIFIED     (1 << 8)
 
-#define ACD_FLAG_VIRTUAL       (1 << 8)
+#define ACD_FLAG_VIRTUAL       (1 << 9)
 
 // CAN'T ADD ANY MORE wuthout changeing uint8_t to uint16_t 
 //#define CONDITION_SCOPE_GLOBAL (1 << 3) // For conditions Set if global interlock, clear if local restriction
@@ -277,6 +303,6 @@ typedef struct runtime_range_t{
 #define SD_PUMP_EVENT_ID "332918807d4b46949f50e93149872583"
 #define SD_MESSAGE_STARTUP_ID "5e982c7a12344567890abcdef1234567"
 #define SD_MESSAGE_UPGRADE_ID "c3b9b418e24440939b4bfae6dfbc1122"
-
+#define SD_TANK_LEVEL_SET_EVENT_ID "a7f82b1c4d3e4e899c125f6b7a8d90e1"
 
 #endif // ACD_TYPES_H_

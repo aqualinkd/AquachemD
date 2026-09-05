@@ -6,6 +6,15 @@
 #include "utils.h"
 #include "acd_timer.h"
 #include "net_services.h"
+#include "sensor_stats.h"
+
+// COME BACK AND FIGURE OUT WHY I NEED TO INCLUDE THIS HERE, IT'S CAUSING A CIRCULAR DEPENDENCY ISSUE
+//#include "state_manager.h"
+void calculate_tank_volume_after_dose(acd_key_t *key, float dose_ml);
+// COME BACK AND FIGURE OUT WHY I NEED TO INCLUDE THIS HERE, IT'S CAUSING A CIRCULAR DEPENDENCY ISSUE
+
+
+
 
 bool set_cond_state(struct aquachemdata *acdata, acd_key_t *cond, acd_state_t state);
 bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state);
@@ -100,25 +109,43 @@ uint32_t get_orp_dose_time(float current_orp) { // Changed name to current_orp f
   return _acdconfig_.orp_steps[_acdconfig_.orp_step_count - 1].seconds;
 }
 
-uint32_t get_pump_runtime(struct aquachemdata *acdata, acd_key_t *key) {
+uint32_t caculate_dose_time(struct aquachemdata *acdata, acd_key_t *key) {
   // Find latest ph and orp values.
   uint32_t runtime;
 
   if (isMASKSET(key->flags, PH_PUMP)) {
     float current_ph = get_sensor_value(acdata, ACD_TYPE_EZO_PH);
     runtime = get_ph_dose_time(current_ph);
-    LOG(LOG_NOTICE, "Dosing time calculated as %s for %d(s) (pH %.2f)",key->label, runtime, current_ph);
     return runtime;
   } else if (isMASKSET(key->flags, ORP_PUMP)) {
     float current_orp = get_sensor_value(acdata, ACD_TYPE_EZO_ORP);
     runtime = get_orp_dose_time(current_orp);
-    LOG(LOG_NOTICE, "Dosing time calculated as %s for %d(s) (ORP %.1f)",key->label, runtime, current_orp);
     return runtime;
+  } else if (isMASKSET(key->flags, H2O_PUMP)) {
+    return key->default_duration;
   }
 
-  LOG(LOG_ERR,"Unable to get pump runtime for %s", key->label);
-
   return 0;
+}
+
+uint32_t get_pump_runtime(struct aquachemdata *acdata, acd_key_t *key) {
+  if (!key) return 0;
+
+  uint32_t runtime = caculate_dose_time(acdata, key);
+
+  if (isMASKSET(key->flags, PH_PUMP)) {
+    float current_ph = get_sensor_value(acdata, ACD_TYPE_EZO_PH);
+    LOG(LOG_NOTICE, "Dosing time calculated for %s at %u(s) (pH %.2f)", key->label, runtime, current_ph);
+  } else if (isMASKSET(key->flags, ORP_PUMP)) {
+    float current_orp = get_sensor_value(acdata, ACD_TYPE_EZO_ORP);
+    LOG(LOG_NOTICE, "Dosing time calculated for %s at %u(s) (ORP %.1f)", key->label, runtime, current_orp);
+  } else if (isMASKSET(key->flags, H2O_PUMP)) {
+    LOG(LOG_NOTICE, "Dosing time calculated for %s at %u(s)", key->label, runtime);
+  } else {
+    LOG(LOG_ERR, "Unable to get pump runtime for %s", key->label ? key->label : "NULL");
+  }
+
+  return runtime;
 }
 
 // This is a request from MQTT/WebSocket/Web, NOT for a system change
@@ -139,6 +166,24 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration
       LOG_PUMP_EVENT(key, 0, 0, 0);
       post_dosing_event(key, 0, 0);
     }
+    return;
+  }
+
+  // Sanity check
+  if (isMASKSET(key->flags, PH_PUMP) && duration_sec > _acdconfig_.ph_max_dose_time) {
+    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, duration_sec, _acdconfig_.ph_max_dose_time);
+    duration_sec = _acdconfig_.ph_max_dose_time;
+  } else if (isMASKSET(key->flags, ORP_PUMP) && duration_sec > _acdconfig_.orp_max_dose_time) {
+    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, duration_sec, _acdconfig_.orp_max_dose_time);
+    duration_sec = _acdconfig_.orp_max_dose_time;
+  } else if (isMASKSET(key->flags, H2O_PUMP) && duration_sec > _acdconfig_.h2o_max_dose_time) {
+    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, duration_sec, _acdconfig_.h2o_max_dose_time);
+    duration_sec = _acdconfig_.h2o_max_dose_time;
+  }
+
+  if (isMASKSET(key->flags, TIMER_ACTIVE) && key->state == ACD_LED_ON) {
+    LOG(LOG_INFO, "Resetting timer for %s to %d\n",key->label, duration_sec);
+    start_timer(acdata, key, 0, duration_sec);
     return;
   }
 
@@ -173,9 +218,11 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
   // Calculate actual runtime and log the event
   if (start > 0) {
     uint32_t actual_runtime = (uint32_t)(now - start);
-    float dose_ml = actual_runtime * key->flow_rate;
+    float dose_ml = actual_runtime * key->dose_stats.flow_rate;
     LOG_PUMP_EVENT(key, actual_runtime, key->value, dose_ml);
     post_dosing_event(key, actual_runtime, dose_ml);
+    calculate_tank_volume_after_dose(key->child, dose_ml);
+    calculate_running_total(key->child, dose_ml);
   }
   
   ASSIGN_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
@@ -244,9 +291,19 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
   LOG(LOG_DEBUG, "Request to set %s to %s (current state: %s) with value %d", key->label, acd_state_to_str(state), acd_state_to_str(key->state), value);
 
   if (state == key->state) {
-    LOG(LOG_DEBUG, "%s is already %s, no state change needed", key->label, acd_state_to_str(state));
-    return true;
+    // If a timer is on, and value > 0 let it pass as we will reset the timer.
+    if (!isMASKSET(key->flags, TIMER_ACTIVE) || value <= 0) {
+      LOG(LOG_DEBUG, "%s is already %s, no state change needed", key->label, acd_state_to_str(state));
+      return true;
+    }
   }
+
+  // If MQTT requested a change, we need to send back the new state regardless of if it changed ot not, so simply force that.
+  // We need to pass a value here to know who requested the change, MQTT / WebSocket / API
+  // Below is a hack for the moment
+  acdata->is_dirty = true;
+  key->is_dirty = true;
+
 
   // Bunch of logic for different key states.
   switch(key->type) {
@@ -297,6 +354,9 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
       } else if (state == ACD_LED_ON) {
         if (key->state == ACD_LED_ENABLED ) {
           turn_pump_on(acdata, key, value<=0?0:value);
+        } else if (isMASKSET(key->flags, TIMER_ACTIVE) && value > 0 && key->state == ACD_LED_ON) {
+          // We are resetting the timer.
+          turn_pump_on(acdata, key, value);
         } else {
           LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
           if (state == ACD_LED_ON && _acdconfig_.log_zerorun_pump_events) {
@@ -540,6 +600,7 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
     case ACD_TYPE_SYSFS_VALUE:
     case ACD_TYPE_MQTT_VALUE:
     case ACD_TYPE_I2C_PRS:
+    case ACD_TYPE_I2C_TEMP: // At present only virtual I2C temp is supported.
     /*
       if (state != ACD_LED_ON && state != ACD_LED_DISABLED) {
         goodState = false;
@@ -562,6 +623,8 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
         state = ACD_LED_DISABLED;
       }
       break;
+    
+    case ACD_TYPE_VIR_TANK: // Virtual device can;t change
     case ACD_TYPE_NONE:
       goodState = false;
       break;
@@ -572,7 +635,7 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
     if (isMASKSET(key->flags, DELAY_ACTIVE) || key->state == ACD_LED_DELAY) {
       return false;
     }
-    LOG(LOG_ERR, "Device %s can't be set to %s", key->label, acd_state_to_str(state));
+    LOG(LOG_WARNING, "Device %s can't be set to %s", key->label, acd_state_to_str(state));
     return false;
   }
 
