@@ -264,6 +264,22 @@ bool duration_seconds_to_string(float seconds, char *dest, size_t dest_len) {
     return true;
 }
 
+
+
+
+
+// Returns true if the tank tracked by `key` (the ACD_TYPE_VIR_TANK child of a doser)
+// has run dry. Call this right after calculate_tank_volume_after_dose() to decide
+// whether the doser needs to be forced off rather than re-armed.
+bool tank_is_empty(acd_key_t *key) {
+  if (!key || key->data.tank.total_volume <= 0.0f) {
+    return false; // no tank configured for this doser -- nothing to check
+  }
+  LOG(LOG_INFO, "Tank %s is %sempty!",key->label, (key->data.tank.remaining_volume > key->data.tank.min_volume)?"not ":"" );
+  return key->data.tank.remaining_volume <= key->data.tank.min_volume;
+}
+
+
 void calculate_tank_volumes(acd_key_t *key)
 {
 
@@ -401,9 +417,15 @@ void set_pump_default_duration(acd_key_t *key, uint32_t default_duration)
 
 void calculate_running_total(acd_key_t *key, float dose_ml)
 {
+  printf("*** calculate_running_total(), %s dose_ml=%f, running_total_max_ml=%f\n",key->label, dose_ml, key->dose_stats.running_total_max_ml);
   if (!key || key->dose_stats.running_total_max_ml <= 0) {
     // Bad key, or running total not set.
     return;
+  }
+  if (!isMASKSET(key->flags, PH_PUMP) && 
+      !isMASKSET(key->flags, ORP_PUMP) && 
+      !isMASKSET(key->flags, H2O_PUMP)) {
+        return;
   }
 
   if (dose_ml > 0.0f && isfinite(dose_ml)) {
@@ -414,5 +436,25 @@ void calculate_running_total(acd_key_t *key, float dose_ml)
     } else {
         key->dose_stats.running_total_ml += dose_ml;
     }
+  }
+  LOG(LOG_INFO, "Running total for %s is %f",key->label, key->dose_stats.running_total_ml);
+
+  key->is_dirty = true;
 }
+
+void reset_running_total(acd_key_t *key)
+{
+  if (!key || key->dose_stats.running_total_max_ml <= 0) {
+    return;
+  }
+  if (!isMASKSET(key->flags, PH_PUMP) && 
+      !isMASKSET(key->flags, ORP_PUMP) && 
+      !isMASKSET(key->flags, H2O_PUMP)) {
+        return;
+  }
+
+  LOG(LOG_INFO, "Reset Running total for %s\n",key->label
+
+  key->dose_stats.running_total_ml = 0.0f;
+  key->is_dirty = true;
 }

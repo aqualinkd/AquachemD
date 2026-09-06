@@ -437,7 +437,7 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
       return uActioned;
     } */
   // Handle "aquachemd/reset_stats" at moment aquachemd can be anything as we don;t check.
-  } else if (ri2 && strncmp(ri2, "reset_stats", 11) == 0) {
+  } else if (ri2 && (strncmp(ri2, "reset_stats", 11) == 0 || strncmp(ri2, "reset_sensor_stats", 18) == 0)) {
       for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
         if (uri_strcmp(ri1, curr->ID)) {
           // If aquachemd is the ID then expect value and use reset by any matching values.
@@ -449,6 +449,19 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
           return uActioned;
         }
       }
+  } else if (ri2 && strncmp(ri2, "reset_dose_total", 16) == 0) {
+    for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+      if (uri_strcmp(ri1, curr->ID)) {
+        if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
+          reset_running_total(curr);
+          _aquachemd_data->is_dirty = true;
+          return uActioned;
+        } else {
+          *rtnmsg = REJECTED_REQUEST; // not a doser -- nothing to reset here
+          return uBad;
+        }
+      }
+    }
   } else if (ri2 && (strncasecmp(ri2, "set", 3) == 0)) {
     for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
       if (uri_strcmp(ri1, curr->ID) && (value == ACD_LED_OFF || value == ACD_LED_ON || value == ACD_LED_ENABLED)) {
@@ -928,6 +941,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
     
     // We are only subscribed to aquachemd topic, (so not checking that).
     // Just check we have "set" as string end
+    // NSF should handle reset_dose_total & reset_sensor_stats here, or simply leave them to WS and HTTP only
     if ( FAST_SUFFIX_3_CI(mqtt_msg->topic.buf, mqtt_msg->topic.len, "set"))
     {
       LOG(LOG_DEBUG, "MQTT: received (msg_id: %d), %.*s\n", mqtt_msg->id, mqtt_msg->topic.len, mqtt_msg->topic.buf);
@@ -1146,6 +1160,7 @@ void mqtt_broadcast_aquachemd_dose_event(struct mg_connection *nc)
 {
   struct mg_connection *c;
   char topic[MQTT_PUB_TOPIC_SIZE];
+  //char rt_topic[MQTT_PUB_TOPIC_SIZE];
   //char msg[11];
 
   LOG(LOG_INFO, "Broadcasting Aquachemd dose event to MQTT\n");
@@ -1157,12 +1172,18 @@ void mqtt_broadcast_aquachemd_dose_event(struct mg_connection *nc)
                           (_dose_event.key->flags & ORP_PUMP) ? MQTT_TL_DOSE_ORP :
                           (_dose_event.key->flags & H2O_PUMP) ? MQTT_TL_DOSE_H2O : MQTT_TL_DOSE_UNKNOWN );
   */
-  snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_LAST_DOSE);
+  //snprintf(ld_topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_LAST_DOSE);
+  //snprintf(rt_topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_RUNNING_DOSE);
 
   for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c)) {
     if (is_mqtt(c)) {
+      snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_LAST_DOSE);
       LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",_dose_event.dose_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
       send_mqtt_float_msg(c, topic, _dose_event.dose_ml);
+
+      snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_RUNNING_DOSE);
+      LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",_dose_event.key->dose_stats.running_total_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
+      send_mqtt_float_msg(c, topic, _dose_event.key->dose_stats.running_total_ml);
     }
   }
   

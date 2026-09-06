@@ -1791,10 +1791,10 @@
               if (obj.attributes?.includes(_DeviceAttributes.VSP)) {
                 if (commandID == V_GPM) return "/GPM"; else if (commandID == V_RPM) return "/RPM";
               } else if (obj.attributes?.includes(_DeviceAttributes.TIMER) && commandID == V_TIMER) return "/timer";
-              else if (obj.attributes?.includes(_DeviceAttributes.RESET_STATS) && commandID == V_RESET_STATS) return "/reset_stats";
+              else if (obj.attributes?.includes(_DeviceAttributes.RESET_STATS) && commandID == V_RESET_STATS) return "/reset_sensor_stats";
               break;
             case _DeviceTypes.SENSOR:
-              if (obj.attributes?.includes(_DeviceAttributes.RESET_STATS) && commandID == V_RESET_STATS) return "/reset_stats";
+              if (obj.attributes?.includes(_DeviceAttributes.RESET_STATS) && commandID == V_RESET_STATS) return "/reset_sensor_stats";
               break;
           }
         }

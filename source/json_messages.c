@@ -205,14 +205,17 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.ph_default_dose_time);
           cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.ph_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("ph_pump"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_total"));
         } else if (isMASKSET(curr->flags, ORP_PUMP)) {
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.orp_default_dose_time);
           cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.orp_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("orp_pump"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_total"));
         } else if (isMASKSET(curr->flags, H2O_PUMP)) {
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.h2o_default_dose_time);
           cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.h2o_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("h2o_pump"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_total"));
         }
         
         cJSON_AddItemToObject(device, "attributes", attributes);

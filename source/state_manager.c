@@ -169,6 +169,15 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration
     return;
   }
 
+  // User-configured safety cap: total ml dosed this period (e.g. per day) must stat under running_total_max_ml. This only warns and skips THIS dose -- it does not
+  // touch key->state, so the doser stays fully enabled and will dose normally again as soon as running_total_ml resets for the next period. A runaway sensor reading
+  if (key->dose_stats.running_total_max_ml > 0.0f &&
+      key->dose_stats.running_total_ml >= key->dose_stats.running_total_max_ml) {
+    LOG(LOG_WARNING, "%s: dosing limit reached for this period (%.1f / %.1f ml) -- skipping dose until reset",
+        key->label, key->dose_stats.running_total_ml, key->dose_stats.running_total_max_ml);
+    return;
+  }
+
   // Sanity check
   if (isMASKSET(key->flags, PH_PUMP) && duration_sec > _acdconfig_.ph_max_dose_time) {
     LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, duration_sec, _acdconfig_.ph_max_dose_time);
@@ -207,6 +216,7 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration
 void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
   time_t start = get_timer_started_at(key);
   time_t now = time(NULL);
+  bool tank_empty = false;
 
   if (key->type == ACD_TYPE_GPIO_PMP) {
     relay_off(&key->data.gpio);
@@ -222,10 +232,17 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
     LOG_PUMP_EVENT(key, actual_runtime, key->value, dose_ml);
     post_dosing_event(key, actual_runtime, dose_ml);
     calculate_tank_volume_after_dose(key->child, dose_ml);
-    calculate_running_total(key->child, dose_ml);
+    calculate_running_total(key, dose_ml);
   }
   
-  ASSIGN_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
+  //ASSIGN_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
+  if (tank_empty) {
+    LOG(LOG_WARNING, "%s: dose tank is empty, forcing doser OFF -- switch back to Enabled once refilled\n", key->label);
+    ASSIGN_IF_CHANGED(key->state, ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
+  } else {
+    ASSIGN_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
+  }
+
   clear_timer(acdata, key);
   key->value = 0;
 }

@@ -72,6 +72,7 @@ typedef struct {
     float value;
     float value2;
     float value3;
+    float value4;
     int   pin;
     bool  pin_mode;
     bool  pin_state;
@@ -137,6 +138,7 @@ void clear_staging() {
     _staging.value = 0;
     _staging.value2 = 0;
     _staging.value3 = 0;
+    _staging.value4 = 0;
     _staging.pending_type = ACD_TYPE_NONE;
     _staging.flags = 0;
     _staging.is_global = true;
@@ -384,6 +386,9 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 else if (strncasecmp(param, "gpio_doser_tank_uom", 19) == 0) {
                     _staging.uom2 = parse_uom(value);
                 }
+                else if (strncasecmp(param, "gpio_doser_tank_min_volume", 26) == 0) {
+                    _staging.value3 = parse_uom(value);
+                }
                 else if (strncasecmp(param, "mqtt_condition_value", 20) == 0) {
                     if (_staging.char_value) free(_staging.char_value);
                     _staging.char_value = strdup(value);
@@ -391,6 +396,9 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 }   
                 else if (strncasecmp(param, "gpio_doser_ml_per_second", 24) == 0) {
                     _staging.value = strtof(value, NULL);
+                }
+                else if (strncasecmp(param, "gpio_doser_running_dose_max_ml", 30) == 0) {
+                    _staging.value4 = strtof(value, NULL);
                 }
                 else if (strstr(param, "condition_met_delay")) {
                     _staging.value = strtof(value, NULL);
@@ -2236,7 +2244,10 @@ void add_output_gpio(const acd_staging_t *st) {
     new_node->data.gpio.active = st->pin_mode;
     new_node->data.gpio.required = st->pin_state;
     new_node->dose_stats.flow_rate = st->value; // Mapped from _staging.value (ml_ps)
+    new_node->dose_stats.running_total_max_ml = st->value4;
   
+    printf("**** Tank %s: running_total_max_ml=%f\n", new_node->label, new_node->dose_stats.running_total_max_ml);
+
     if (st->flags != 0) {
         new_node->flags = st->flags;
     }
@@ -2272,8 +2283,10 @@ void add_output_gpio(const acd_staging_t *st) {
       char *tank_label = isMASKSET(new_tank->flags, PH_PUMP)?"Acid Tank Level":"Chlorine Tank Level";
 
       new_tank->data.tank.total_volume = st->value2;
+      new_tank->data.tank.min_volume = st->value3;
 
       printf("**** Tank uom2: %d, %s\n", st->uom2, uom_to_str(st->uom2));
+
       if (st->uom2 == UOM_GALLONS) {
         new_tank->data.tank.uom = st->uom2;
       } else {

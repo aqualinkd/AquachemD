@@ -119,6 +119,7 @@ typedef struct {
   float total_volume;
   float remaining_volume;
   float percent_full;
+  float min_volume;   // Consider the tank empty once remaining_volume drops to this level.
   acd_uom_t uom;
 } tank_sensor_t;
 
