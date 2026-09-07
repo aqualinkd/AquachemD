@@ -150,8 +150,8 @@ gpio_doser_required_state=on
 gpio_doser_ml_per_second=2.18
 ```
 
-<details>
-<summary><b>Full configuration reference</b> (click to expand)</summary>
+
+## Full configuration reference
 
 #### System & web
 | Option | Description |
