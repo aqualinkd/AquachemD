@@ -28,4 +28,24 @@ void reset_dose_running_total(acd_key_t *key);
 
 void set_pump_default_duration(acd_key_t *key, uint32_t default_duration);
 
+#define IS_RUNNING_DOSE_ENABLED(k) \
+    ((k) && \
+     ((k)->dose_stats.running_total_max_ml > 0.0f) && \
+     (isMASKSET((k)->flags, PH_PUMP) || \
+      isMASKSET((k)->flags, ORP_PUMP) || \
+      isMASKSET((k)->flags, H2O_PUMP)))
+
+#define IS_TANK_EMPTY_LOCKOUT_ENABLED(k) \
+    ((k) && \
+     ((k)->type == ACD_TYPE_VIR_TANK) && \
+     ((k)->data.tank.total_volume > 0.0f) && \
+     ((k)->data.tank.min_volume > 0.0f) && \
+     isMASKSET((k)->flags, ACD_FLAG_VIRTUAL))
+
+#define IS_TANK_VOLUME_ENABLED(k) \
+    ((k) && \
+     ((k)->type == ACD_TYPE_VIR_TANK) && \
+     ((k)->data.tank.total_volume > 0.0f) && \
+     isMASKSET((k)->flags, ACD_FLAG_VIRTUAL))
+
 #endif

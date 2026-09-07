@@ -64,6 +64,8 @@ struct acdconfig
   uint32_t orp_max_dose_time;
   uint32_t h2o_max_dose_time;
 
+  uint32_t switch_max_runtime; // Default max runtime for switches etc
+
   bool ph_average_dose_calc;
   bool orp_average_dose_calc;
 

@@ -195,6 +195,7 @@
 	"tile_settings":	{
 		"orp_runtime_in_minutes":	true,
 		"h2o_runtime_in_minutes":	true,
+		"switch_runtime_in_minutes":	true,
 		"display_temp_in_f":	true
 	}
 }

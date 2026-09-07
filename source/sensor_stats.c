@@ -272,7 +272,7 @@ bool duration_seconds_to_string(float seconds, char *dest, size_t dest_len) {
 // has run dry. Call this right after calculate_tank_volume_after_dose() to decide
 // whether the doser needs to be forced off rather than re-armed.
 bool tank_is_empty(acd_key_t *key) {
-  if (!key || key->data.tank.total_volume <= 0.0f) {
+  if (!key || !IS_TANK_VOLUME_ENABLED(key)) {
     return false; // no tank configured for this doser -- nothing to check
   }
   LOG(LOG_INFO, "Tank %s is %sempty!",key->label, (key->data.tank.remaining_volume > key->data.tank.min_volume)?"not ":"" );
@@ -307,7 +307,7 @@ void calculate_tank_volumes(acd_key_t *key)
 
 void set_tank_volume(acd_key_t *key, acd_uom_t uom, float value)
 {
-    if (!key || key->data.tank.total_volume <= 0.0f) {
+    if (!key || !IS_TANK_VOLUME_ENABLED(key)) {
         LOG(LOG_ERR, "set_tank_volume: invalid key or zero total volume for %s", key ? key->label : "NULL");
         return;
     }
@@ -342,17 +342,18 @@ void set_tank_volume(acd_key_t *key, acd_uom_t uom, float value)
 // rather than a physical level sensor, so the tank's level stays in sync.
 void calculate_tank_volume_after_dose(acd_key_t *key, float dose_ml)
 {
-  if (!key) {
+  if (!key || !IS_TANK_VOLUME_ENABLED(key)) {
     //LOG(LOG_ERR, "calculate_tank_volume_after_dose: key is NULL");
     // Tank hasn't been setup for this pump
     return;
   }
+  /*
   if (key->data.tank.total_volume <= 0.0f) {
     LOG(LOG_ERR, "%s: total_volume is not set (%.1f) — cannot calculate tank level",
         key->label, key->data.tank.total_volume);
     return;
   }
-
+  */
   if (dose_ml <= 0.0f) {
     return;   // nothing dosed (or bad input) -- leave the tank level untouched
   }
@@ -407,6 +408,8 @@ void set_pump_default_duration(acd_key_t *key, uint32_t default_duration)
         max_duration = _acdconfig_.orp_max_dose_time;
     } else if (isMASKSET(key->flags, H2O_PUMP)) {
         max_duration = _acdconfig_.h2o_max_dose_time;
+    } else if (key->type == ACD_TYPE_GPIO_SWITCH) {
+        max_duration = _acdconfig_.switch_max_runtime;
     } else {
         LOG(LOG_ERR, "set_pump_default_duration: unknown pump flags for %s", key->label ? key->label : "NULL");
         return;
@@ -424,15 +427,8 @@ void set_pump_default_duration(acd_key_t *key, uint32_t default_duration)
 
 void calculate_dose_running_total(acd_key_t *key, float dose_ml)
 {
-  //printf("*** calculate_running_total(), %s dose_ml=%f, running_total_max_ml=%f\n",key->label, dose_ml, key->dose_stats.running_total_max_ml);
-  if (!key || key->dose_stats.running_total_max_ml <= 0) {
-    // Bad key, or running total not set.
+  if (!key || !IS_RUNNING_DOSE_ENABLED(key)) {
     return;
-  }
-  if (!isMASKSET(key->flags, PH_PUMP) && 
-      !isMASKSET(key->flags, ORP_PUMP) && 
-      !isMASKSET(key->flags, H2O_PUMP)) {
-        return;
   }
 
   if (dose_ml > 0.0f && isfinite(dose_ml)) {
@@ -451,17 +447,38 @@ void calculate_dose_running_total(acd_key_t *key, float dose_ml)
 
 void reset_dose_running_total(acd_key_t *key)
 {
-  if (!key || key->dose_stats.running_total_max_ml <= 0) {
+  if (!key || !IS_RUNNING_DOSE_ENABLED(key)) {
     return;
   }
-  if (!isMASKSET(key->flags, PH_PUMP) && 
-      !isMASKSET(key->flags, ORP_PUMP) && 
-      !isMASKSET(key->flags, H2O_PUMP)) {
-        return;
-  }
-
+  
   LOG(LOG_INFO, "Reset Running total for %s\n",key->label);
 
   key->dose_stats.running_total_ml = 0.0f;
   key->is_dirty = true;
 }
+
+
+
+/*
+bool IS_RUNNING_DOSE_ENABLED(acd_key_t *key)
+{
+  if (!isMASKSET(key->flags, PH_PUMP) && 
+      !isMASKSET(key->flags, ORP_PUMP) && 
+      !isMASKSET(key->flags, H2O_PUMP)) {
+        return false;
+  }
+
+  if (!key || key->dose_stats.running_total_max_ml <= 0) {
+    return false;
+  }
+  return true;
+}
+
+bool IS_TANK_EMPTY_LOCKOUT_ENABLED(acd_key_t *key)
+{
+  if (!key || key->type != ACD_TYPE_TANK || key->data.tank.total_volume <= 0 || key->data.tank.min_volume <= 0 || !isMASKSET(key->flags, ACD_FLAG_VIRTUAL)) {
+    return false;
+  }
+  return true;
+}
+*/

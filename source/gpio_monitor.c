@@ -158,7 +158,7 @@ void *gpio_monitor_worker(void *ptr)
     for (acd_key_t *curr = acddata->keys; curr; curr = curr->next)
     {
         // Register Keys (Outputs) - Monitor for ERRORS ONLY
-        if (curr->type == ACD_TYPE_GPIO_PMP && curr->data.gpio.request)
+        if ((curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_SWITCH) && curr->data.gpio.request)
         {
             int fd = gpiod_line_request_get_fd(curr->data.gpio.request);
             if (fd >= 0)

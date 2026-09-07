@@ -64,6 +64,9 @@ CFG_ENTRY( "h2o_default_dose_time",  h2o_default_dose_time,  300,               
 CFG_ENTRY( "h2o_max_dose_time",      h2o_max_dose_time,     600,                  CFG_INT,     0,                                  0,                NULL )
 
 
+CFG_ENTRY( "switch_max_runtime",     switch_max_runtime,    7200,                  CFG_INT,     0,                                  0,                NULL )
+
+
 /* --- 7. SECURITY / TLS (Conditional) --- */
 #if MG_TLS > 0
 CFG_ENTRY( "cert_dir",               cert_dir,               NULL,                 CFG_STRING,  CFG_GRP_ADVANCED,                   0,                NULL )
@@ -143,6 +146,16 @@ CFG_ENTRY( "gpio_doser_tank_total_volume", keys,               NULL,            
 CFG_ENTRY( "gpio_doser_tank_min_volume", keys,                 NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_tank_uom",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_running_dose_max_ml", keys,             NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
+CFG_ENTRY( "gpio_doser_scope_global",  keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
+CFG_ENTRY( "gpio_switch_label",         keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "gpio_switch_type",          keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_switch_pin",           keys,                   NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "gpio_switch_address",       keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_switch_pin_mode",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_switch_required_state",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_switch_scope_global",  keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 
 /*

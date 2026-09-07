@@ -86,8 +86,10 @@ typedef enum {
     //ACD_TYPE_GPIO_PMP_PH,
     //ACD_TYPE_GPIO_PMP_ORP,
     ACD_TYPE_EZO_PMP,
+    ACD_TYPE_GPIO_SWITCH,
     #define ACD_OUT_FIRST ACD_TYPE_GPIO_PMP
-    #define ACD_OUT_LAST  ACD_TYPE_EZO_PMP
+    //#define ACD_OUT_LAST  ACD_TYPE_EZO_PMP
+    #define ACD_OUT_LAST  ACD_TYPE_GPIO_SWITCH
 
     // Self managed
     ACD_TYPE_VIR_TANK,

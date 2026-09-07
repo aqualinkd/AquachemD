@@ -1287,13 +1287,14 @@
       return id.startsWith("PMP") && _devices.devices[id].attributes?.includes("orp_pump") && _config?.tile_settings?.orp_runtime_in_minutes;
     }*/
     function useMinutesForRuntime(id) {
-      if (!id?.startsWith("PMP")) return false;
+      //if (!id?.startsWith("PMP") && !id?.startsWith("SWT")) return false;
 
       const attrs = _devices.devices[id]?.attributes;
 
       return (
         (attrs?.includes("orp_pump") && Boolean(_config?.tile_settings?.orp_runtime_in_minutes)) ||
-        (attrs?.includes("h2o_pump") && Boolean(_config?.tile_settings?.h2o_runtime_in_minutes))
+        (attrs?.includes("h2o_pump") && Boolean(_config?.tile_settings?.h2o_runtime_in_minutes)) ||
+        (attrs?.includes("gpio_switch") && Boolean(_config?.tile_settings?.switch_runtime_in_minutes))
       );
     }
 

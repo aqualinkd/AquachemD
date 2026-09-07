@@ -449,7 +449,7 @@ reload_configuration:
       if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_INPUT, curr->data.gpio.active) != 0) {
         LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
       }
-    } else if (curr->type == ACD_TYPE_GPIO_PMP) {
+    } else if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_SWITCH) {
       LOG(LOG_DEBUG,"Setting up GPIO Pump: %s, pin %d\n", curr->label, curr->data.gpio.pin);
       if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_OUTPUT, curr->data.gpio.active) != 0) {
         LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
@@ -749,6 +749,7 @@ reload_configuration:
         case ACD_TYPE_MQTT_COND:
         case ACD_TYPE_GPIO_COND:
         case ACD_TYPE_MQTT_VALUE:
+        case ACD_TYPE_GPIO_SWITCH:
         break;
 
         default:

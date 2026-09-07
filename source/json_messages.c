@@ -216,6 +216,10 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
           cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.h2o_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("h2o_pump"));
           cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_stats"));
+        } else if (curr->type == ACD_TYPE_GPIO_SWITCH) {
+          //cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.switch_default_runtime);
+          cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.switch_max_runtime);
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("gpio_switch"));
         }
         
         cJSON_AddItemToObject(device, "attributes", attributes);

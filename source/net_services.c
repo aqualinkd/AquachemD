@@ -1120,8 +1120,9 @@ void mqtt_broadcast_aquachemdstate(struct mg_connection *nc, bool force_all)
           send_mqtt_average_float_msg(nc, curr->ID, curr->stats.average);
         }
       }
-      if (curr->type == ACD_TYPE_VIR_TANK) {
-        if (curr->uom)
+      //if (curr->type == ACD_TYPE_VIR_TANK) {
+      //  if (curr->uom)
+      if (IS_TANK_VOLUME_ENABLED(curr)) {
         send_mqtt_level_float_msg(nc, curr->ID, MQTT_TSL_REMAINING_VOLUME, curr->data.tank.remaining_volume);
         send_mqtt_level_float_msg(nc, curr->ID, MQTT_TSL_TOTAL_VOLUME, curr->data.tank.total_volume);
       }
@@ -1183,9 +1184,11 @@ void mqtt_broadcast_aquachemd_dose_event(struct mg_connection *nc)
       LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",_dose_event.dose_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
       send_mqtt_float_msg(c, topic, _dose_event.dose_ml);
 
-      snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_RUNNING_DOSE);
-      LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",_dose_event.key->dose_stats.running_total_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
-      send_mqtt_float_msg(c, topic, _dose_event.key->dose_stats.running_total_ml);
+      if (IS_RUNNING_DOSE_ENABLED(_dose_event.key)) {
+        snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_RUNNING_DOSE);
+        LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",_dose_event.key->dose_stats.running_total_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
+        send_mqtt_float_msg(c, topic, _dose_event.key->dose_stats.running_total_ml);
+      }
     }
   }
   
