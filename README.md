@@ -27,14 +27,14 @@ Full details on all UI options comming, but just about everything is fully custo
 <img src="docs/images/dose-time.png" alt="Alt Text"  width="100">
 <img src="docs/images/disabled.png" alt="Alt Text"  width="100">
 -->
-<table>
+<table align="center" border="0" cellpadding="0" cellspacing="0">
   <tr>
-    <td><img src="docs/images/sensor.png" alt="Sensor" width="80"></td>
-    <td><img src="docs/images/sensor-high.png" alt="High" width="80"></td>
-    <td><img src="docs/images/sensor-outrange.png" alt="Out Range" width="80"></td>
-    <td><img src="docs/images/sensor-custom.png" alt="Custom" width="80"></td>
-    <td><img src="docs/images/dose-time.png" alt="Dose Time" width="80"></td>
-    <td><img src="docs/images/disabled.png" alt="Disabled" width="80"></td>
+    <td><img src="docs/images/sensor.png" alt="Sensor" width="100"></td>
+    <td><img src="docs/images/sensor-high.png" alt="High" width="100"></td>
+    <td><img src="docs/images/sensor-outrange.png" alt="Out Range" width="100"></td>
+    <td><img src="docs/images/sensor-custom.png" alt="Custom" width="100"></td>
+    <td><img src="docs/images/dose-time.png" alt="Dose Time" width="100"></td>
+    <td><img src="docs/images/disabled.png" alt="Disabled" width="100"></td>
   </tr>
 </table>
 <br><br>
