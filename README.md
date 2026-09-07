@@ -51,6 +51,11 @@ The result: chemicals are never dispensed into stagnant water, which is exactly 
 
 Interlocks aren't limited to "is the filter pump on" — any equipment state you can get onto MQTT can gate a doser. A common example: if your acid injection point sits physically upstream of a pressure-side pool cleaner, dosing while that cleaner's booster pump is running can alter flow through the injection point in ways that make dosing unpredictable. Point an MQTT interlock at the booster pump's running state, and AquachemD simply won't dose while it's active — no different in principle from the filter-pump interlock, just watching a different piece of equipment.
 
+Conditions can also delay how long *sensors* are trusted after they're satisfied, not just how long dosers wait — useful for exactly the situation you'd expect: if your filter pump has been off overnight, the water sitting in the flow cell and pipework is stagnant and gives misleading pH/ORP readings the instant the pump kicks back on. Setting a delay (e.g. 60 seconds) on the filter-pump condition means AquachemD waits for genuinely fresh, circulating pool water before trusting those readings again, rather than reacting to a stale first reading.
+
+### Not just dosing — plain GPIO switches too
+Not every relay near your pool is a chemical doser. AquachemD also supports plain **GPIO switches** for anything else you want on/off control and HomeKit/Home Assistant visibility for — a booster pump, an auxiliary light, whatever's wired to a spare relay — using the same interlock and scope system as everything else, without forcing it to pretend to be a doser.
+
 ### Gives you a real dashboard, not just a config file
 The built-in web UI (served directly by the daemon — no separate web server needed) shows live sensor readings and pump status over a websocket, lets you trigger a manual dose or override a pump directly, and includes an editable configuration screen for every setting described in this README. AquachemD can also self-upgrade to the latest release directly from the web UI.
 
@@ -63,7 +68,7 @@ Every sensor reading, pump state, and dose event is published to MQTT with nativ
 - Dose-volume tracking (mL of acid/chlorine dispensed per day), using `total_increasing` state classes so Home Assistant's energy-dashboard-style tracking works out of the box.
 - Binary "OK/Problem" entities for every safety interlock.
 - Mode selectors (Off / On / Auto) for each doser.
-- **Dose tank levels**, tracked as remaining volume (mL or gallons) and percentage, updated automatically as each dose is drawn from the tank and persisted across restarts. Once a tank runs dry, the doser is automatically switched to **Off** — not a transient auto-disable that clears itself, but a persistent state that requires manually switching it back to Enabled once you've refilled — so it never sits there silently trying to dose from an empty tank until you notice. Tank level is also published live to MQTT, so Home Assistant (or any automation you write) can warn you well before it gets to that point.
+- **Dose tank levels**, tracked as remaining volume (mL or gallons) and percentage, updated automatically as each dose is drawn from the tank and persisted across restarts. If you also set a minimum "consider empty" volume, the doser is automatically switched to **Off** once the tank hits it — not a transient auto-disable that clears itself the next cycle, but a persistent state that only clears once you update the tank's level again (after refilling it), so it never sits there silently trying to dose from a dry tank until you notice. Tank tracking works fine without the minimum-volume setting too — you just get level reporting without the auto-shutoff. Tank level is also published live to MQTT, so Home Assistant (or any automation you write) can warn you well before it gets to that point.
 
 ## HomeKit integration
 
@@ -178,6 +183,9 @@ gpio_doser_ml_per_second=2.18
 | `ph_average_dose_calc` / `orp_average_dose_calc` | Use a rolling average of readings rather than the latest single reading. |
 | `h2o_default_dose_time` / `h2o_max_dose_time` | Same pattern, for the water-topup doser. |
 | `temp_compensated_ph` | Adjust pH readings for current water temperature. |
+| `gpio_doser_running_dose_max_ml` | Per-doser cap on total volume dosed within the current period. If hit, dosing is skipped (with a warning) until the total resets — it does not disable the doser. |
+| `gpio_doser_tank_total_volume` / `gpio_doser_tank_uom` | Total capacity of the tank feeding this doser, and its unit (gal/mL) — enables tank-level tracking and reporting. |
+| `gpio_doser_tank_min_volume` | Volume below which the tank is considered empty. If set (alongside `tank_total_volume`), the doser is forced Off once reached — see [Doses automatically](#doses-automatically-and-tells-you-exactly-why) above. Leave unset to track level without auto-shutoff. |
 
 #### Safety interlocks
 | Option | Description |
@@ -185,6 +193,8 @@ gpio_doser_ml_per_second=2.18
 | `mqtt_condition_label/topic/value` | Require an external MQTT value (e.g. filter pump state) before dosing. |
 | `mqtt_condition_met_delay` | Seconds a condition must hold before it's considered satisfied. |
 | `gpio_condition_label/pin/pin_mode/required_state` | Same, for a physical GPIO interlock (flow switch, level sensor). |
+| `gpio_condition_met_delay` | Same delay concept as `mqtt_condition_met_delay`, for a GPIO interlock. |
+| `*_scope_global` (e.g. `mqtt_condition_scope_global`, `ph_sensor_scope_global`, `gpio_doser_scope_global`) | Controls how severely this condition/sensor/doser is affected by a failed interlock elsewhere — a Soft Limit (only outputs pause) versus a Hard Interlock (outputs stop *and* scoped sensors stop being polled). See the full explanation in source comments (`acd_types.h`) if you're tuning this — it's more nuanced than a plain on/off. |
 
 #### Sensors
 | Type | Config prefix | Notes |
@@ -198,8 +208,13 @@ gpio_doser_ml_per_second=2.18
 #### Dosers
 | Option | Description |
 | :--- | :--- |
-| `ph_doser_*` / `orp_doser_*` / `gpio_doser_*` | Pin, pin mode, required active state, and pump flow rate (`ml_per_second`) for each pump. |
-| `gpio_doser_tank_size` / `gpio_doser_tank_uom` | Optional tank size, for reporting remaining chemical volume rather than just dose totals. |
+| `ph_doser_*` / `orp_doser_*` / `gpio_doser_*` | Pin, pin mode, required active state, and pump flow rate (`ml_per_second`) for each pump. Tank tracking and the per-period cap are covered in the [Dosing](#dosing) table above. |
+
+#### Switches
+| Option | Description |
+| :--- | :--- |
+| `gpio_switch_label/pin/pin_mode/required_state` | A plain on/off GPIO output — same wiring options as a doser, but with no dosing logic, timer, or chemical role attached. Use this for equipment that just needs on/off control and HomeKit/Home Assistant visibility. |
+| `gpio_switch_scope_global` | Same interlock-scope concept as everything else — see Safety interlocks above. |
 
 </details>
 
@@ -211,6 +226,24 @@ gpio_doser_ml_per_second=2.18
 ## Support
 
 Found a bug, or something not covered here? Please open a [GitHub issue](https://github.com/aqualinkd/AquachemD/issues) — include your `log_level=debug` output and relevant config lines where possible.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <!--
 
 
