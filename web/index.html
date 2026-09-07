@@ -606,12 +606,14 @@
       DIMMER: 'dimmer',
       VSP: 'vsp',
       ALT_LABEL: 'alt_label',
-      RESET_STATS: 'reset_stats',
       HEATER: 'heater',
       SWG: 'swg',
-      FREEZE: 'freeze', CHILLER: 'chiller',
-      STATS: 'stats',
-      DOSESTATS: 'dosestats',
+      FREEZE: 'freeze', 
+      CHILLER: 'chiller',
+      SENSOR_STATS: 'sensor_stats',
+      DOSE_STATS: 'dose_stats',
+      RESET_SENSOR_STATS: 'reset_sensor_stats',
+      RESET_DOSE_STATS: 'reset_dose_stats',
       ALT_VALUE: 'alt_value',
     });
 
@@ -1464,7 +1466,7 @@
                         ?? 0;
       }
 
-      if (_devices.devices[id].attributes?.includes(_DeviceAttributes.DOSESTATS)) {
+      if (_devices.devices[id].attributes?.includes(_DeviceAttributes.DOSE_STATS)) {
         get_dosestats();
       }
 
@@ -1581,7 +1583,7 @@
     }
 
     var CS_ROW_INDEX = 0;
-    var V_OFF = 0, V_ON = 1, V_SETPOINT = 3, V_PERCENT = 4, V_RPM = 5, V_GPM = 6, V_TIMER = 7, V_RESET_STATS = 8;
+    var V_OFF = 0, V_ON = 1, V_SETPOINT = 3, V_PERCENT = 4, V_RPM = 5, V_GPM = 6, V_TIMER = 7, V_RESET_SENSOR_STATS = 8, V_RESET_DOSE_STATS = 9;
 
     function showScheduler(caller) {
       var height = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
@@ -1674,7 +1676,15 @@
           } else { 
             option += '<option value="' + obj.id + '">' + obj.label + '</option>'; 
           }
-        } else if (obj.type == _DeviceTypes.SENSOR && obj.attributes?.includes(_DeviceAttributes.RESET_STATS)) {
+        } else if (obj.type == _DeviceTypes.SENSOR && obj.attributes?.includes(_DeviceAttributes.RESET_SENSOR_STATS)) {
+          //LOG("Device:"+device+" obj:"+obj.id+" subdev:"+subdev+" value:"+value);
+          if (device == obj.id ) {
+            option += '<option selected value="' + obj.id + '">' + obj.label + '</option>';
+            subOption = cs_getDeviceOptions(obj, subdev, value);
+          } else { 
+            option += '<option value="' + obj.id + '">' + obj.label + '</option>'; 
+          }
+        } else if (obj.type == _DeviceTypes.SWITCH && obj.attributes?.includes(_DeviceAttributes.RESET_SENSOR_STATS)) {
           //LOG("Device:"+device+" obj:"+obj.id+" subdev:"+subdev+" value:"+value);
           if (device == obj.id ) {
             option += '<option selected value="' + obj.id + '">' + obj.label + '</option>';
@@ -1717,10 +1727,12 @@
           if (deviceobj.attributes?.includes(_DeviceAttributes.VSP)) {
             if (deviceobj.Pump_Type == "vfPump") html += '<option value="' + V_GPM + '" ' + cs_isSelected("GPM", val1, val2) + '>GPM</option>';
             else html += '<option value="' + V_RPM + '" ' + cs_isSelected("RPM", val1, val2) + '>RPM</option>';
-          } else if (deviceobj.attributes?.includes(_DeviceAttributes.TIMER)) {
+          }/* else*/ if (deviceobj.attributes?.includes(_DeviceAttributes.TIMER)) {
             html += '<option value="' + V_TIMER + '" ' + cs_isSelected("timer", val1, val2) + '>Timer</option>';
-          } else if (deviceobj.attributes?.includes(_DeviceAttributes.RESET_STATS)) {
-            html += '<option value="' + V_RESET_STATS + '" ' + cs_isSelected("reset_stats", val1, val2) + '>Reset Stats</option>';
+          } /*else*/ if (deviceobj.attributes?.includes(_DeviceAttributes.RESET_SENSOR_STATS)) {
+            html += '<option value="' + V_RESET_SENSOR_STATS + '" ' + cs_isSelected("reset_sensor_stats", val1, val2) + '>Reset Stats</option>';
+          } /*else*/ if (deviceobj.attributes?.includes(_DeviceAttributes.RESET_DOSE_STATS)) {
+            html += '<option value="' + V_RESET_DOSE_STATS + '" ' + cs_isSelected("reset_dose_stats", val1, val2) + '>Reset Stats</option>';
           }
           break;
         case _DeviceTypes.CONTROLLER:
@@ -1729,9 +1741,9 @@
           else if (deviceobj.attributes?.includes(_DeviceAttributes.FREEZE)) html = '<option value="' + V_SETPOINT + '">Temp</option>';
           break;
         case _DeviceTypes.SENSOR:
-          if (deviceobj.attributes?.includes(_DeviceAttributes.RESET_STATS)) {
+          if (deviceobj.attributes?.includes(_DeviceAttributes.RESET_SENSOR_STATS)) {
             // Don't use += since there is no on / off, also only option so select it.
-            html = '<option value="' + V_RESET_STATS + '" "selected">Reset Stats</option>';
+            html = '<option value="' + V_RESET_SENSOR_STATS + '" "selected">Reset Stats</option>';
           }
           break;
       }
@@ -1754,7 +1766,10 @@
       let device = caller.parentNode.parentNode.querySelector('#device')?.value;
       //value.type = caller.value >= 2 ? "text" : "hidden";
       //LOG("cs_commandChange: caller.value=" + caller.value + " device=" + device + " device type=" + _devices.devices[device]?.type);
-      if (caller.value < 2 || (caller.value == V_RESET_STATS && _devices.devices[device]?.type == _DeviceTypes.SENSOR)) {
+      if (caller.value < 2 || 
+         (caller.value == V_RESET_SENSOR_STATS && _devices.devices[device]?.type == _DeviceTypes.SENSOR) ||
+         (caller.value == V_RESET_DOSE_STATS && _devices.devices[device]?.type == _DeviceTypes.SWITCH && _devices.devices[device]?.attributes?.includes(_DeviceAttributes.RESET_DOSE_STATS))
+          ) {
         value.type = "hidden";
       } else {
         value.type = "text";
@@ -1791,10 +1806,11 @@
               if (obj.attributes?.includes(_DeviceAttributes.VSP)) {
                 if (commandID == V_GPM) return "/GPM"; else if (commandID == V_RPM) return "/RPM";
               } else if (obj.attributes?.includes(_DeviceAttributes.TIMER) && commandID == V_TIMER) return "/timer";
-              else if (obj.attributes?.includes(_DeviceAttributes.RESET_STATS) && commandID == V_RESET_STATS) return "/reset_sensor_stats";
+              else if (obj.attributes?.includes(_DeviceAttributes.RESET_SENSOR_STATS) && commandID == V_RESET_SENSOR_STATS) return "/reset_sensor_stats";
+              else if (obj.attributes?.includes(_DeviceAttributes.RESET_DOSE_STATS) && commandID == V_RESET_DOSE_STATS) return "/reset_dose_stats";
               break;
             case _DeviceTypes.SENSOR:
-              if (obj.attributes?.includes(_DeviceAttributes.RESET_STATS) && commandID == V_RESET_STATS) return "/reset_sensor_stats";
+              if (obj.attributes?.includes(_DeviceAttributes.RESET_SENSOR_STATS) && commandID == V_RESET_SENSOR_STATS) return "/reset_sensor_stats";
               break;
           }
         }
@@ -1812,7 +1828,11 @@
         let device = row.querySelector('#device')?.value, command = row.querySelector('#command')?.value; 
         let value = row.querySelector('#value')?.value;
 
-        if (command == V_RESET_STATS && _devices.devices[device]?.type == _DeviceTypes.SENSOR ) {
+        if (command == V_RESET_SENSOR_STATS && _devices.devices[device]?.type == _DeviceTypes.SENSOR ) {
+          // If the command is to reset stats and the device is a sensor, set value to "1" to indicate reset
+          value = "1";
+        }
+        if (command == V_RESET_DOSE_STATS && _devices.devices[device]?.type == _DeviceTypes.SWITCH && _devices.devices[device]?.attributes?.includes(_DeviceAttributes.RESET_DOSE_STATS)) {
           // If the command is to reset stats and the device is a sensor, set value to "1" to indicate reset
           value = "1";
         }
@@ -1863,7 +1883,7 @@
       physicalDeviceIds.forEach(id => {
         const device = data.devices[id];
         device.status = device.status.toLowerCase();
-        if (device.attributes?.includes(_DeviceAttributes.STATS)) {
+        if (device.attributes?.includes(_DeviceAttributes.SENSOR_STATS)) {
           const statsId = device.stats?.id || `${id}_stats`;
           if (!data.devices[statsId]) {
             data.devices[statsId] = {

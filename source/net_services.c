@@ -438,6 +438,7 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
     } */
   // Handle "aquachemd/reset_stats" at moment aquachemd can be anything as we don;t check.
   } else if (ri2 && (strncmp(ri2, "reset_stats", 11) == 0 || strncmp(ri2, "reset_sensor_stats", 18) == 0)) {
+  //} else if (ri2 && strncmp(ri2, "reset_sensor_stats", 18) == 0) { // NSF Need to move to this in future
       for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
         if (uri_strcmp(ri1, curr->ID)) {
           // If aquachemd is the ID then expect value and use reset by any matching values.
@@ -449,7 +450,7 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
           return uActioned;
         }
       }
-  } else if (ri2 && strncmp(ri2, "reset_dose_total", 16) == 0) {
+  } else if (ri2 && strncmp(ri2, "reset_dose_stats", 16) == 0) {
     for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
       if (uri_strcmp(ri1, curr->ID)) {
         if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {

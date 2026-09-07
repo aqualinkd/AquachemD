@@ -160,7 +160,7 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
   cJSON *attributes = cJSON_CreateArray();
   cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_OFF)));
   cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ON)));
-  cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_stats"));
+  cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_sensor_stats"));
   cJSON_AddItemToObject(device, "attributes", attributes);
   cJSON_AddItemToObject(devices, acddata->keys->ID, device);
 
@@ -194,7 +194,7 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
         cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ENABLED)));
         
         if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
-          cJSON_AddItemToArray(attributes, cJSON_CreateString("dosestats"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("dose_stats"));
           cJSON_AddItemToArray(attributes, cJSON_CreateString("valve")); // For Homekit.
         }
         
@@ -205,17 +205,17 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.ph_default_dose_time);
           cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.ph_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("ph_pump"));
-          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_total"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_stats"));
         } else if (isMASKSET(curr->flags, ORP_PUMP)) {
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.orp_default_dose_time);
           cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.orp_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("orp_pump"));
-          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_total"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_stats"));
         } else if (isMASKSET(curr->flags, H2O_PUMP)) {
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.h2o_default_dose_time);
           cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.h2o_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("h2o_pump"));
-          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_total"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_stats"));
         }
         
         cJSON_AddItemToObject(device, "attributes", attributes);
@@ -239,8 +239,8 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
           cJSON_AddItemToObject(device, "stats", stats);
           
           cJSON *attributes = cJSON_CreateArray();
-          cJSON_AddItemToArray(attributes, cJSON_CreateString("stats"));
-          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_stats"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("sensor_stats"));
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_sensor_stats"));
           cJSON_AddItemToObject(device, "attributes", attributes);
         }
         
