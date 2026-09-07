@@ -242,7 +242,7 @@ typedef struct acd_key_t {
         tank_sensor_t  tank;
     } data;
 
-    struct acd_key_t *child;  // Virtual key if sensor has multiple outputs (like PTE7300 with pressure and temperature)
+    struct acd_key_t *child;  // Virtual key if sensor has multiple outputs (like PTE7300 with pressure and temperature), or pump with tankvolume as child 
     struct acd_key_t *next;
 } acd_key_t;
 
@@ -255,7 +255,7 @@ typedef struct runtime_range_t{
 
 #define MAX_DOSING_RANGES 10
 
-// For special_mask in acd_key
+// For special_mask in acd_key (15 is the highest bit in uint16_t, so we can have 15 special_mask's)
 #define TIMER_ACTIVE           (1 << 0)
 #define DELAY_ACTIVE           (1 << 1)
 #define PH_PUMP                (1 << 2) 
@@ -270,6 +270,7 @@ typedef struct runtime_range_t{
 #define CONDITION_NOTIFIED     (1 << 8)
 
 #define ACD_FLAG_VIRTUAL       (1 << 9)
+#define SET_OFF_DUE_TO_TANK_VOLUME (1 << 10)
 
 // CAN'T ADD ANY MORE wuthout changeing uint8_t to uint16_t 
 //#define CONDITION_SCOPE_GLOBAL (1 << 3) // For conditions Set if global interlock, clear if local restriction

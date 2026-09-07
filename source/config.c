@@ -377,17 +377,17 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 else if (strncasecmp(param, "gpio_doser_pin", 14) == 0) {
                     _staging.pin = (int)strtoul(value, NULL, 10);
                 }
-                else if (strncasecmp(param, "gpio_doser_tank_size", 20) == 0) {
+                else if (strncasecmp(param, "gpio_doser_tank_total_volume", 28) == 0) {
                     _staging.value2 = strtof(value, NULL);
                 }
-                else if (strncasecmp(param, "gpio_doser_tank_size", 20) == 0) {
+                else if (strncasecmp(param, "gpio_doser_tank_size", 20) == 0) { // NSF NEED TO REMOVE AND DEPRICATE.
                     _staging.value2 = strtof(value, NULL);
                 }
                 else if (strncasecmp(param, "gpio_doser_tank_uom", 19) == 0) {
                     _staging.uom2 = parse_uom(value);
                 }
                 else if (strncasecmp(param, "gpio_doser_tank_min_volume", 26) == 0) {
-                    _staging.value3 = parse_uom(value);
+                    _staging.value3 = strtof(value, NULL);
                 }
                 else if (strncasecmp(param, "mqtt_condition_value", 20) == 0) {
                     if (_staging.char_value) free(_staging.char_value);
@@ -965,6 +965,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
         cJSON *block_fields = cJSON_AddArrayToObject(block, "fields");
         cJSON *f_item; 
         cJSON *s_item;
+        cJSON *t_item;
         char tmp_buf[32];
 
         // Any virtual device is created from another sensor, so ignore
@@ -1262,9 +1263,17 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                s_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "gpio_doser_running_dose_max_ml");
+                cJSON_AddStringToObject(f_item, "type", "number");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddFloat(f_item, "value", curr->dose_stats.running_total_max_ml);
+                cJSON_AddItemToArray(block_fields, f_item);
 
-                cJSON_AddStringToObject(f_item, "key", "gpio_doser_tank_size");
+                f_item = cJSON_CreateObject();
+                s_item = cJSON_CreateObject();
+                t_item = cJSON_CreateObject();
+
+                cJSON_AddStringToObject(f_item, "key", "gpio_doser_tank_total_volume");
                 cJSON_AddStringToObject(f_item, "type", "number");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
 
@@ -1272,14 +1281,21 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(s_item, "type", "select");
                 cJSON_AddItemToObject(s_item, "options", cJSON_Parse(CFG_O_TANK_UOM));
                 cJSON_AddBoolToObject(s_item, "readonly", false);
+
+                cJSON_AddStringToObject(t_item, "key", "gpio_doser_tank_min_volume");
+                cJSON_AddStringToObject(t_item, "type", "number");
+                cJSON_AddBoolToObject(t_item, "readonly", false);
+
                 if (curr->child && curr->child->type == ACD_TYPE_VIR_TANK) {
                   cJSON_AddNumberToObject(f_item, "value", curr->child->data.tank.total_volume);
                   cJSON_AddStringToObject(s_item, "value", uom_to_fullstr(curr->child->data.tank.uom));
+                  cJSON_AddNumberToObject(t_item, "value", curr->child->data.tank.min_volume);
                 } else {
                   cJSON_AddStringToObject(s_item, "value", "");
                 }
                 cJSON_AddItemToArray(block_fields, f_item);
                 cJSON_AddItemToArray(block_fields, s_item);
+                cJSON_AddItemToArray(block_fields, t_item);
                 break;
             
             case ACD_TYPE_SYSFS_VALUE:
@@ -1617,7 +1633,12 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddItemToArray(df_arr, df_item);
 
     df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "gpio_doser_tank_size");
+    cJSON_AddStringToObject(df_item, "key", "gpio_doser_running_dose_max_ml");
+    cJSON_AddStringToObject(df_item, "type", "number");
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "gpio_doser_tank_total_volume");
     cJSON_AddStringToObject(df_item, "type", "number");
     cJSON_AddItemToArray(df_arr, df_item);
 
@@ -1626,6 +1647,11 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddStringToObject(df_item, "value", "");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_TANK_UOM));
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "gpio_doser_tank_min_volume");
+    cJSON_AddStringToObject(df_item, "type", "number");
     cJSON_AddItemToArray(df_arr, df_item);
 
     cJSON_AddItemToArray(available_drivers, drv);
@@ -1766,7 +1792,26 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
 
 
 
-
+// config.c — local to this file. Not the same as utils.c's acd_scope_to_str(),
+// which prints the bare enum name for routine runtime logs; this one spells
+// out what scope actually does for the specific node kind, since this is the
+// one place a user is trying to understand their config from scratch.
+static const char *config_scope_detail_str(acd_key_t *key)
+{
+  if (IS_CONDITION(key->type)) {
+    switch (key->scope) {
+      case ACD_SCOPE_GLOBAL: return "Global (Hard Interlock)";
+      case ACD_SCOPE_LOCAL:  return "Local (Soft Limit)";
+      default:                return "Allow";
+    }
+  } else {
+    switch (key->scope) {
+      case ACD_SCOPE_GLOBAL: return "Global (paused during interlock)";
+      case ACD_SCOPE_LOCAL:  return "Local (always reads)";
+      default:                return "Allow";
+    }
+  }
+}
 
 #define MAX_PRINTLEN 25
 
@@ -1855,12 +1900,12 @@ void check_print_config (struct aquachemdata *acdata)
     }
   }
 
-
   for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
     const char *type_str = "UNKNOWN";
-    char buffer[64]; // Temporary storage for combined strings
-    const char *role = (curr->flags & PH_PUMP)  ? "pH" : 
-                       (curr->flags & ORP_PUMP) ? "ORP" : "undefined";
+    char buffer[64];
+    const char *role = (curr->flags & PH_PUMP)  ? "pH" :
+                       (curr->flags & ORP_PUMP) ? "ORP" :
+                       (curr->flags & H2O_PUMP) ? "H2O" : "undefined";
     buffer[0] = '\0';
 
     switch (curr->type) {
@@ -1869,17 +1914,17 @@ void check_print_config (struct aquachemdata *acdata)
       case ACD_TYPE_EZO_TEMP:    type_str = "sensor (EZO Temp)"; break;
       case ACD_TYPE_EZO_PH:      type_str = "sensor (EZO pH)"; break;
       case ACD_TYPE_EZO_ORP:     type_str = "sensor (EZO ORP)"; break;
-      case ACD_TYPE_EZO_PRS:     type_str = "sensor (EZO PMP)"; break;
+      case ACD_TYPE_EZO_PRS:     type_str = "sensor (EZO Pressure)"; break; // was mislabeled "EZO PMP"
       case ACD_TYPE_D1W_TEMP:    type_str = "sensor (1-Wire Temp)"; break;
       case ACD_TYPE_MQTT_TEMP:   type_str = "sensor (MQTT Temp)"; break;
       case ACD_TYPE_SYSFS_VALUE: type_str = "sensor (System File)"; break;
       case ACD_TYPE_MQTT_VALUE:  type_str = "sensor (MQTT Value)"; break;
       case ACD_TYPE_VIR_TANK:    type_str = "Virtual sensor (Tank)"; break;
-      case ACD_TYPE_I2C_PRS:     
+      case ACD_TYPE_I2C_PRS:
         type_str = "sensor (I2C Pressure)";
         snprintf(buffer, sizeof(buffer), "(%s)", curr->data.i2c.type == I2C_SENSOR_PTE7300 ? "PTE7300" : "UNKNOWN");
         break;
-      case ACD_TYPE_I2C_TEMP:     
+      case ACD_TYPE_I2C_TEMP:
         type_str = "sensor (I2C Temp)";
         if (curr->data.i2c.type == I2C_SENSOR_PTE7300){ snprintf(buffer, sizeof(buffer), "(PTE7300)");}
         break;
@@ -1894,25 +1939,75 @@ void check_print_config (struct aquachemdata *acdata)
       case ACD_TYPE_MASTER:
         break;
       case ACD_TYPE_NONE:
-        default: type_str = "sensor (UNKNOWN)"; 
+        default: type_str = "sensor (UNKNOWN)";
         break;
     }
 
-    if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_COND) {
-      int len = strlen(buffer);
-      snprintf(&buffer[len], sizeof(buffer)-len, "(pin=%d, %s, required state=%s)", 
-                curr->data.gpio.pin, 
-                gpio_active_to_str(curr->data.gpio.active), 
-                gpio_req_to_str(curr->data.gpio.required));
-    } 
-    if (IS_CONDITION(curr->type ) /*&& curr->delay_on > 0*/) {
+    // GPIO pin/mode/required-state moved to the INFO block below -- NOTICE line
+    // now only carries role (pump) or delay (condition), same as every other type.
+    if (IS_CONDITION(curr->type)) {
       int len = strlen(buffer);
       snprintf(&buffer[len], sizeof(buffer)-len, "(delay=%ds)", curr->delay_on);
     }
 
-    LOG(LOG_NOTICE, "%-*s = %-8.8s| %s %s\n", MAX_PRINTLEN, type_str, curr->ID, curr->label,buffer);
-  }
+    LOG(LOG_NOTICE, "%-*s = %-8.8s| %s %s\n", MAX_PRINTLEN, type_str, curr->ID, curr->label, buffer);
 
+    if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_COND) {
+      LOG(LOG_INFO, "%-*s   -> pin = %d, mode = %s, required state = %s%s%s\n", MAX_PRINTLEN, "",
+          curr->data.gpio.pin, gpio_active_to_str(curr->data.gpio.active), gpio_req_to_str(curr->data.gpio.required),
+          IS_CONDITION(curr->type) ? ", scope = " : "",
+          IS_CONDITION(curr->type) ? config_scope_detail_str(curr) : "");
+    }
+
+    if (curr->type == ACD_TYPE_MQTT_COND) {
+      LOG(LOG_INFO, "%-*s   -> MQTT topic = %s, expected value = %s, scope = %s\n", MAX_PRINTLEN, "",
+          curr->data.mqtt.topic, curr->data.mqtt.target_value, config_scope_detail_str(curr));
+    }
+
+    if (curr->type == ACD_TYPE_MQTT_TEMP) {
+      LOG(LOG_INFO, "%-*s   -> MQTT topic = %s, scope = %s\n", MAX_PRINTLEN, "",
+          curr->data.mqtt.topic, config_scope_detail_str(curr));
+    }
+
+    if (curr->type == ACD_TYPE_EZO_TEMP || curr->type == ACD_TYPE_EZO_PH || curr->type == ACD_TYPE_EZO_ORP) {
+      LOG(LOG_INFO, "%-*s   -> I2C address = 0x%02x, scope = %s\n", MAX_PRINTLEN, "",
+          curr->data.ezo.address, config_scope_detail_str(curr));
+    }
+
+    if (curr->type == ACD_TYPE_D1W_TEMP) {
+      LOG(LOG_INFO, "%-*s   -> path = %s, scale = %.4f, offset = %.2f, scope = %s\n", MAX_PRINTLEN, "",
+          curr->data.w1.path, curr->data.w1.scale, curr->data.w1.offset, config_scope_detail_str(curr));
+    }
+
+    if (curr->type == ACD_TYPE_I2C_PRS || curr->type == ACD_TYPE_I2C_TEMP) {
+      LOG(LOG_INFO, "%-*s   -> I2C address = 0x%02x, range = %.2f to %.2f, scope = %s\n", MAX_PRINTLEN, "",
+          curr->data.i2c.address, curr->data.i2c.min_value, curr->data.i2c.max_value, config_scope_detail_str(curr));
+    }
+
+    if (curr->type == ACD_TYPE_MQTT_VALUE) {
+      LOG(LOG_INFO, "%-*s   -> MQTT topic = %s%s%s\n", MAX_PRINTLEN, "", curr->data.mqtt.topic,
+          curr->data.mqtt.target_value ? ", expected value = " : "",
+          curr->data.mqtt.target_value ? curr->data.mqtt.target_value : "");
+    }
+
+    if (curr->type == ACD_TYPE_SYSFS_VALUE) {
+      LOG(LOG_INFO, "%-*s   -> path = %s%s%s, multiplier = %.4f, offset = %.2f\n", MAX_PRINTLEN, "",
+          curr->data.sysfs.path,
+          curr->data.sysfs.parser_type == PARSER_REGEX ? ", regex = " : "",
+          curr->data.sysfs.parser_type == PARSER_REGEX ? curr->data.sysfs.regex_pattern : "",
+          curr->data.sysfs.multiplier, curr->data.sysfs.offset);
+    }
+
+    if (curr->type == ACD_TYPE_VIR_TANK) {
+      LOG(LOG_INFO, "%-*s   -> total volume = %.2f %s, min volume = %.2f %s\n", MAX_PRINTLEN, "",
+          curr->data.tank.total_volume, uom_to_str(curr->data.tank.uom), curr->data.tank.min_volume, uom_to_str(curr->data.tank.uom));
+    }
+
+    if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_EZO_PMP) {
+      LOG(LOG_INFO, "%-*s   -> flow rate = %.2f ml/s, max per period = %.2f ml\n", MAX_PRINTLEN, "",
+          curr->dose_stats.flow_rate, curr->dose_stats.running_total_max_ml);
+    }
+  }
 }
 
 

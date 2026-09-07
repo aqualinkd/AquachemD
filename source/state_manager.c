@@ -21,6 +21,8 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
 
 void check_master(struct aquachemdata *acdata);
 
+void set_pump_off_due_to_tank_empty(struct aquachemdata *acdata, acd_key_t *key);
+
 
 void devices_emergency_stop()
 {
@@ -196,6 +198,15 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration
     return;
   }
 
+  // NSF, We turn doser off after dose, Do we want to allow manual overide?
+  // If yes don;t use below code
+  /*
+  if ( tank_is_empty(key->child)) {
+    LOG(LOG_ERR, "%s: is below min volume (%.1f / %.1f %s) -- skipping dose until filled",
+        key->label, key->child->data.tank.remaining_volume, key->child->data.tank.total_volume, uom_to_str(key->child->data.tank.uom));
+    return;
+  }*/
+
   if (key->type == ACD_TYPE_GPIO_PMP) {
     relay_on(&key->data.gpio);
     key->ison = pump_is_on(&key->data.gpio);
@@ -216,7 +227,6 @@ void turn_pump_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration
 void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
   time_t start = get_timer_started_at(key);
   time_t now = time(NULL);
-  bool tank_empty = false;
 
   if (key->type == ACD_TYPE_GPIO_PMP) {
     relay_off(&key->data.gpio);
@@ -232,19 +242,20 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
     LOG_PUMP_EVENT(key, actual_runtime, key->value, dose_ml);
     post_dosing_event(key, actual_runtime, dose_ml);
     calculate_tank_volume_after_dose(key->child, dose_ml);
-    calculate_running_total(key, dose_ml);
+    calculate_dose_running_total(key, dose_ml);
   }
   
-  //ASSIGN_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
-  if (tank_empty) {
-    LOG(LOG_WARNING, "%s: dose tank is empty, forcing doser OFF -- switch back to Enabled once refilled\n", key->label);
-    ASSIGN_IF_CHANGED(key->state, ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
-  } else {
-    ASSIGN_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
-  }
-
+  ASSIGN_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
+  
   clear_timer(acdata, key);
   key->value = 0;
+
+  if (tank_is_empty(key->child)) {
+    //LOG(LOG_WARNING, "%s: dose tank is empty (%.1f / %.1f %s), forcing doser OFF -- switch back to Enabled once refilled\n", 
+    //    key->label, key->child->data.tank.remaining_volume, key->child->data.tank.total_volume, uom_to_str(key->child->data.tank.uom));
+    //ASSIGN_IF_CHANGED(key->state, ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
+    set_pump_off_due_to_tank_empty(acdata, key);
+  }
 }
 /*
 void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
@@ -569,7 +580,7 @@ void check_master(struct aquachemdata *acdata) {
       }
 
       // Set the outputs to disabled or enabled depending on condition(s)
-      if (failed_condition != NULL || acdata->keys->scope == ACD_ACTION_LIMIT ) {
+      if ((failed_condition != NULL || acdata->keys->scope == ACD_ACTION_LIMIT) && curr->state != ACD_LED_OFF) {
         set_key_state(acdata, curr, ACD_LED_DISABLED);
       } else if (failed_condition == NULL && curr->state != ACD_LED_OFF && curr->state != ACD_LED_ON) {
         set_key_state(acdata, curr, ACD_LED_ENABLED);
@@ -664,10 +675,10 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
   //return SET_IF_CHANGED(key->state , state, acdata->is_dirty);
 
   if (ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty)) {
-    LOG(LOG_INFO, "State Manager - Set %s to %s (scope %s)",acd_state_to_str(key->state), key->label, acd_scope_to_str(key->scope));
+    LOG(LOG_INFO, "State Manager - Set %s to %s (scope %s)",key->label, acd_state_to_str(key->state), acd_scope_to_str(key->scope));
     return true;
   } else {
-    LOG(LOG_DEBUG, "State Manager - Request to set same state, ignored %s to %s (scope %s)",acd_state_to_str(key->state), key->label, acd_scope_to_str(key->scope));
+    LOG(LOG_DEBUG, "State Manager - Request to set same state, ignored %s to %s (scope %s)",key->label, acd_state_to_str(key->state), acd_scope_to_str(key->scope));
     //LOG(LOG_INFO, "State Manager - No change for %s, remains at %s (scope %s)",curr->label, acd_state_to_str(curr->state), acd_scope_to_str(curr->scope));
     return false;
   }
@@ -712,4 +723,39 @@ bool set_cond_state(struct aquachemdata *acdata, acd_key_t *cond, acd_state_t st
 
   check_master(acdata);
   return true;
+}
+
+void set_pump_off_due_to_tank_empty(struct aquachemdata *acdata, acd_key_t *key)
+{
+  if (key->state == ACD_LED_ON) {
+    turn_pump_off(acdata, key);
+  }
+  
+  LOG(LOG_WARNING, "%s: dose tank is empty (%.2f / %.2f %s), forcing doser OFF -- switch back to Enabled once refilled\n", 
+        key->label, key->child->data.tank.remaining_volume, key->child->data.tank.total_volume, uom_to_str(key->child->data.tank.uom));
+  set_key_state(acdata, key, ACD_LED_OFF);
+  key->state = ACD_LED_OFF;
+  setMASK(key->flags, SET_OFF_DUE_TO_TANK_VOLUME);
+}
+
+// Turn the appropiate pump on or off based on the volume of the tank.
+void validate_pumps_against_tanks(struct aquachemdata *acdata)
+{
+  for (acd_key_t *key = acdata->keys->next; key != NULL; key = key->next) {
+    if (IS_OUTPUT(key->type) && key->child != NULL && key->child->type == ACD_TYPE_VIR_TANK) {
+      if (tank_is_empty(key->child)) {
+        if (key->state == ACD_LED_ENABLED || key->state == ACD_LED_ON) {
+          //LOG(LOG_WARNING, "%s: dose tank is empty (%.1f / %.1f %s), forcing doser OFF -- switch back to Enabled once refilled\n", 
+          //    key->label, key->child->data.tank.remaining_volume, key->child->data.tank.total_volume, uom_to_str(key->child->data.tank.uom));
+          //set_key_state(acdata, key, ACD_LED_OFF);
+          set_pump_off_due_to_tank_empty(acdata, key);
+        }
+      } else if(isMASKSET(key->flags, SET_OFF_DUE_TO_TANK_VOLUME)) {
+        LOG(LOG_WARNING, "%s: dose tank is refilled (%.1f / %.1f %s), switching doser back to Enabled\n", 
+            key->label, key->child->data.tank.remaining_volume, key->child->data.tank.total_volume, uom_to_str(key->child->data.tank.uom));
+        removeMASK(key->flags, SET_OFF_DUE_TO_TANK_VOLUME);
+        set_key_state(acdata, key, ACD_LED_ENABLED);
+      }
+    }
+  }
 }

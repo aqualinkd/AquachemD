@@ -12,4 +12,6 @@ void devices_emergency_stop();
 
 uint32_t caculate_dose_time(struct aquachemdata *acdata, acd_key_t *key);
 
+void validate_pumps_against_tanks(struct aquachemdata *acdata);
+
 #endif

@@ -453,7 +453,7 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
     for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
       if (uri_strcmp(ri1, curr->ID)) {
         if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
-          reset_running_total(curr);
+          reset_dose_running_total(curr);
           _aquachemd_data->is_dirty = true;
           return uActioned;
         } else {
@@ -515,6 +515,7 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
         if (uom != UOM_NONE) {
           LOG(LOG_INFO, "Request to set '%s' tank volume to %f%% %s", curr->label, value, uom_to_str(uom));
           set_tank_volume(curr, uom, value);
+          validate_pumps_against_tanks(_aquachemd_data);
           _aquachemd_data->is_dirty = true; // Force an update to be sent to the device, even if the state is already set to the requested value.
           return uActioned;
         }

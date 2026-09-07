@@ -490,6 +490,9 @@ reload_configuration:
     curr->err_cnt = 0;
   }
 
+  // Now we have tank volumes, check if pumps can be on.
+  validate_pumps_against_tanks(&acddata);
+
   // If we don't have any conditions to test, set master to ON.
   if (!acddata.haveConditions){acddata.keys->state = ACD_LED_ON;}
 

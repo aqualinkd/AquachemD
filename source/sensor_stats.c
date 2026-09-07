@@ -282,7 +282,6 @@ bool tank_is_empty(acd_key_t *key) {
 
 void calculate_tank_volumes(acd_key_t *key)
 {
-
   if ( READ_LAST_TANK_LEVEL_EVENT(key) ) {
     LOG(LOG_NOTICE, "Restored %s tank level from journal: %.1f%% (%.1f %s remaining)",
         key->label, key->data.tank.percent_full, key->data.tank.remaining_volume, uom_to_display_str(key->data.tank.uom));
@@ -295,6 +294,14 @@ void calculate_tank_volumes(acd_key_t *key)
     LOG(LOG_NOTICE, "No tank level found for %s from journal, initializing at : %.1f%% (%.1f %s remaining)",
         key->label, key->data.tank.percent_full, key->data.tank.remaining_volume, uom_to_display_str(key->data.tank.uom));
   }
+
+  /* NO GOOD HERE, need to move it.
+  if (tank_is_empty(key->child)) {
+    LOG(LOG_WARNING, "%s: dose tank is empty (%.1f / %.1f %s), forcing doser OFF -- switch back to Enabled once refilled\n", 
+    key->label, key->data.tank.remaining_volume, key->data.tank.total_volume, uom_to_str(key->data.tank.uom));
+    ASSIGN_IF_CHANGED(key->state, ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
+  }
+  */
 }
 
 
@@ -415,9 +422,9 @@ void set_pump_default_duration(acd_key_t *key, uint32_t default_duration)
     key->is_dirty = true;
 }
 
-void calculate_running_total(acd_key_t *key, float dose_ml)
+void calculate_dose_running_total(acd_key_t *key, float dose_ml)
 {
-  printf("*** calculate_running_total(), %s dose_ml=%f, running_total_max_ml=%f\n",key->label, dose_ml, key->dose_stats.running_total_max_ml);
+  //printf("*** calculate_running_total(), %s dose_ml=%f, running_total_max_ml=%f\n",key->label, dose_ml, key->dose_stats.running_total_max_ml);
   if (!key || key->dose_stats.running_total_max_ml <= 0) {
     // Bad key, or running total not set.
     return;
@@ -442,7 +449,7 @@ void calculate_running_total(acd_key_t *key, float dose_ml)
   key->is_dirty = true;
 }
 
-void reset_running_total(acd_key_t *key)
+void reset_dose_running_total(acd_key_t *key)
 {
   if (!key || key->dose_stats.running_total_max_ml <= 0) {
     return;
@@ -453,7 +460,7 @@ void reset_running_total(acd_key_t *key)
         return;
   }
 
-  LOG(LOG_INFO, "Reset Running total for %s\n",key->label
+  LOG(LOG_INFO, "Reset Running total for %s\n",key->label);
 
   key->dose_stats.running_total_ml = 0.0f;
   key->is_dirty = true;

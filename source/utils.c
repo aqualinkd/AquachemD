@@ -174,7 +174,7 @@ void LOG_PUMP_EVENT(acd_key_t *key, uint32_t seconds, float reading, float ml)
 
 void LOG_TANK_LEVEL_SET_EVENT(acd_key_t *key)
 {
-    LOG(LOG_NOTICE, "Tank: %s level set to %.1f%%", key->ID, key->data.tank.percent_full);
+    LOG(LOG_NOTICE, "Tank: %s level set to %.1f%%", key->label, key->data.tank.percent_full);
 
 #ifdef USE_SYSTEMD
   if (_enable_journal) {
@@ -633,6 +633,7 @@ const char* acd_scope_to_str( acd_scope_t scope) {
     default:                   return "UNKNOWN";
   }
 }
+
 
 const char* acd_condition_met_to_str(bool met) {
   if (met)

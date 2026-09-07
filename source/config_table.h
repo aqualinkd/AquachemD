@@ -139,9 +139,9 @@ CFG_ENTRY( "gpio_doser_address",       keys,                   NULL,            
 CFG_ENTRY( "gpio_doser_pin_mode",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_required_state",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_ml_per_second", keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_doser_tank_size",     keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_doser_tank_uom",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_tank_total_volume", keys,               NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_tank_min_volume", keys,                 NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_tank_uom",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_running_dose_max_ml", keys,             NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 
