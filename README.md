@@ -11,6 +11,29 @@ Pool chemistry controllers from the major manufacturers are closed, expensive, a
 
 No subscriptions. No cloud dependency. No proprietary sensor lock-in. Just an open daemon, a config file, and full visibility into exactly what your pool chemistry is doing and why.
 
+## Quick Web UI overview
+
+Full details on all UI options comming, but just about everything is fully customizable.
+
+<img src="docs/images/AquachemD.png" alt="Alt Text">
+<br><br>
+
+- Each tile can have it's own limits for normal/high/out or range, and also custom text & colors for each, and will show timers / dose time / status etc
+
+<img src="docs/images/sensor.png" alt="Alt Text">
+<img src="docs/images/sensor-high.png" alt="Alt Text">
+<img src="docs/images/sensor-outrange.png" alt="Alt Text">
+<img src="docs/images/sensor-custom.png" alt="Alt Text">
+<img src="docs/images/dose-time.png" alt="Alt Text">
+<img src="docs/images/disabled.png" alt="Alt Text">
+<br><br>
+
+- Dosers will show multiple options along with recent history
+
+<img src="docs/images/doser.png" alt="Alt Text">
+
+
+
 ## Why AquachemD
 
 - **You own the data and the logic.** Everything runs locally on your own hardware. No cloud account, no vendor API, nothing to stop working if a company goes out of business.
