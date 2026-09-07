@@ -20,17 +20,17 @@ Full details on all UI options comming, but just about everything is fully custo
 
 - Each tile can have it's own limits for normal/high/out or range, and also custom text & colors for each, and will show timers / dose time / status etc
 
-<img src="docs/images/sensor.png" alt="Alt Text">
-<img src="docs/images/sensor-high.png" alt="Alt Text">
-<img src="docs/images/sensor-outrange.png" alt="Alt Text">
-<img src="docs/images/sensor-custom.png" alt="Alt Text">
-<img src="docs/images/dose-time.png" alt="Alt Text">
-<img src="docs/images/disabled.png" alt="Alt Text">
+<img src="docs/images/sensor.png" alt="Alt Text" width="100">
+<img src="docs/images/sensor-high.png" alt="Alt Text"  width="100">
+<img src="docs/images/sensor-outrange.png" alt="Alt Text"  width="100">
+<img src="docs/images/sensor-custom.png" alt="Alt Text"  width="100">
+<img src="docs/images/dose-time.png" alt="Alt Text"  width="100">
+<img src="docs/images/disabled.png" alt="Alt Text"  width="100">
 <br><br>
 
 - Dosers will show multiple options along with recent history
 
-<img src="docs/images/doser.png" alt="Alt Text">
+<img src="docs/images/doser.png" alt="Alt Text"  width="400">
 
 
 
