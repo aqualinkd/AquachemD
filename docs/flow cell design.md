@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="web/aquachemd.png" width="120" alt="AquachemD logo">
+  <img src="../web/aquachemd.png" width="120" alt="AquachemD logo">
 </p>
 
 <h1 align="center">AquachemD</h1>
