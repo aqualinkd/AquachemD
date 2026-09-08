@@ -11,22 +11,17 @@ Pool chemistry controllers from the major manufacturers are closed, expensive, a
 
 No subscriptions. No cloud dependency. No proprietary sensor lock-in. Just an open daemon, a config file, and full visibility into exactly what your pool chemistry is doing and why.
 
+
+
 ## Quick Web UI overview
 
-Full details on all UI options comming, but just about everything is fully customizable.
-
+Full details on UI are in [`Web UI.md`](/docs/UI.md)
+Web interface and mobile app interface are identical, phone / app layout will simply use different number or rows and columns, [`Web UI.md`](/docs/UI.md) has examples.
 <img src="docs/images/AquachemD.png" alt="Alt Text">
 <br><br>
-
-- Each tile can have it's own limits for normal/high/out or range, and also custom text & colors for each, and will show timers / dose time / status etc
 <!--
-<img src="docs/images/sensor.png" alt="Alt Text" width="100">
-<img src="docs/images/sensor-high.png" alt="Alt Text"  width="100">
-<img src="docs/images/sensor-outrange.png" alt="Alt Text"  width="100">
-<img src="docs/images/sensor-custom.png" alt="Alt Text"  width="100">
-<img src="docs/images/dose-time.png" alt="Alt Text"  width="100">
-<img src="docs/images/disabled.png" alt="Alt Text"  width="100">
--->
+- Each tile can have it's own limits for normal/high/out or range, and also custom text & colors for each, and will show timers / dose time / status etc
+
 <table align="center" border="0" cellpadding="0" cellspacing="0">
   <tr>
     <td><img src="docs/images/sensor.png" alt="Sensor" width="100"></td>
@@ -42,7 +37,7 @@ Full details on all UI options comming, but just about everything is fully custo
 - Dosers will show multiple options along with recent history
 
 <img src="docs/images/doser.png" alt="Alt Text"  width="400">
-
+-->
 
 
 ## Why AquachemD
@@ -112,11 +107,11 @@ There are two supported ways to get AquachemD into Apple's Home app, depending o
 The companion Homebridge plugin talks to AquachemD directly over MQTT — no Home Assistant required. It maps devices to the *correct* native HomeKit types rather than working around HomeKit's limitations: dosers appear as HomeKit Valves (with a real countdown timer) or Switches, pH/ORP/PPM readings display as Light Sensor values, and tank levels can show as remaining gal/mL instead of a bare percentage. This is the most direct path if Homebridge is your smart-home hub.
 
 ### Option 2 — Home Assistant's native HomeKit Bridge
-If you're already running Home Assistant for other integrations, its built-in HomeKit bridge can expose AquachemD's auto-discovered entities to Apple Home too. Because HomeKit has no native concept of "pH sensor" or "ORP sensor," this path relies on creative re-mapping — for example, showing pH as a Humidity Sensor tile so the numeric value is visible at a glance, or an out-of-range chemistry alert as an Occupancy Sensor so it surfaces as an iOS notification. It works well once configured, but the entity types you see in the Home app won't always match what they represent. Full mapping guidance is in [`homekit entity.md`](homekit%20entity.md).
+If you're already running Home Assistant for other integrations, its built-in HomeKit bridge can expose AquachemD's auto-discovered entities to Apple Home too. Because HomeKit has no native concept of "pH sensor" or "ORP sensor," this path relies on creative re-mapping — for example, showing pH as a Humidity Sensor tile so the numeric value is visible at a glance, or an out-of-range chemistry alert as an Occupancy Sensor so it surfaces as an iOS notification. It works well once configured, but the entity types you see in the Home app won't always match what they represent. Full mapping guidance is in [`homekit entity.md`](/docs/homekit%20entity.md).
 
 ## Custom Integrations
 
-AquachemD can easily be integrated into ano other home automation hub using MQTT or HTTP [`API.md`](API.md) has complete details of API interfaces.
+AquachemD can easily be integrated into ano other home automation hub using MQTT or HTTP [`API.md`](/docs/API.md) has complete details of API interfaces.
 
 ## Hardware
 
@@ -125,7 +120,7 @@ AquachemD is built to run on a **Raspberry Pi** (official release binaries are c
 - **GPIO**, via `libgpiod`/`/dev/gpiochip0`, for relay-driven dosing pumps and physical interlock switches.
 - **1-Wire** for DS18B20 temperature probes, if you're not using an EZO temperature circuit.
 
-If you're building or adapting the physical sensor housing, [`flow cell design.md`](flow%20cell%20design.md) documents a tested, low-turbulence PVC flow cell design (with a full parts rationale) for mounting pH, ORP, and temperature probes safely outside the main plumbing run.
+If you're building or adapting the physical sensor housing, [`flow cell design.md`](/docs/flow%20cell%20design.md) documents a tested, low-turbulence PVC flow cell design (with a full parts rationale) for mounting pH, ORP, and temperature probes safely outside the main plumbing run.
 
 ## Installation
 
