@@ -60,6 +60,10 @@ char* replace_or_append_suffix(const char *orig, const char *suffixes[], const c
 #define STARTS_WITH_IC(str, prefix) \
     (strncasecmp((str), (prefix), sizeof(prefix) - 1) == 0)
 
+#define ENDS_WITH_IC(str, suffix) \
+    (strlen(str) >= sizeof(suffix) - 1 && \
+     strcasecmp((str) + strlen(str) - (sizeof(suffix) - 1), (suffix)) == 0)
+
 // Helper to stop cJSON to handle a float correctly.
 static void cJSON_AddFloat(cJSON *object, const char *name, float value) {
     char buf[32];
@@ -80,6 +84,7 @@ typedef struct {
     bool  pin_mode;
     bool  pin_state;
     bool  is_global;
+    acd_scope_t scope;
     unsigned char address;
     acd_type_t pending_type;
     uint8_t flags;
@@ -92,7 +97,8 @@ static acd_staging_t _staging;
 
 void add_condition_mqtt(const acd_staging_t *st);
 void add_condition_gpio(const acd_staging_t *st);
-void add_output_gpio(const acd_staging_t *st);
+void add_gpio_pump(const acd_staging_t *st);
+void add_gpio(const acd_staging_t *st);
 void add_sensor_ezo(const acd_staging_t *st);
 void add_sensor_d1w(const acd_staging_t *st);
 void add_sensor_mqtt(const acd_staging_t *st);
@@ -145,6 +151,7 @@ void clear_staging() {
     _staging.pending_type = ACD_TYPE_NONE;
     _staging.flags = 0;
     _staging.is_global = true;
+    _staging.scope = ACD_SCOPE_GLOBAL;
     _staging.uom = UOM_NONE;
     _staging.uom2 = UOM_NONE;
 }
@@ -168,8 +175,11 @@ void action_staging() {
             add_sensor_d1w(&_staging);
             break;
         case ACD_TYPE_GPIO_PMP:
-        case ACD_TYPE_GPIO_SWITCH:
-            add_output_gpio(&_staging);
+            add_gpio_pump(&_staging);
+            break;
+        case ACD_TYPE_GPIO_OUTPUT:
+        case ACD_TYPE_GPIO_INPUT:
+            add_gpio(&_staging);
             break;
         case ACD_TYPE_MQTT_COND:
             add_condition_mqtt(&_staging);
@@ -285,8 +295,9 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     LOG(LOG_DEBUG,"Start new device %s\n",value);
                     _staging.label = strdup(value);
 
-                    if (STARTS_WITH_IC(param, "gpio_switch")) _staging.pending_type = ACD_TYPE_GPIO_SWITCH;
-                    else if (STARTS_WITH_IC(param, "mqtt_condition")) _staging.pending_type = ACD_TYPE_MQTT_COND;
+                    /*if (STARTS_WITH_IC(param, "gpio_switch")) _staging.pending_type = ACD_TYPE_GPIO_OUTPUT;
+                    else*/
+                    if (STARTS_WITH_IC(param, "mqtt_condition")) _staging.pending_type = ACD_TYPE_MQTT_COND;
                     else if (STARTS_WITH_IC(param, "gpio_condition")) _staging.pending_type = ACD_TYPE_GPIO_COND;
                     else if (STARTS_WITH_IC(param, "sysfs_sensor")) _staging.pending_type = ACD_TYPE_SYSFS_VALUE;
                 }
@@ -306,13 +317,11 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     }
                     else if (strcasecmp(value, "d1w") == 0) _staging.pending_type = ACD_TYPE_D1W_TEMP;
                     else if (strcasecmp(value, "mqtt") == 0) _staging.pending_type = ACD_TYPE_MQTT_TEMP;
-                    else if (strcasecmp(value, "gpio") == 0) {}
+                    else if (strcasecmp(value, "input") == 0) _staging.pending_type = ACD_TYPE_GPIO_INPUT;
+                    else if (strcasecmp(value, "output") == 0) _staging.pending_type = ACD_TYPE_GPIO_OUTPUT;
                     else if (strstr(param, "doser_type")) {
                         _staging.pending_type = ACD_TYPE_GPIO_PMP;
                         setMASK(_staging.flags, parse_pump_type(value));
-                            //if (strncasecmp(param, "ph", 2) == 0) setMASK(_staging.flags, PH_PUMP);
-                            //else if (strncasecmp(param, "orp", 2) == 0) setMASK(_staging.flags, ORP_PUMP);
-                        
                     }
                     else if (strcasecmp(value, "PTE7300") == 0) {
                       _staging.pending_type = ACD_TYPE_I2C_PRS;
@@ -366,6 +375,11 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 else if (strstr(param, "_scope_global")) {
                     _staging.is_global = parse_bool(value);
                 }
+                //else if (ENDS_WITH_IC(param, "_scope")) {
+                else if (strncasecmp(param, "gpio_scope", 10) == 0) {
+                    printf("PASSING === %s\n",value);
+                    _staging.scope = parse_acd_scope(value);
+                }
                 else if (strncasecmp(param, "mqtt_sensor_topic", 17) == 0) {
                     if (_staging.topic_path) free(_staging.topic_path);
                     _staging.topic_path = strdup(value);
@@ -384,15 +398,15 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     _staging.pending_type = ACD_TYPE_GPIO_COND;
                 }
                 else if (strncasecmp(param, "gpio_doser_required_state", 25) == 0 ||
-                         strncasecmp(param, "gpio_switch_required_state", 26) == 0  ) {
+                         strncasecmp(param, "gpio_required_state", 19) == 0  ) {
                     _staging.pin_state = parse_gpio_req(value);
                 }
                 else if (strncasecmp(param, "gpio_doser_pin_mode", 19) == 0 ||
-                         strncasecmp(param, "gpio_switch_pin_mode", 20) == 0) {
+                         strncasecmp(param, "gpio_pin_mode", 13) == 0) {
                     _staging.pin_mode = parse_gpio_active(value);
                 }
                 else if (strncasecmp(param, "gpio_doser_pin", 14) == 0 ||
-                         strncasecmp(param, "gpio_switch_pin", 15) == 0) {
+                         strncasecmp(param, "gpio_pin", 8) == 0) {
                     _staging.pin = (int)strtoul(value, NULL, 10);
                 }
                 else if (strncasecmp(param, "gpio_doser_tank_total_volume", 28) == 0) {
@@ -813,7 +827,8 @@ int save_aquachem_config_json(const char* inBuf, int inSize, char* outBuf, int o
                     case ACD_TYPE_D1W_TEMP:    fprintf(fp, "temp_sensor_label=%s\ntemp_sensor_type=d1w\n", lbl); break;
                     case ACD_TYPE_SYSFS_VALUE: fprintf(fp, "sysfs_sensor_label=%s\n", lbl); break;
                     case ACD_TYPE_GPIO_PMP:    fprintf(fp, "gpio_doser_label=%s\n", lbl); break;
-                    case ACD_TYPE_GPIO_SWITCH: fprintf(fp, "gpio_switch_label=%s\n", lbl); break;
+                    case ACD_TYPE_GPIO_OUTPUT: fprintf(fp, "gpio_output_label=%s\n", lbl); break;
+                    case ACD_TYPE_GPIO_INPUT:  fprintf(fp, "gpio_input_label=%s\n", lbl); break;
                     case ACD_TYPE_MQTT_VALUE:  fprintf(fp, "mqtt_sensor_label=%s\n", lbl); break;
                     case ACD_TYPE_I2C_PRS:     fprintf(fp, "prs_sensor_label=%s\n", lbl); break;
                     
@@ -1326,18 +1341,27 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
 
                 break;
 
-            case ACD_TYPE_GPIO_SWITCH:
-                cJSON_AddStringToObject(block, "driver_type", "gpio_switch");
+            case ACD_TYPE_GPIO_OUTPUT:
+            case ACD_TYPE_GPIO_INPUT:
+                cJSON_AddStringToObject(block, "driver_type", "GPIO");
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "gpio_type");
+                cJSON_AddStringToObject(f_item, "type", "select");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", gpio_direction_to_str(curr->data.gpio.direction));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_GPIO_DIRECTION));
+                cJSON_AddItemToArray(block_fields, f_item);
                 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "gpio_switch_pin");
+                cJSON_AddStringToObject(f_item, "key", "gpio_pin");
                 cJSON_AddStringToObject(f_item, "type", "number");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddNumberToObject(f_item, "value", curr->data.gpio.pin);
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "gpio_switch_pin_mode");
+                cJSON_AddStringToObject(f_item, "key", "gpio_pin_mode");
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", gpio_active_to_str(curr->data.gpio.active));
@@ -1345,7 +1369,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "gpio_switch_required_state");
+                cJSON_AddStringToObject(f_item, "key", "gpio_required_state");
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddStringToObject(f_item, "value", gpio_req_to_str(curr->data.gpio.required));
@@ -1353,7 +1377,15 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "gpio_switch_scope_global");
+                cJSON_AddStringToObject(f_item, "key", "gpio_scope");
+                cJSON_AddStringToObject(f_item, "type", "select");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE));
+                cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "gpio_scope_global");
                 cJSON_AddStringToObject(f_item, "type", "boolean");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
@@ -1727,38 +1759,45 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
 
     cJSON_AddItemToArray(available_drivers, drv);
 
-    // Define: GPIO Switch Template
+    // Define: GPIO generic input / outputs Template
     drv = cJSON_CreateObject();
-    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_GPIO_SWITCH);
-    cJSON_AddStringToObject(drv, "driver_type", "gpio_switch");
-    cJSON_AddStringToObject(drv, "default_label", "New GPIO Switch");
+    cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_GPIO_OUTPUT);
+    cJSON_AddStringToObject(drv, "driver_type", "GPIO");
+    cJSON_AddStringToObject(drv, "default_label", "New GPIO Block");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
 
     df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "gpio_switch_pin");
+    cJSON_AddStringToObject(df_item, "key", "gpio_type");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddStringToObject(df_item, "value", "Output");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_GPIO_DIRECTION));
+    cJSON_AddItemToArray(df_arr, df_item);
+
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "gpio_pin");
     cJSON_AddStringToObject(df_item, "type", "number");
     cJSON_AddNumberToObject(df_item, "value", 0);
     cJSON_AddItemToArray(df_arr, df_item);
 
     df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "gpio_switch_pin_mode");
+    cJSON_AddStringToObject(df_item, "key", "gpio_pin_mode");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddStringToObject(df_item, "value", "Active Low");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ACTIVE));
     cJSON_AddItemToArray(df_arr, df_item);
 
     df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "gpio_switch_required_state");
+    cJSON_AddStringToObject(df_item, "key", "gpio_required_state");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddStringToObject(df_item, "value", "on");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ONOFF));
     cJSON_AddItemToArray(df_arr, df_item);
 
     df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "gpio_switch_scope_global");
+    cJSON_AddStringToObject(df_item, "key", "gpio_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "Yes");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
+    cJSON_AddStringToObject(df_item, "value", "Allow");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
     cJSON_AddItemToArray(df_arr, df_item);
 
     cJSON_AddItemToArray(available_drivers, drv);
@@ -2025,7 +2064,8 @@ void check_print_config (struct aquachemdata *acdata)
       case ACD_TYPE_SYSFS_VALUE: type_str = "sensor (System File)"; break;
       case ACD_TYPE_MQTT_VALUE:  type_str = "sensor (MQTT Value)"; break;
       case ACD_TYPE_VIR_TANK:    type_str = "virtual sensor (Tank)"; break;
-      case ACD_TYPE_GPIO_SWITCH: type_str = "switch (GPIO)"; break;
+      case ACD_TYPE_GPIO_OUTPUT: type_str = "Output (GPIO)"; break;
+      case ACD_TYPE_GPIO_INPUT:  type_str = "Input  (GPIO)"; break;
       case ACD_TYPE_I2C_PRS:
         type_str = "sensor (I2C Pressure)";
         snprintf(buffer, sizeof(buffer), "(%s)", curr->data.i2c.type == I2C_SENSOR_PTE7300 ? "PTE7300" : "UNKNOWN");
@@ -2058,11 +2098,11 @@ void check_print_config (struct aquachemdata *acdata)
 
     LOG(LOG_NOTICE, "%-*s = %-8.8s| %s %s\n", MAX_PRINTLEN, type_str, curr->ID, curr->label, buffer);
 
-    if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_COND || curr->type == ACD_TYPE_GPIO_SWITCH) {
-      LOG(LOG_INFO, "%-*s   -> pin = %d, mode = %s, required state = %s%s%s\n", MAX_PRINTLEN, "",
+    if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_COND ||
+        curr->type == ACD_TYPE_GPIO_OUTPUT || curr->type == ACD_TYPE_GPIO_INPUT) {
+      LOG(LOG_INFO, "%-*s   -> pin = %d, mode = %s, required state = %s, scope = %s\n", MAX_PRINTLEN, "",
           curr->data.gpio.pin, gpio_active_to_str(curr->data.gpio.active), gpio_req_to_str(curr->data.gpio.required),
-          IS_CONDITION(curr->type) ? ", scope = " : "",
-          IS_CONDITION(curr->type) ? config_scope_detail_str(curr) : "");
+          config_scope_detail_str(curr));
     }
 
     if (curr->type == ACD_TYPE_MQTT_COND) {
@@ -2132,7 +2172,9 @@ typedef enum {
   ACD_LABEL_PMP,  // Doser
   ACD_LABEL_PRS,
   ACD_LABEL_SYSFS,
-  ACD_LABEL_SWITCH,
+  //ACD_LABEL_SWITCH,
+  //ACD_LABEL_GPIO_OUT,
+  //ACD_LABEL_GPIO_IN,
   ACD_LABEL_VIRTUAL
 } acd_label_type_t;
 
@@ -2149,19 +2191,9 @@ const char* int_to_str(int i) {
 
 /* Helper to generate ID and set Master status */
 
-//void generate_condition_id(acd_condition_t *node) {
-void generate_condition_id(acd_key_t *node) {
-   static int count = MASTER_ID;
-
-   char buf[32];
-   
-   node->index = count++;
-   snprintf(buf, sizeof(buf), "CS_%d", node->index);
-   node->ID = strdup(buf);
-}
-
 /* Helper to generate ID and set Master status */
-void generate_sensor_id(acd_key_t *node) {
+void generate_id(acd_key_t *node) {
+    static int count_condition = MASTER_ID;
     static int count_ph = MASTER_ID;
     static int count_orp = MASTER_ID;
     static int count_temp = MASTER_ID;
@@ -2170,12 +2202,17 @@ void generate_sensor_id(acd_key_t *node) {
     static int count_sysfs = MASTER_ID;
     static int count_mqtt = MASTER_ID;
     static int count_vir = MASTER_ID;
-    static int count_switch = MASTER_ID;
+    static int count_gpio = MASTER_ID;
 
     char buf[32]; 
     const char *prefix = "";
 
     switch (node->type) {
+        case ACD_TYPE_MQTT_COND:
+        case ACD_TYPE_GPIO_COND:
+            prefix = "CS";
+            node->index = count_condition++;
+            break;
         case ACD_TYPE_EZO_PH:
             prefix = "PH";
             node->index = count_ph++;
@@ -2213,9 +2250,10 @@ void generate_sensor_id(acd_key_t *node) {
             prefix = "TNK";
             node->index = count_vir++;
             break;
-        case ACD_TYPE_GPIO_SWITCH:
-            prefix = "SWT";
-            node->index = count_switch++;
+        case ACD_TYPE_GPIO_OUTPUT:
+        case ACD_TYPE_GPIO_INPUT:
+            prefix = "GPIO";
+            node->index = count_gpio++;
             break;
         default:
             prefix = "UNK";
@@ -2225,6 +2263,25 @@ void generate_sensor_id(acd_key_t *node) {
 
     snprintf(buf, sizeof(buf), "%s_%d", prefix, node->index);
     node->ID = strdup(buf);
+}
+
+//void generate_condition_id(acd_condition_t *node) {
+void generate_condition_id(acd_key_t *node) {
+  generate_id(node);
+    /*
+   static int count = MASTER_ID;
+
+   char buf[32];
+   
+   node->index = count++;
+   snprintf(buf, sizeof(buf), "CS_%d", node->index);
+   node->ID = strdup(buf);
+   */
+}
+
+/* Helper to generate ID and set Master status */
+void generate_sensor_id(acd_key_t *node) {
+  generate_id(node);
 }
 
 char *generate_label(const char *base, acd_label_type_t type, const char *label) {
@@ -2264,9 +2321,9 @@ char *generate_label(const char *base, acd_label_type_t type, const char *label)
     case ACD_LABEL_VIRTUAL:
       snprintf(buf, sizeof(buf), "VIR_%s", base);
       break;
-    case ACD_LABEL_SWITCH:
-      snprintf(buf, sizeof(buf), "SWT_%s", base);
-      break;
+    //case ACD_LABEL_SWITCH:
+    //  snprintf(buf, sizeof(buf), "SWT_%s", base);
+    //  break;
     //case ACD_LABEL_MQTT:
     //  snprintf(buf, sizeof(buf), "MQT_%s", base);
     //  break;
@@ -2443,13 +2500,33 @@ void add_sensor_d1w(const acd_staging_t *st) {
     append_to_key_list(new_node);
 }
 
+void add_gpio(const acd_staging_t *st) {
+    acd_key_t *new_node = malloc(sizeof(acd_key_t));
+    if (!new_node) return;
+
+    new_node->type = st->pending_type;
+
+    new_node->label = generate_label(int_to_str(st->pin), ACD_LABEL_GPIO, st->label);
+    new_node->data.gpio.pin = st->pin;
+    new_node->data.gpio.active = st->pin_mode;
+    new_node->data.gpio.required = st->pin_state;
+    new_node->met = false; // Initial state, not met.
+    new_node->scope = st->scope;
+     
+    if (new_node->type==ACD_TYPE_GPIO_INPUT) {new_node->delay_on = st->value;}
+    if (new_node->type==ACD_TYPE_GPIO_OUTPUT) {set_pump_default_duration(new_node,_acdconfig_.switch_max_runtime / 2);} // Default to half of the max runtime for switches
+  
+    generate_id(new_node);
+    append_to_key_list(new_node);
+}
+
 // Specialized function for GPIO Output / Pump
-void add_output_gpio(const acd_staging_t *st) {
+void add_gpio_pump(const acd_staging_t *st) {
     acd_key_t *new_node = malloc(sizeof(acd_key_t));
     if (!new_node) return;
   
     new_node->type = st->pending_type;
-    new_node->label = generate_label(int_to_str(st->pin), (new_node->type==ACD_TYPE_GPIO_SWITCH)?ACD_LABEL_SWITCH:ACD_LABEL_PMP, st->label);
+    new_node->label = generate_label(int_to_str(st->pin), (new_node->type==ACD_TYPE_GPIO_OUTPUT)?ACD_LABEL_GPIO:ACD_LABEL_PMP, st->label);
     new_node->data.gpio.pin = st->pin;
     new_node->data.gpio.active = st->pin_mode;
     new_node->data.gpio.required = st->pin_state;
@@ -2457,6 +2534,7 @@ void add_output_gpio(const acd_staging_t *st) {
     new_node->dose_stats.running_total_max_ml = st->value4;
 
     new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+    
   
     //printf("**** Tank %s: running_total_max_ml=%f\n", new_node->label, new_node->dose_stats.running_total_max_ml);
 
@@ -2467,8 +2545,7 @@ void add_output_gpio(const acd_staging_t *st) {
     if isMASKSET(new_node->flags, PH_PUMP)       set_pump_default_duration(new_node,_acdconfig_.ph_default_dose_time);
     else if isMASKSET(new_node->flags, ORP_PUMP) set_pump_default_duration(new_node,_acdconfig_.orp_default_dose_time);
     else if isMASKSET(new_node->flags, H2O_PUMP) set_pump_default_duration(new_node,_acdconfig_.h2o_default_dose_time);
-    else if (new_node->type==ACD_TYPE_GPIO_SWITCH) set_pump_default_duration(new_node,_acdconfig_.switch_max_runtime / 2); // Default to half of the max runtime for switches
-  
+    
     generate_sensor_id(new_node);
     append_to_key_list(new_node);
 

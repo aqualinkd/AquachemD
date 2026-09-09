@@ -1294,7 +1294,7 @@
       return (
         (attrs?.includes("orp_pump") && Boolean(_config?.tile_settings?.orp_runtime_in_minutes)) ||
         (attrs?.includes("h2o_pump") && Boolean(_config?.tile_settings?.h2o_runtime_in_minutes)) ||
-        (attrs?.includes("gpio_switch") && Boolean(_config?.tile_settings?.switch_runtime_in_minutes))
+        (attrs?.includes("gpio_output") && Boolean(_config?.tile_settings?.switch_runtime_in_minutes))
       );
     }
 

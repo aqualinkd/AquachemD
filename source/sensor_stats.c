@@ -408,7 +408,7 @@ void set_pump_default_duration(acd_key_t *key, uint32_t default_duration)
         max_duration = _acdconfig_.orp_max_dose_time;
     } else if (isMASKSET(key->flags, H2O_PUMP)) {
         max_duration = _acdconfig_.h2o_max_dose_time;
-    } else if (key->type == ACD_TYPE_GPIO_SWITCH) {
+    } else if (key->type == ACD_TYPE_GPIO_OUTPUT) {
         max_duration = _acdconfig_.switch_max_runtime;
     } else {
         LOG(LOG_ERR, "set_pump_default_duration: unknown pump flags for %s", key->label ? key->label : "NULL");

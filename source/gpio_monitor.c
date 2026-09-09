@@ -158,7 +158,7 @@ void *gpio_monitor_worker(void *ptr)
     for (acd_key_t *curr = acddata->keys; curr; curr = curr->next)
     {
         // Register Keys (Outputs) - Monitor for ERRORS ONLY
-        if ((curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_SWITCH) && curr->data.gpio.request)
+        if ((curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_OUTPUT) && curr->data.gpio.request)
         {
             int fd = gpiod_line_request_get_fd(curr->data.gpio.request);
             if (fd >= 0)
@@ -169,7 +169,7 @@ void *gpio_monitor_worker(void *ptr)
                 num_lines++;
             }
         }
-        else if (curr->type == ACD_TYPE_GPIO_COND && curr->data.gpio.request)
+        else if ( (curr->type == ACD_TYPE_GPIO_COND || curr->type == ACD_TYPE_GPIO_INPUT) && curr->data.gpio.request)
         {
             // Register Conditions (Inputs) - Monitor for EVENTS + ERRORS
             int fd = gpiod_line_request_get_fd(curr->data.gpio.request);
@@ -228,7 +228,6 @@ void *gpio_monitor_worker(void *ptr)
                     if (met != GPIO_ERROR)
                     {
                         acd_key_t *c = (acd_key_t *)ctx_map[i].parent_obj;
-
                         // Only act if the state actually changed
                         if (c->met != (bool)met)
                         {

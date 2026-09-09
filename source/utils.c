@@ -558,6 +558,42 @@ const char *pump_type_to_str(uint8_t val)
   return "";
 }
 
+
+acd_type_t parse_gpio_in_out(char *type)
+{
+  if (strcasecmp(type, "output") == 0 || strcasecmp(type, "out") == 0) {
+    return ACD_TYPE_GPIO_OUTPUT;
+  }
+  return ACD_TYPE_GPIO_INPUT;
+}
+
+const char *gpio_in_out_to_str(acd_type_t type)
+{
+  if (type == ACD_TYPE_GPIO_INPUT)
+    return "input";
+  else if (type == ACD_TYPE_GPIO_OUTPUT)
+    return "output";
+
+  return "unknown";
+}
+
+gpio_dir_t parse_gpio_direction(char *type)
+{
+  if (strcasecmp(type, "output") == 0 || strcasecmp(type, "out") == 0) {
+    return GPIO_INPUT;
+  }
+  return GPIO_OUTPUT;
+}
+const char *gpio_direction_to_str(gpio_dir_t direction)
+{
+  if (direction == GPIO_INPUT)
+    return "input";
+  else if (direction == GPIO_OUTPUT)
+    return "output";
+
+  return "unknown";
+}
+
 /*
 uint8_t parse_statistics(const char *str)
 {
@@ -623,6 +659,24 @@ const char* acd_state_to_str(acd_state_t state) {
         case ACD_LED_UNKNOWN: 
         default:               return "UNKNOWN";
     }
+}
+
+acd_scope_t parse_acd_scope(const char *str) {
+    if (!str) return ACD_SCOPE_UNKNOWN;
+
+    char *clean = cleanwhitespace((char *)str);
+
+    if (strcasecmp(clean, "Allow") == 0) {
+        return ACD_SCOPE_ALLOW;
+    } else if (strcasecmp(clean, "Local") == 0) {
+        return ACD_SCOPE_LOCAL;
+    } else if (strcasecmp(clean, "Global") == 0) {
+        return ACD_SCOPE_GLOBAL;
+    } else  if (strcasecmp(clean, "None") == 0) {
+        return ACD_SCOPE_ALLOW; // May need to change this and add ACD_SCOPE_NONE?????
+    }
+    
+    return ACD_SCOPE_UNKNOWN; // Default to global if unknown
 }
 
 const char* acd_scope_to_str( acd_scope_t scope) {

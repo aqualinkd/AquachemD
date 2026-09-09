@@ -39,6 +39,15 @@ const char *gpio_req_to_str(gpio_req_t val);
 uint8_t parse_pump_type(char *str);
 const char *pump_type_to_str(uint8_t val);
 
+acd_type_t parse_gpio_in_out(char *type);
+const char *gpio_in_out_to_str(acd_type_t type);
+
+gpio_dir_t parse_gpio_direction(char *type);
+const char *gpio_direction_to_str(gpio_dir_t direction);
+
+acd_scope_t parse_acd_scope(const char *str);
+const char* acd_scope_to_str( acd_scope_t scope);
+
 /*
 uint8_t parse_statistics(const char *str);
 const char *statistics_to_str(uint8_t val);
@@ -65,7 +74,7 @@ void precise_delay(long nanoseconds);
 const char* acd_state_to_str(acd_state_t state);
 const char* acd_state_to_set_attrib(acd_state_t status);
 const char* acd_condition_met_to_str(bool met);
-const char* acd_scope_to_str( acd_scope_t scope);
+
 
 
 #define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))  

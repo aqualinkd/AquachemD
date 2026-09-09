@@ -76,9 +76,9 @@ typedef enum {
     ACD_TYPE_D1W_TEMP,
     ACD_TYPE_SYSFS_VALUE,
     ACD_TYPE_MQTT_VALUE,
+    ACD_TYPE_GPIO_INPUT,
     #define ACD_IN_FIRST ACD_TYPE_EZO_PH
-    //#define ACD_IN_LAST  ACD_TYPE_D1W_TEMP
-    #define ACD_IN_LAST  ACD_TYPE_MQTT_VALUE
+    #define ACD_IN_LAST  ACD_TYPE_GPIO_INPUT
 
 
     // Outputs (Actuators)
@@ -86,10 +86,11 @@ typedef enum {
     //ACD_TYPE_GPIO_PMP_PH,
     //ACD_TYPE_GPIO_PMP_ORP,
     ACD_TYPE_EZO_PMP,
-    ACD_TYPE_GPIO_SWITCH,
+    ACD_TYPE_GPIO_OUTPUT, // SWITCH Below needs to be delted once codebase is updated.
+    //ACD_TYPE_GPIO_SWITCH,
     #define ACD_OUT_FIRST ACD_TYPE_GPIO_PMP
     //#define ACD_OUT_LAST  ACD_TYPE_EZO_PMP
-    #define ACD_OUT_LAST  ACD_TYPE_GPIO_SWITCH
+    #define ACD_OUT_LAST  ACD_TYPE_GPIO_OUTPUT
 
     // Self managed
     ACD_TYPE_VIR_TANK,
@@ -178,6 +179,7 @@ typedef enum {
     ACD_SCOPE_LOCAL  = 1, // Acts as a Soft Limit for specific outputs
     ACD_SCOPE_GLOBAL = 2  // Acts as a Hard Interlock for the whole system
 } acd_scope_t;
+#define ACD_SCOPE_UNKNOWN ACD_SCOPE_ALLOW //default to ALLOW if unknown, so that we don't block dosing due to a config error.
 
 // Inverse the names for conditions to make code easier to read.
 #define ACD_ACTION_ALLOW  ACD_SCOPE_ALLOW

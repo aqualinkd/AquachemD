@@ -162,7 +162,7 @@ void queue_pump_event(acd_key_t *key, int value) {
 
 void turn_gpio_switch_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t duration_sec) {
 
-  if (key->type != ACD_TYPE_GPIO_SWITCH) {
+  if (key->type != ACD_TYPE_GPIO_OUTPUT) {
     LOG(LOG_ERR, "Add Code in turn_gpio_switch_on.c - turn_gpio_switch_on(), %s is not a GPIO_SWITCH", key->label);
     return;
   }
@@ -191,7 +191,7 @@ void turn_gpio_switch_on(struct aquachemdata *acdata, acd_key_t *key, uint32_t d
 
 void turn_gpio_switch_off(struct aquachemdata *acdata, acd_key_t *key) {
 
-  if (key->type != ACD_TYPE_GPIO_SWITCH) {
+  if (key->type != ACD_TYPE_GPIO_OUTPUT) {
     LOG(LOG_ERR, "Add Code in turn_gpio_switch_on.c - turn_gpio_switch_on(), %s is not a GPIO_SWITCH", key->label);
     return;
   }
@@ -331,12 +331,17 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
   clear_timer(acdata, key);
 }
 */
+void check_gpio_output_state(struct aquachemdata *acdata, acd_key_t *key) {
+  int current = relay_is_on(&key->data.gpio);
+  if (current >= 0 && current != key->ison) {
+    LOG(LOG_WARNING, "%s %s changed externally\n",key->type==ACD_TYPE_GPIO_PMP?"Pump":"GPIO Output", key->label);
+    key->ison = current;
+    set_key_state(acdata, key, key->ison ? ACD_LED_ON : ACD_LED_ENABLED);
+    LOG(LOG_NOTICE, "Output %s, GPIO %d is now %s/%s/%s",key->label,key->data.gpio.pin,(relay_is_on(&key->data.gpio)?"ON":"OFF"),acd_state_to_str(key->state),key->ison?"ON":"OFF");
+  }
+}
+/*
 void check_pump_state(struct aquachemdata *acdata, acd_key_t *key) {
-  /*
-  LOG(LOG_NOTICE, "Output %s, GPIO %d is in %d/%s state",key->label,key->data.gpio.pin,pump_is_on(&key->data.gpio),(pump_is_on(&key->data.gpio)?"ON":"OFF"));
-  LOG(LOG_NOTICE, "Output %s, GPIO %d cache %d/%s state",key->label,key->data.gpio.pin,key->ison,key->ison?"ON":"OFF");
-  LOG(LOG_NOTICE, "Output %s, GPIO %d LED   %d/%s state",key->label,key->data.gpio.pin,key->state,acd_state_to_str(key->state));
-  */
   int current = pump_is_on(&key->data.gpio);
   if (current >= 0 && current != key->ison) {
     LOG(LOG_WARNING, "Pump %s changed externally\n", key->label);
@@ -345,7 +350,7 @@ void check_pump_state(struct aquachemdata *acdata, acd_key_t *key) {
     LOG(LOG_NOTICE, "Output %s, GPIO %d is now %s/%s/%s",key->label,key->data.gpio.pin,(pump_is_on(&key->data.gpio)?"ON":"OFF"),acd_state_to_str(key->state),key->ison?"ON":"OFF");
   }
 }
-
+*/
 bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state, uint32_t value);
 
 bool state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state)
@@ -468,7 +473,7 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
         set_cond_state(acdata, key, key->met?ACD_LED_ON:ACD_LED_OFF);
       }
       break;
-    case ACD_TYPE_GPIO_SWITCH:
+    case ACD_TYPE_GPIO_OUTPUT:
       if (state == ACD_LED_ON) {
         turn_gpio_switch_on(acdata, key, value<=0?0:value);
       } else if (state == ACD_LED_OFF) {
@@ -625,7 +630,9 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
       }
       break;
 
-    case ACD_TYPE_GPIO_SWITCH:
+    case ACD_TYPE_GPIO_OUTPUT:
+    case ACD_TYPE_GPIO_INPUT:
+    // Do need to validate scope here.
       if (state != ACD_LED_OFF && state != ACD_LED_ON && state != ACD_LED_ENABLED && state != ACD_LED_DISABLED) {
         goodState = false;
       }

@@ -443,14 +443,14 @@ reload_configuration:
 
   // Setup any specifics for GPIO / D1W etc
   for (acd_key_t *curr = acddata.keys; curr != NULL; curr = curr->next) {
-    if (curr->type == ACD_TYPE_GPIO_COND) {
+    if (curr->type == ACD_TYPE_GPIO_COND || curr->type == ACD_TYPE_GPIO_INPUT) {
       acddata.haveConditions = true;
-      LOG(LOG_DEBUG,"Setting up GPIO Condition: %s, pin %d\n", curr->label, curr->data.gpio.pin);
+      LOG(LOG_DEBUG,"Setting up GPIO %s: %s, pin %d\n", (curr->type == ACD_TYPE_GPIO_COND?"Condition":"Input"), curr->label, curr->data.gpio.pin);
       if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_INPUT, curr->data.gpio.active) != 0) {
         LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
       }
-    } else if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_SWITCH) {
-      LOG(LOG_DEBUG,"Setting up GPIO Pump: %s, pin %d\n", curr->label, curr->data.gpio.pin);
+    } else if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_OUTPUT) {
+      LOG(LOG_DEBUG,"Setting up GPIO %s: %s, pin %d\n", (curr->type == ACD_TYPE_GPIO_PMP?"Pump":"Output"), curr->label, curr->data.gpio.pin);
       if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_OUTPUT, curr->data.gpio.active) != 0) {
         LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
       } else {
@@ -477,6 +477,12 @@ reload_configuration:
         pthread_mutex_init(&curr->stats.lock, NULL);
         reset_sensor_average(curr);
       }
+    } else if (curr->type == ACD_TYPE_GPIO_OUTPUT || curr->type == ACD_TYPE_GPIO_INPUT) {
+      curr->state = ACD_LED_OFF;
+      //if (sensor_is_met(&curr->data.gpio)) {
+        //ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty); 
+        //set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
+      //}
     } else if (IS_OUTPUT(curr->type)) {
       // GPIO status will be set from sync_pump_state() above
       //if (curr->type != ACD_TYPE_GPIO_PMP) {
@@ -527,7 +533,7 @@ reload_configuration:
     }
 
     for (acd_key_t *curr = acddata.keys; curr != NULL; curr = curr->next) {
-     if (IS_CONDITION(curr->type)) {
+      if (IS_CONDITION(curr->type)) {
         if (curr->type == ACD_TYPE_GPIO_COND) {
           // This should have been changed from the gpio_monitor, but 2nd check doesn't hurt
           if (sensor_is_met(&curr->data.gpio) > 0 && !curr->met) {
@@ -546,8 +552,13 @@ reload_configuration:
           removeMASK(curr->flags, CONDITION_NOTIFIED);
           LOG(LOG_NOTICE,"Condition satisfied: %s\n", curr->label);
         }
-      } else if (curr->type == ACD_TYPE_GPIO_PMP) {
-        check_pump_state(&acddata, curr);
+      } else if (curr->type == ACD_TYPE_GPIO_INPUT) {
+        if (sensor_is_met(&curr->data.gpio) > 0 && !curr->met) {
+          ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
+          set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
+        }
+      } else if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_OUTPUT) {
+        check_gpio_output_state(&acddata, curr);
       }
     }
     
@@ -749,7 +760,16 @@ reload_configuration:
         case ACD_TYPE_MQTT_COND:
         case ACD_TYPE_GPIO_COND:
         case ACD_TYPE_MQTT_VALUE:
-        case ACD_TYPE_GPIO_SWITCH:
+        break;
+
+        case ACD_TYPE_GPIO_INPUT:
+        case ACD_TYPE_GPIO_OUTPUT:
+          // For GPIO may want to read state
+          /*
+          if (sensor_is_met(&key->data.gpio) > 0 && !key->met) {
+            ASSIGN_IF_CHANGED(key->met, !key->met, acddata.is_dirty, key->is_dirty); 
+            set_key_state(&acddata, key, key->met?ACD_LED_ON:ACD_LED_OFF);
+          }*/
         break;
 
         default:
