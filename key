@@ -1,0 +1,2016 @@
+./source/1wire.c:  normalise_dir_path(s->path);
+./source/1wire.c:  if (s->path[0] == '/') { // Assume full path if starts with '/'
+./source/1wire.c:    snprintf(s->temp_path,  sizeof(s->temp_path),  "%s/temperature", s->path);
+./source/1wire.c:    snprintf(s->slave_path, sizeof(s->slave_path), "%s/w1_slave",    s->path);
+./source/1wire.c:    snprintf(s->temp_path,  sizeof(s->temp_path),  "%s/%s/temperature", W1_BASE_PATH, s->path);
+./source/1wire.c:    snprintf(s->slave_path, sizeof(s->slave_path), "%s/%s/w1_slave",    W1_BASE_PATH, s->path);
+./source/1wire.c:    fprintf(stderr, "w1_detect: cannot open %s — is 1-wire enabled?\n", W1_BASE_PATH);
+./source/1wire.c:    fprintf(stderr, "  Check /boot/firmware/config.txt contains: dtoverlay=w1-gpio\n");
+./source/1wire.c:  printf("\nScanning 1-wire bus at %s...\n\n", W1_BASE_PATH);
+./source/1wire.c:    // Also skip family code "00-" — phantom devices reported when bus is
+./source/1wire.c:    if (entry->d_name[0] == '.' ||
+./source/1wire.c:        strncmp(entry->d_name, "w1_bus", 6) == 0 ||
+./source/1wire.c:        strncmp(entry->d_name, "00-", 3) == 0)
+./source/1wire.c:    if (strncmp(entry->d_name, "28-", 3) == 0)      family = "DS18B20 (temperature)";
+./source/1wire.c:    else if (strncmp(entry->d_name, "10-", 3) == 0) family = "DS18S20 (temperature)";
+./source/1wire.c:    else if (strncmp(entry->d_name, "22-", 3) == 0) family = "DS1822  (temperature)";
+./source/1wire.c:    else if (strncmp(entry->d_name, "3b-", 3) == 0) family = "DS1825  (temperature)";
+./source/1wire.c:    else if (strncmp(entry->d_name, "42-", 3) == 0) family = "DS28EA00 (temperature)";
+./source/1wire.c:    printf("  %s   [%s]\n", entry->d_name, family);
+./source/1wire.c:    if (strncmp(entry->d_name, "28-", 3) == 0 ||
+./source/1wire.c:        strncmp(entry->d_name, "10-", 3) == 0)
+./source/1wire.c:      snprintf(dev_path, sizeof(dev_path), "%s/%s", W1_BASE_PATH, entry->d_name);
+./source/1wire.c:    printf("  No 1-wire devices found.\n");
+./source/1wire.c:    if (strncmp(entry->d_name, W1_DS18B20_PREFIX, strlen(W1_DS18B20_PREFIX)) != 0)
+./source/1wire.c:    snprintf(dev_path, sizeof(dev_path), "%s/%s", W1_BASE_PATH, entry->d_name);
+./source/1wire.c:    if (path && path != s->path) {   // guard against self-copy
+./source/1wire.c:      snprintf(s->path, sizeof(s->path), "%s", path);
+./source/1wire.c:    s->type   = W1_TYPE_DS18B20;
+./source/1wire.c:    s->scale  = W1_DS18B20_SCALE;
+./source/1wire.c:    s->offset = 0.0f;
+./source/1wire.c:  if (path && path != s->path) {   // guard against self-copy
+./source/1wire.c:    snprintf(s->path, sizeof(s->path), "%s", path);
+./source/1wire.c:  s->type   = W1_TYPE_GENERIC;
+./source/1wire.c:  s->scale  = scale;
+./source/1wire.c:  s->offset = offset;
+./source/1wire.c:  FILE *fp = fopen(s->temp_path, "r");
+./source/1wire.c:    LOG(LOG_ERR, "w1_read: cannot open %s: %s\n", s->temp_path, strerror(errno));
+./source/1wire.c:    LOG(LOG_ERR, "w1_read: failed to parse value from %s\n", s->temp_path);
+./source/1wire.c:  result.value  = (float)raw * s->scale + s->offset;
+./source/1wire.c:  // Return between -5 and 75
+./source/1wire.c:  FILE *fp = fopen(s->slave_path, "r");
+./source/1wire.c:    LOG(LOG_ERR, "w1_read_with_crc: cannot open %s: %s\n", s->slave_path, strerror(errno));
+./source/1wire.c:    LOG(LOG_ERR, "w1_read_with_crc: short read from %s\n", s->slave_path);
+./source/1wire.c:    LOG(LOG_ERR, "w1_read_with_crc: CRC check failed for %s\n", s->slave_path);
+./source/1wire.c:    LOG(LOG_ERR, "w1_read_with_crc: no t= field in %s\n", s->slave_path);
+./source/1wire.c:  result.value  = (float)raw * s->scale + s->offset;
+./source/acd_scheduler.c:    if (cJSON_IsString(item) && (item->valuestring != NULL)) {
+./source/acd_scheduler.c:        strncpy(dest, item->valuestring, dest_size - 1);
+./source/acd_scheduler.c:        dest[dest_size - 1] = '\0';
+./source/acd_scheduler.c:                        (cJSON_IsString(enabled_item) && enabled_item->valuestring[0] == '1');
+./source/acd_scheduler.c:        fprintf(fp, "%s%s %s %s %s %s root curl -s -S --show-error %s -o /dev/null %s%s -d value=%s -X PUT\n",
+./source/acd_scheduler.c:                (iface->isLocalurlTLS ? "--insecure" : ""),
+./source/acd_scheduler.c:                (iface->localurl[0] == '\0' ? _acdconfig_.listen_address : iface->localurl),
+./source/acd_scheduler.c:    const char *regexString = "(#{0,1})([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s.*(\\/api\\/.*\\/set).* value=([0-9]+).*";
+./source/acd_scheduler.c:    // NOTE the below regex expects the '-' for '-PUT' for the end limit
+./source/acd_scheduler.c:    //const char *regexString = "(#{0,1})([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s([^\\s]+)\\s.*(\\/api\\/.*\\/set).* value=([0-9]+[wdh]?) -.*";
+./source/acd_scheduler.c:    while ((read_size = getline(&line, &len, fp)) != -1) {
+./source/acd_scheduler.c:            if (groupArray[8].rm_so != (size_t)-1) {
+./source/acd_scheduler.c:                // Helper macro-like logic to extract strings directly into cJSON
+./source/acd_scheduler.c:                    int l = groupArray[grp].rm_eo - groupArray[grp].rm_so; \
+./source/acd_timer.c:    t->id = 0;
+./source/acd_timer.c:    pthread_mutex_init(&t->mutex, NULL);
+./source/acd_timer.c:    pthread_cond_init(&t->cond, NULL);
+./source/acd_timer.c:    t->state = ACD_STARTING;
+./source/acd_timer.c:    t->parent_id = pthread_self();
+./source/acd_timer.c:        pthread_mutex_lock(&curr->control.mutex);
+./source/acd_timer.c:        curr->control.state = ACD_CLEANUP;
+./source/acd_timer.c:        pthread_cond_broadcast(&curr->control.cond);
+./source/acd_timer.c:        pthread_mutex_unlock(&curr->control.mutex);
+./source/acd_timer.c:        curr = curr->next;
+./source/acd_timer.c:  for (t_ptr = _timerthread_ll; t_ptr != NULL; t_ptr = t_ptr->next) {
+./source/acd_timer.c:    if (t_ptr->key == key) {
+./source/acd_timer.c:    long total_duration_sec = (t_ptr->duration_min * 60) + t_ptr->duration_sec;
+./source/acd_timer.c:    long elapsed_sec = (long)difftime(now, t_ptr->started_at);
+./source/acd_timer.c:      remaining_mins = (int) (((total_duration_sec - elapsed_sec) / 60.0) + 0.5);
+./source/acd_timer.c:    long total_duration_sec = (t_ptr->duration_min * 60) + t_ptr->duration_sec;
+./source/acd_timer.c:    long elapsed_sec = (long)difftime(now, t_ptr->started_at);
+./source/acd_timer.c:      remaining_sec = (uint32_t)(total_duration_sec - elapsed_sec);
+./source/acd_timer.c:    return t_ptr->started_at;
+./source/acd_timer.c:    LOG(LOG_INFO, "Clearing timer for '%s'\n", t_ptr->key->label);
+./source/acd_timer.c:    pthread_mutex_lock(&t_ptr->control.mutex);
+./source/acd_timer.c:    t_ptr->control.state = ACD_CLEANUP; 
+./source/acd_timer.c:    t_ptr->duration_min = 0;
+./source/acd_timer.c:    t_ptr->duration_sec = 0;
+./source/acd_timer.c:    pthread_cond_broadcast(&t_ptr->control.cond);
+./source/acd_timer.c:    pthread_mutex_unlock(&t_ptr->control.mutex);
+./source/acd_timer.c:    LOG(LOG_INFO, "Timer already active for '%s', resetting\n", t_ptr->key->label);
+./source/acd_timer.c:    pthread_mutex_lock(&t_ptr->control.mutex);
+./source/acd_timer.c:    t_ptr->duration_min = duration_min;
+./source/acd_timer.c:    t_ptr->duration_sec = duration_sec;
+./source/acd_timer.c:    pthread_cond_broadcast(&t_ptr->control.cond);
+./source/acd_timer.c:    pthread_mutex_unlock(&t_ptr->control.mutex);
+./source/acd_timer.c:  tmthread->acddata = acddata;
+./source/acd_timer.c:  tmthread->key = key;
+./source/acd_timer.c:  tmthread->duration_min = duration_min;
+./source/acd_timer.c:  tmthread->duration_sec = duration_sec;
+./source/acd_timer.c:  tmthread->started_at = time(NULL); 
+./source/acd_timer.c:  tmthread->mask_type = mask_type;
+./source/acd_timer.c:  //pthread_mutex_init(&tmthread->thread_mutex, NULL);
+./source/acd_timer.c:  //pthread_cond_init(&tmthread->thread_cond, NULL);
+./source/acd_timer.c:  acd_thread_init_dynamic(&tmthread->control);
+./source/acd_timer.c:    for (t_ptr = _timerthread_ll; t_ptr->next != NULL; t_ptr = t_ptr->next) {}
+./source/acd_timer.c:    t_ptr->next = tmthread;
+./source/acd_timer.c:    tmthread->prev = t_ptr;
+./source/acd_timer.c:  if(pthread_create(&tmthread->control.id, NULL, timer_worker, (void*)tmthread) < 0) {
+./source/acd_timer.c:    LOG(LOG_ERR, "could not create timer thread for key '%s'\n", key->label);
+./source/acd_timer.c:    if (tmthread->prev) tmthread->prev->next = NULL;
+./source/acd_timer.c:    pthread_mutex_destroy(&tmthread->control.mutex);
+./source/acd_timer.c:    pthread_cond_destroy(&tmthread->control.cond);
+./source/acd_timer.c:  pthread_detach(tmthread->control.id);
+./source/acd_timer.c:  LOG(LOG_NOTICE, "Start %s for '%s'\n", isMASKSET(tmthread->mask_type, TIMER_ACTIVE)?"timer":"delay", tmthread->key->label);
+./source/acd_timer.c:  //tmthread->key->flags |= TIMER_ACTIVE;
+./source/acd_timer.c:  tmthread->key->flags |= tmthread->mask_type;
+./source/acd_timer.c:  pthread_mutex_lock(&tmthread->control.mutex);
+./source/acd_timer.c:  tmthread->control.state = ACD_KEEPRUNNING;
+./source/acd_timer.c:  pthread_mutex_unlock(&tmthread->control.mutex);
+./source/acd_timer.c:  while (tmthread->key->state == ACD_LED_OFF && tmthread->mask_type == TIMER_ACTIVE) {
+./source/acd_timer.c:    if (atomic_load_explicit(&tmthread->control.state, memory_order_relaxed) == ACD_CLEANUP) {
+./source/acd_timer.c:        LOG(LOG_INFO, "Timer cancelled during startup phase for '%s'\n", tmthread->key->label);
+./source/acd_timer.c:    LOG(LOG_DEBUG, "waiting for key state '%s' to change\n", tmthread->key->label);
+./source/acd_timer.c:       LOG(LOG_NOTICE, "turning on '%s'\n", tmthread->key->label);
+./source/acd_timer.c:       state_change_request(tmthread->acddata, tmthread->key, ACD_LED_ON);
+./source/acd_timer.c:       LOG(LOG_ERR, "key state never turned on '%s'\n", tmthread->key->label);
+./source/acd_timer.c:  pthread_mutex_lock(&tmthread->control.mutex);
+./source/acd_timer.c:  end_time.tv_sec += (tmthread->duration_min * 60) + tmthread->duration_sec;
+./source/acd_timer.c:  tmthread->started_at = time(NULL);
+./source/acd_timer.c:  LOG(LOG_INFO, "Timer started for '%s': %d:%02d total duration\n", tmthread->key->label, tmthread->duration_min, tmthread->duration_sec);
+./source/acd_timer.c:    long remaining_sec = end_time.tv_sec - now.tv_sec;
+./source/acd_timer.c:    SET_DIRTY(tmthread->acddata->is_dirty);
+./source/acd_timer.c:    SET_DIRTY(tmthread->key->is_dirty);
+./source/acd_timer.c:      LOG(LOG_INFO, "Time left for '%s': %ldm %lds\n", tmthread->key->label, remaining_sec / 60, remaining_sec % 60);
+./source/acd_timer.c:      LOG(LOG_INFO, "Time left for '%s': %ld seconds\n", tmthread->key->label, remaining_sec);
+./source/acd_timer.c:    tmthread->timeout = now;
+./source/acd_timer.c:    //tmthread->timeout.tv_sec += (remaining_sec > 60) ? 60 : remaining_sec; // Wakes exactly when done if < 60s
+./source/acd_timer.c:    //tmthread->timeout.tv_sec += (remaining_sec >= 60) ? 60 : 1; // Wake ever minute, then every second if under 1 minute left on timer
+./source/acd_timer.c:    //tmthread->timeout.tv_sec += (remaining_sec > 60) ? (remaining_sec - 60) : 1; // Wake every second if under 1 minute left on timer
+./source/acd_timer.c:    tmthread->timeout.tv_sec += 1; // Always wake every second
+./source/acd_timer.c:      tmthread->timeout.tv_sec += (rem != 0) ? rem : 60; // align to minute boundary first, then sleep in full minutes
+./source/acd_timer.c:      tmthread->timeout.tv_sec += 1; // under a minute left: wake every second
+./source/acd_timer.c:    retval = pthread_cond_timedwait(&tmthread->control.cond, &tmthread->control.mutex, &tmthread->timeout);
+./source/acd_timer.c:      if (tmthread->control.state == ACD_CLEANUP) {
+./source/acd_timer.c:          LOG(LOG_INFO, "Timer cancelled for '%s'\n", tmthread->key->label);
+./source/acd_timer.c:      if (tmthread->duration_min <= 0 && tmthread->duration_sec <= 0) break;
+./source/acd_timer.c:      LOG(LOG_INFO, "Timer update received for '%s'. Recalculating...\n", tmthread->key->label);
+./source/acd_timer.c:      end_time.tv_sec += (tmthread->duration_min * 60) + tmthread->duration_sec;
+./source/acd_timer.c:      tmthread->started_at = time(NULL); 
+./source/acd_timer.c:  pthread_mutex_unlock(&tmthread->control.mutex);
+./source/acd_timer.c:  LOG(LOG_NOTICE, "End %s for '%s'\n", isMASKSET(tmthread->key->flags, TIMER_ACTIVE)?"timer":"delay", tmthread->key->label);
+./source/acd_timer.c:  if (isMASKSET(tmthread->key->flags, TIMER_ACTIVE)) {
+./source/acd_timer.c:    if ((tmthread->duration_min != 0 || tmthread->duration_sec != 0) && tmthread->key->state != ACD_LED_OFF && tmthread->key->state != ACD_LED_ENABLED) {
+./source/acd_timer.c:      LOG(LOG_INFO, "Timer waking turning '%s' off\n", tmthread->key->label);
+./source/acd_timer.c:      state_change_request(tmthread->acddata, tmthread->key, ACD_LED_OFF);
+./source/acd_timer.c:    } else if (tmthread->key->state != ACD_LED_ON) {
+./source/acd_timer.c:      LOG(LOG_INFO, "Timer waking '%s' is already off\n", tmthread->key->label);
+./source/acd_timer.c:  } else if (isMASKSET(tmthread->key->flags, DELAY_ACTIVE)) {
+./source/acd_timer.c:    if (tmthread->key->state == ACD_LED_DELAY) {
+./source/acd_timer.c:      state_change_request(tmthread->acddata, tmthread->key, ACD_LED_ON);
+./source/acd_timer.c:      LOG(LOG_INFO, "Timer waking '%s' is not in delay, not turning on\n", tmthread->key->label);
+./source/acd_timer.c:  tmthread->key->flags &= ~tmthread->mask_type;
+./source/acd_timer.c:  // --- CRITICAL FIX: Lock Linked List before modifying and freeing ---
+./source/acd_timer.c:  if (tmthread->next != NULL && tmthread->prev != NULL) {
+./source/acd_timer.c:    tmthread->next->prev = tmthread->prev;
+./source/acd_timer.c:    tmthread->prev->next = tmthread->next;
+./source/acd_timer.c:  } else if (tmthread->next == NULL && tmthread->prev != NULL) {
+./source/acd_timer.c:    tmthread->prev->next = NULL;
+./source/acd_timer.c:  } else if (tmthread->next != NULL && tmthread->prev == NULL) {
+./source/acd_timer.c:    _timerthread_ll = tmthread->next;
+./source/acd_timer.c:    _timerthread_ll->prev = NULL;
+./source/acd_timer.c:  } else if (tmthread->next == NULL && tmthread->prev == NULL) {
+./source/acd_timer.c:  pthread_mutex_destroy(&tmthread->control.mutex);
+./source/acd_timer.c:  pthread_cond_destroy(&tmthread->control.cond);
+./source/acd_timer.c:    for (t_ptr = _timerthread_ll; t_ptr != NULL; t_ptr = t_ptr->next) {
+./source/acd_timer.c:      if (t_ptr->key == key) {
+./source/acd_timer.c:    double seconds = difftime(now, t_ptr->started_at);
+./source/acd_timer.c:    return (int) ((t_ptr->duration_min - (seconds / 60)) +0.5) ;
+./source/acd_timer.c:    long total_duration_sec = (t_ptr->duration_min * 60) + t_ptr->duration_sec;
+./source/acd_timer.c:    long elapsed_sec = (long)difftime(now, t_ptr->started_at);
+./source/acd_timer.c:    return (uint32_t)(total_duration_sec - elapsed_sec);
+./source/acd_timer.c:  struct timerthread *t_ptr = find_timerthread(&acddata->aqkeys[deviceIndex]);
+./source/acd_timer.c:    LOG( LOG_INFO, "Clearing timer for '%s'\n",t_ptr->key->label);
+./source/acd_timer.c:    t_ptr->duration_min = 0;
+./source/acd_timer.c:    t_ptr->duration_sec = 0;
+./source/acd_timer.c:    pthread_cond_broadcast(&t_ptr->thread_cond);
+./source/acd_timer.c:  acd_key_t *key = &acddata->aqkeys[deviceIndex];
+./source/acd_timer.c:    LOG( LOG_INFO, "Timer already active for '%s', resetting\n",t_ptr->key->label);
+./source/acd_timer.c:    t_ptr->duration_min = duration_min;
+./source/acd_timer.c:    t_ptr->duration_sec = duration_sec;
+./source/acd_timer.c:    pthread_cond_broadcast(&t_ptr->thread_cond);
+./source/acd_timer.c:  tmthread->acddata = acddata;
+./source/acd_timer.c:  tmthread->key = key;
+./source/acd_timer.c:  tmthread->deviceIndex = deviceIndex;
+./source/acd_timer.c:  tmthread->thread_id = 0;
+./source/acd_timer.c:  tmthread->duration_min = duration_min;
+./source/acd_timer.c:  tmthread->duration_sec = duration_sec;
+./source/acd_timer.c:  tmthread->next = NULL;
+./source/acd_timer.c:  tmthread->started_at = time(0); // This will get reset once we actually start. But need it here incase someone calls get_timer_left() before we start
+./source/acd_timer.c:  if( pthread_create( &tmthread->thread_id , NULL ,  timer_worker, (void*)tmthread) < 0) {
+./source/acd_timer.c:    LOG( LOG_ERR, "could not create timer thread for key '%s'\n",key->label);
+./source/acd_timer.c:    _timerthread_ll->prev = NULL;
+./source/acd_timer.c:    //LOG( LOG_NOTICE, "Added Timer '%s' at beginning LL\n",_timerthread_ll->key->label);
+./source/acd_timer.c:    for (t_ptr = _timerthread_ll; t_ptr->next != NULL; t_ptr = t_ptr->next) {} // Simply run to the end of the list
+./source/acd_timer.c:    t_ptr->next = tmthread;
+./source/acd_timer.c:    tmthread->prev = t_ptr;
+./source/acd_timer.c:    //LOG( LOG_NOTICE, "Added Timer '%s' at end LL \n",tmthread->key->label);
+./source/acd_timer.c:  if ( tmthread->thread_id != 0 ) {
+./source/acd_timer.c:    pthread_detach(tmthread->thread_id);
+./source/acd_timer.c:  LOG( LOG_NOTICE, "Start timer for '%s'\n",tmthread->key->label);
+./source/acd_timer.c:  //tmthread->key->flags |= TIMER_ACTIVE;
+./source/acd_timer.c:  tmthread->key->flags |= tmthread->mask_type;
+./source/acd_timer.c:  while (tmthread->key->led->state == OFF) {
+./source/acd_timer.c:    LOG( LOG_DEBUG, "waiting for key state '%s' to change\n",tmthread->key->label);
+./source/acd_timer.c:       LOG( LOG_NOTICE, "turning on '%s'\n",tmthread->key->label);
+./source/acd_timer.c:       panel_device_request(tmthread->acddata, ON_OFF, tmthread->deviceIndex, true, NET_TIMER);
+./source/acd_timer.c:       LOG( LOG_ERR, "key state never turned on'%s'\n",tmthread->key->label);
+./source/acd_timer.c:  pthread_mutex_lock(&tmthread->thread_mutex);
+./source/acd_timer.c:  end_time.tv_sec += (tmthread->duration_min * 60) + tmthread->duration_sec;
+./source/acd_timer.c:  tmthread->started_at = time(0);
+./source/acd_timer.c:  LOG( LOG_INFO, "Timer started for '%s': %d:%02d total duration\n", tmthread->key->label, tmthread->duration_min, tmthread->duration_sec);
+./source/acd_timer.c:    long remaining_sec = end_time.tv_sec - now.tv_sec;
+./source/acd_timer.c:    SET_DIRTY(tmthread->acddata->is_dirty);
+./source/acd_timer.c:      LOG( LOG_INFO, "Time left for '%s': %ldm %lds\n", tmthread->key->label, remaining_sec / 60, remaining_sec % 60);
+./source/acd_timer.c:      LOG( LOG_INFO, "Time left for '%s': %ld seconds\n", tmthread->key->label, remaining_sec);
+./source/acd_timer.c:    tmthread->timeout = now;
+./source/acd_timer.c:    tmthread->timeout.tv_sec += (remaining_sec > 60) ? 60 : 1;
+./source/acd_timer.c:    retval = pthread_cond_timedwait(&tmthread->thread_cond, &tmthread->thread_mutex, &tmthread->timeout);
+./source/acd_timer.c:      // We were signaled! Someone changed tmthread->duration_min or duration_sec
+./source/acd_timer.c:      if (tmthread->duration_min <= 0 && tmthread->duration_sec <= 0) {
+./source/acd_timer.c:      LOG( LOG_INFO, "Timer update received for '%s'. Recalculating...\n", tmthread->key->label);
+./source/acd_timer.c:      end_time.tv_sec += (tmthread->duration_min * 60) + tmthread->duration_sec;
+./source/acd_timer.c:      tmthread->started_at = time(0); 
+./source/acd_timer.c:  pthread_mutex_unlock(&tmthread->thread_mutex);
+./source/acd_timer.c:  LOG( LOG_NOTICE, "End timer for '%s'\n", tmthread->key->label);
+./source/acd_timer.c:  //LOG( LOG_NOTICE, "End timer duration '%d'\n",tmthread->duration_min); 
+./source/acd_timer.c:  if (isMASKSET(tmthread->key->flags, TIMER_ACTIVE)) {
+./source/acd_timer.c:    if ( (tmthread->duration_min != 0 || tmthread->duration_sec != 0) && tmthread->key->led->state != OFF) {
+./source/acd_timer.c:      LOG( LOG_INFO, "Timer waking turning '%s' off\n",tmthread->key->label);
+./source/acd_timer.c:      panel_device_request(tmthread->acddata, ON_OFF, tmthread->deviceIndex, false, NET_TIMER);
+./source/acd_timer.c:    } else if (tmthread->key->led->state == OFF) {
+./source/acd_timer.c:      LOG( LOG_INFO, "Timer waking '%s' is already off\n",tmthread->key->label);
+./source/acd_timer.c:  } else if (isMASKSET(tmthread->key->flags, DELAY_ACTIVE)) {
+./source/acd_timer.c:    LOG( LOG_INFO, "Timer waking turning '%s' on\n",tmthread->key->label);
+./source/acd_timer.c:    panel_device_request(tmthread->acddata, ON_OFF, tmthread->deviceIndex, false, NET_TIMER); 
+./source/acd_timer.c:  if (tmthread->key->led->state != OFF) {
+./source/acd_timer.c:  //tmthread->key->flags &= ~ TIMER_ACTIVE;
+./source/acd_timer.c:  tmthread->key->flags &= ~ tmthread->mask_type;
+./source/acd_timer.c:  if (tmthread->next != NULL && tmthread->prev != NULL){
+./source/acd_timer.c:    tmthread->next->prev = tmthread->prev;
+./source/acd_timer.c:    tmthread->prev->next = tmthread->next;
+./source/acd_timer.c:    //LOG( LOG_NOTICE, "Removed Timer '%s' from middle LL\n",tmthread->key->label);
+./source/acd_timer.c:  } else if (tmthread->next == NULL && tmthread->prev != NULL){
+./source/acd_timer.c:    tmthread->prev->next = NULL;
+./source/acd_timer.c:    //LOG( LOG_NOTICE, "Removed Timer '%s' from end LL\n",tmthread->key->label);
+./source/acd_timer.c:  } else if (tmthread->next != NULL && tmthread->prev == NULL){
+./source/acd_timer.c:    _timerthread_ll = tmthread->next;
+./source/acd_timer.c:    _timerthread_ll->prev = NULL;
+./source/acd_timer.c:    //LOG( LOG_NOTICE, "Removed Timer '%s' from beginning LL\n",tmthread->key->label);
+./source/acd_timer.c:  } else if (tmthread->next == NULL && tmthread->prev == NULL){
+./source/acd_timer.c:    //LOG( LOG_NOTICE, "Removed Timer '%s' last LL\n",tmthread->key->label);
+./source/aquachemd.c:dtoverlay=w1-gpio
+./source/aquachemd.c:# Install i2c-tools for testing and debugging:
+./source/aquachemd.c:sudo apt install i2c-tools
+./source/aquachemd.c:# Load i2c-dev module
+./source/aquachemd.c:sudo modprobe i2c-dev
+./source/aquachemd.c:# Verify /dev/i2c-1 appears
+./source/aquachemd.c:echo "i2c-dev" | sudo tee /etc/modules-load.d/i2c.conf
+./source/aquachemd.c:  ./aquachemd                       - normal mode, loop reading sensors
+./source/aquachemd.c:  ./aquachemd scan                  - scan I2C bus and identify devices, scan GPIO chips
+./source/aquachemd.c:  ./aquachemd deepscan              - scan I2C bus and identify devices, scan GPIO chips with line details
+./source/aquachemd.c:  ./aquachemd calibrate mid         - calibrate pH mid-point (7.00)
+./source/aquachemd.c:  ./aquachemd calibrate low         - calibrate pH low-point (4.00)
+./source/aquachemd.c:  ./aquachemd calibrate high        - calibrate pH high-point (10.00)
+./source/aquachemd.c:  ./aquachemd calibrate orp <mv>    - calibrate ORP at specified mV value
+./source/aquachemd.c:#include <systemd/sd-daemon.h>
+./source/aquachemd.c:// 100% Async-Signal-Safe mapping function
+./source/aquachemd.c:   * safety guard so the stop task can't be skipped if the process is killed mid-dose. 
+./source/aquachemd.c:  ACD_MSG_CLEAR = -1,
+./source/aquachemd.c:      if (acddata->display_message[0] != '\0') {
+./source/aquachemd.c:        acddata->is_dirty = true;
+./source/aquachemd.c:      acddata->display_message[0] = '\0';
+./source/aquachemd.c:    if (acddata->display_message[0] != '\0') {
+./source/aquachemd.c:    snprintf(acddata->display_message, DISPLAY_MSG_SIZE, "%s%s", prefix, suffix);
+./source/aquachemd.c:    LOG(LOG_DEBUG, "Display Message Updated: %s", acddata->display_message);
+./source/aquachemd.c:    long delta_sec = now.tv_sec - start_time->tv_sec;
+./source/aquachemd.c:    long delta_nsec = now.tv_nsec - start_time->tv_nsec;
+./source/aquachemd.c:        delta_sec -= 1;
+./source/aquachemd.c:  strncpy(acddata.self, bname, sizeof(acddata.self) - 1);
+./source/aquachemd.c:  acddata.self[sizeof(acddata.self) - 1] = '\0';
+./source/aquachemd.c:    LOG(LOG_ERR, "Run: sudo modprobe i2c-dev\n");
+./source/aquachemd.c:    LOG(LOG_ERR, "To persist across reboots: echo i2c-dev | sudo tee /etc/modules-load.d/i2c.conf\n");
+./source/aquachemd.c:      printf("Calibrating pH mid-point (7.00)...\n");
+./source/aquachemd.c:      printf("Calibrating pH low-point (4.00)...\n");
+./source/aquachemd.c:      printf("Calibrating pH high-point (10.00)...\n");
+./source/aquachemd.c:    if (strcmp(argv[i], "-h") == 0)
+./source/aquachemd.c:    //if (strcmp(argv[i], "-d") == 0)
+./source/aquachemd.c:    else if (strcmp(argv[i], "-c") == 0)
+./source/aquachemd.c:    else if (strcmp(argv[i], "-v") == 0)
+./source/aquachemd.c:  //acddata.keys->ID = "AquachemD";
+./source/aquachemd.c:  acddata.keys->ID = ACD_MASTER_ID;
+./source/aquachemd.c:  acddata.keys->type = ACD_TYPE_MASTER;
+./source/aquachemd.c:  acddata.keys->label = "AquachemD";
+./source/aquachemd.c:  acddata.keys->state = ACD_LED_ENABLED;
+./source/aquachemd.c:  // --- THE RESET ---
+./source/aquachemd.c:  acddata.keys->label = _acdconfig_.main_label; // Update main label from config
+./source/aquachemd.c:  for (acd_key_t *curr = acddata.keys; curr != NULL; curr = curr->next) {
+./source/aquachemd.c:    if (curr->type == ACD_TYPE_GPIO_COND || curr->type == ACD_TYPE_GPIO_INPUT) {
+./source/aquachemd.c:      LOG(LOG_DEBUG,"Setting up GPIO %s: %s, pin %d\n", (curr->type == ACD_TYPE_GPIO_COND?"Condition":"Input"), curr->label, curr->data.gpio.pin);
+./source/aquachemd.c:      if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_INPUT, curr->data.gpio.active) != 0) {
+./source/aquachemd.c:        LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
+./source/aquachemd.c:    } else if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_OUTPUT) {
+./source/aquachemd.c:      LOG(LOG_DEBUG,"Setting up GPIO %s: %s, pin %d\n", (curr->type == ACD_TYPE_GPIO_PMP?"Pump":"Output"), curr->label, curr->data.gpio.pin);
+./source/aquachemd.c:      if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_OUTPUT, curr->data.gpio.active) != 0) {
+./source/aquachemd.c:        LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
+./source/aquachemd.c:        gpio_write(&curr->data.gpio, 0); // Turn pump off
+./source/aquachemd.c:    } else if (curr->type == ACD_TYPE_D1W_TEMP) {
+./source/aquachemd.c:      w1_init_generic(&curr->data.w1, curr->data.w1.path, curr->data.w1.scale, curr->data.w1.offset);
+./source/aquachemd.c:    } else if (curr->type == ACD_TYPE_SYSFS_VALUE) {
+./source/aquachemd.c:      sysfs_init_sensor(&curr->data.sysfs);
+./source/aquachemd.c:    } else if (curr->type == ACD_TYPE_I2C_PRS) {
+./source/aquachemd.c:      //LOG(LOG_DEBUG,"Setting up I2C Pressure Sensor: %s, address 0x%02X\n", curr->label, curr->data.i2c.address);
+./source/aquachemd.c:      i2c_sensor_init(&curr->data.i2c, curr->data.i2c.type, curr->data.i2c.address, curr->data.i2c.min_value, curr->data.i2c.max_value);
+./source/aquachemd.c:    } else if (curr->type == ACD_TYPE_VIR_TANK) {
+./source/aquachemd.c:      curr->state = ACD_LED_ON;
+./source/aquachemd.c:    if (curr->type == ACD_TYPE_MASTER) {
+./source/aquachemd.c:      curr->state = ACD_LED_ENABLED;
+./source/aquachemd.c:    } else if (IS_INPUT(curr->type)) {
+./source/aquachemd.c:      curr->state = ACD_LED_DISABLED; // DON'T use setKeyLed() here, startup need to force to enabled.
+./source/aquachemd.c:      if (isMASKSET(curr->flags,CALC_AVERAGE)) {
+./source/aquachemd.c:        pthread_mutex_init(&curr->stats.lock, NULL);
+./source/aquachemd.c:    } else if (curr->type == ACD_TYPE_GPIO_OUTPUT /*|| curr->type == ACD_TYPE_GPIO_INPUT*/) {
+./source/aquachemd.c:      if (curr->scope == ACD_ACTION_ALLOW)
+./source/aquachemd.c:        curr->state = ACD_LED_OFF;
+./source/aquachemd.c:        curr->state = ACD_LED_ENABLED; // ACD_ACTION_ LIMIT | BLOCK
+./source/aquachemd.c:    } else if (IS_OUTPUT(curr->type)) {
+./source/aquachemd.c:      //if (curr->type != ACD_TYPE_GPIO_PMP) {
+./source/aquachemd.c:        curr->state = ACD_LED_ENABLED;
+./source/aquachemd.c:    } else if (IS_CONDITION(curr->type)) {
+./source/aquachemd.c:      curr->state = ACD_LED_OFF;
+./source/aquachemd.c:    curr->err_cnt = 0;
+./source/aquachemd.c:  if (!acddata.haveConditions){acddata.keys->state = ACD_LED_ON;}
+./source/aquachemd.c:    bool all_conditions_met = true; // Should be able to get rid of this all together now, and just use acddata.keys->state 
+./source/aquachemd.c:    LOG(reading_log_level,"---- taking reading(s) ----\n");
+./source/aquachemd.c:    if (acddata.keys->state == ACD_LED_OFF) {
+./source/aquachemd.c:    for (acd_key_t *curr = acddata.keys; curr != NULL; curr = curr->next) {
+./source/aquachemd.c:      if (IS_CONDITION(curr->type)) {
+./source/aquachemd.c:        if (curr->type == ACD_TYPE_GPIO_COND) {
+./source/aquachemd.c:          gpio_state = sensor_is_met(&curr->data.gpio);
+./source/aquachemd.c:          if (gpio_state != GPIO_ERROR && gpio_state != curr->met) {
+./source/aquachemd.c:            ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
+./source/aquachemd.c:            set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
+./source/aquachemd.c:          } else if (gpio_state == GPIO_ERROR) LOG(LOG_ERR, "Reading %s GPIO pin %d\n",curr->label,curr->data.gpio.pin);
+./source/aquachemd.c:          if (sensor_is_met(&curr->data.gpio) >= 0 && !curr->met) {
+./source/aquachemd.c:            ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
+./source/aquachemd.c:            set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
+./source/aquachemd.c:        if (!curr->met) {
+./source/aquachemd.c:          if ( !isMASKSET(curr->flags, CONDITION_NOTIFIED)) {
+./source/aquachemd.c:            LOG(LOG_WARNING,"Condition not met: %s\n", curr->label);
+./source/aquachemd.c:            update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, curr->label);
+./source/aquachemd.c:            setMASK(curr->flags, CONDITION_NOTIFIED);
+./source/aquachemd.c:        } else if (curr->met && isMASKSET(curr->flags, CONDITION_NOTIFIED)) {
+./source/aquachemd.c:          removeMASK(curr->flags, CONDITION_NOTIFIED);
+./source/aquachemd.c:          LOG(LOG_NOTICE,"Condition satisfied: %s\n", curr->label);
+./source/aquachemd.c:      } else if (curr->type == ACD_TYPE_GPIO_INPUT) {
+./source/aquachemd.c:        gpio_state = sensor_is_met(&curr->data.gpio);
+./source/aquachemd.c:        if (gpio_state != GPIO_ERROR && gpio_state != curr->met) {
+./source/aquachemd.c:          ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
+./source/aquachemd.c:          set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
+./source/aquachemd.c:        } else if (gpio_state == GPIO_ERROR) LOG(LOG_ERR, "Reading %s GPIO pin %d\n",curr->label,curr->data.gpio.pin);  
+./source/aquachemd.c:      } else if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_OUTPUT) {
+./source/aquachemd.c:    //LOG(LOG_ERR, "Master state = %s, scope = %s\n",acd_state_to_str(acddata.keys->state), acd_scope_to_str(acddata.keys->scope) );
+./source/aquachemd.c:    if (all_conditions_met && acddata.keys->state != ACD_LED_OFF) {
+./source/aquachemd.c:    //} else if (!all_conditions_met && acddata.keys->state == ACD_LED_ENABLED && acddata.keys->scope == ACD_SCOPE_GLOBAL) {
+./source/aquachemd.c:    } else if (!all_conditions_met && acddata.keys->scope == ACD_SCOPE_GLOBAL && acddata.keys->state != ACD_LED_OFF) {
+./source/aquachemd.c:    } else if (acddata.keys->scope == ACD_SCOPE_GLOBAL || acddata.keys->state == ACD_LED_OFF){
+./source/aquachemd.c:      LOG(reading_log_level, "Master state = %s, scope = %s, skipping reading of sensors!\n",acd_state_to_str(acddata.keys->state), acd_scope_to_str(acddata.keys->scope) );
+./source/aquachemd.c:    for (acd_key_t *key = acddata.keys->next; key != NULL; key = key->next) {
+./source/aquachemd.c:      if (sensors_read_scope == ACD_SCOPE_LOCAL && key->scope == ACD_SCOPE_GLOBAL) {
+./source/aquachemd.c:        LOG(LOG_DEBUG,"AquachemD sensor read scope local, skipping reading of global sensor %s\n",key->label);
+./source/aquachemd.c:        //LOG(LOG_INFO, "Master  %s state=%s, scope=%s. Skipping reading of sensors",acd_state_to_str(curr->state), curr->label, acd_scope_to_str(curr->scope));
+./source/aquachemd.c:      } else if (isMASKSET(key->flags,  ACD_FLAG_FAULTED)) {
+./source/aquachemd.c:        LOG(LOG_DEBUG,"Sensor %s failed, skipping\n",key->label);
+./source/aquachemd.c:      } else if (key->state == ACD_LED_DISABLED) {
+./source/aquachemd.c:        LOG(LOG_DEBUG,"Sensor %s is disabled, skipping\n",key->label);
+./source/aquachemd.c:      } else if (isMASKSET(key->flags,  ACD_FLAG_VIRTUAL)) {
+./source/aquachemd.c:        LOG(LOG_DEBUG,"Sensor %s is a child/virtual sensor, skipping\n",key->label);
+./source/aquachemd.c:      switch (key->type) {
+./source/aquachemd.c:          if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
+./source/aquachemd.c:            temp_reading_for_ph = key->value;
+./source/aquachemd.c:            master_temp_label = key->label;
+./source/aquachemd.c:          LOG(LOG_DEBUG, "MQTT Sensor '%s' current value: %.2f\n", key->label, key->value);
+./source/aquachemd.c:          w1_reading_t temp_reading = w1_read(&key->data.w1);
+./source/aquachemd.c:            LOG(reading_log_level,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
+./source/aquachemd.c:            if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
+./source/aquachemd.c:              master_temp_label = key->label;
+./source/aquachemd.c:            ASSIGN_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty, key->is_dirty);
+./source/aquachemd.c:            //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
+./source/aquachemd.c:            key->err_cnt=0;
+./source/aquachemd.c:            LOG(LOG_WARNING, "D1w Temp Sensor '%s' read failed (status %d)\n", key->label, temp_reading.status);
+./source/aquachemd.c:            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+./source/aquachemd.c:            update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+./source/aquachemd.c:            LOG(reading_log_level,"Temp %s : %.2f°C\n", key->label, temp_reading.value);
+./source/aquachemd.c:            if (key->index == MASTER_ID) { // If this is the master temp sensor, also update the temp reading for pH compensation
+./source/aquachemd.c:              master_temp_label = key->label;
+./source/aquachemd.c:            ASSIGN_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty, key->is_dirty);
+./source/aquachemd.c:            //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
+./source/aquachemd.c:            key->err_cnt=0;
+./source/aquachemd.c:            LOG(LOG_WARNING, "EZO Temp Sensor '%s' read failed (status %d)\n", key->label, temp_reading.status);
+./source/aquachemd.c:            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+./source/aquachemd.c:            update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+./source/aquachemd.c:              //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+./source/aquachemd.c:            LOG(LOG_WARNING, "EZO pH Sensor '%s' skipped compensation because temp is unknown\n", key->label);
+./source/aquachemd.c:            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+./source/aquachemd.c:            LOG(reading_log_level,"EZO pH Sensor %s : %.2f\n", key->label, ph_reading.value);
+./source/aquachemd.c:            ASSIGN_IF_CHANGED(key->value, ph_reading.value, acddata.is_dirty, key->is_dirty);
+./source/aquachemd.c:            //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
+./source/aquachemd.c:            key->err_cnt=0;
+./source/aquachemd.c:            LOG(LOG_WARNING, "EZO pH Sensor '%s' read failed (status %d)\n", key->label, ph_reading.status);
+./source/aquachemd.c:            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+./source/aquachemd.c:            update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+./source/aquachemd.c:            LOG(reading_log_level,"EZO ORP Sensor %s : %.2f mV\n", key->label, orp_reading.value);
+./source/aquachemd.c:            ASSIGN_IF_CHANGED(key->value, orp_reading.value, acddata.is_dirty, key->is_dirty);
+./source/aquachemd.c:            //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
+./source/aquachemd.c:            key->err_cnt=0;
+./source/aquachemd.c:            LOG(LOG_WARNING, "EZO ORP Sensor '%s' read failed (status %d)\n", key->label, orp_reading.status);
+./source/aquachemd.c:            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+./source/aquachemd.c:            update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+./source/aquachemd.c:            LOG(reading_log_level,"EZO PRS Sensor %s : %.2f mV\n", key->label, prs_reading.value);
+./source/aquachemd.c:            ASSIGN_IF_CHANGED(key->value, prs_reading.value, acddata.is_dirty, key->is_dirty);
+./source/aquachemd.c:            //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
+./source/aquachemd.c:            key->err_cnt=0;
+./source/aquachemd.c:            LOG(LOG_WARNING, "EZO PRS Sensor '%s' read failed (status %d)\n", key->label, prs_reading.status);
+./source/aquachemd.c:            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+./source/aquachemd.c:            update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+./source/aquachemd.c:          sysfs_reading_t reading = sysfs_read_sensor(&key->data.sysfs);
+./source/aquachemd.c:            LOG(reading_log_level,"%s : %.2f\n", key->label, reading.value);
+./source/aquachemd.c:            ASSIGN_IF_CHANGED(key->value, reading.value, acddata.is_dirty, key->is_dirty);
+./source/aquachemd.c:            key->err_cnt=0;
+./source/aquachemd.c:            LOG(LOG_WARNING, "System FS Sensor '%s' read failed (status %d)\n", key->label, reading.status);
+./source/aquachemd.c:            update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+./source/aquachemd.c:          i2c_reading_t reading = i2c_sensor_get_reading(&key->data.i2c);
+./source/aquachemd.c:            LOG(reading_log_level,"%s : %.2f psi (%.2f Bar), Temperature %.1f C\n", key->label, I2C_BAR_TO_PSI(reading.value), reading.value, reading.temp_c);
+./source/aquachemd.c:            ASSIGN_IF_CHANGED(key->value, I2C_BAR_TO_PSI(reading.value), acddata.is_dirty, key->is_dirty);
+./source/aquachemd.c:            key->err_cnt=0;
+./source/aquachemd.c:            if (key->child && key->child->type == ACD_TYPE_I2C_TEMP && key->data.i2c.type == I2C_SENSOR_PTE7300) {
+./source/aquachemd.c:              ASSIGN_IF_CHANGED(key->child->value, reading.temp_c, acddata.is_dirty, key->child->is_dirty);
+./source/aquachemd.c:              set_key_state(&acddata, key->child, ACD_LED_ON);
+./source/aquachemd.c:              key->child->err_cnt=0;
+./source/aquachemd.c:              update_sensor_average(key->child);
+./source/aquachemd.c:            LOG(LOG_WARNING, "I2C Sensor '%s' read failed (status %d)\n", key->label, reading.status);
+./source/aquachemd.c:            update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
+./source/aquachemd.c:            if (key->child && key->child->type == ACD_TYPE_I2C_TEMP && key->data.i2c.type == I2C_SENSOR_PTE7300) {
+./source/aquachemd.c:              LOG(LOG_WARNING, "I2C Sensor '%s' child temp read failed (status %d)\n", key->child->label, reading.status);
+./source/aquachemd.c:              sensor_read_error(&acddata, key->child);  
+./source/aquachemd.c:          LOG(LOG_WARNING, "Unknown sensor type for sensor '%s'\n", key->label);
+./source/aquachemd.c:    LOG(reading_log_level,"- reading(s) took: %.2fs -\n", elapsed_ms(&next_wake) / 1000);
+./source/aquachemd.c:        LOG(LOG_NOTICE, "--- CONFIGURATION RELOAD INITIATED ---");
+./source/aquachemd.c:        acddata.keys->next = NULL;
+./source/aquachemd.c:        LOG(LOG_NOTICE, "--- TEARDOWN COMPLETE. REBOOTING SERVICES ---");
+./source/aquachemd.c:#define AQUACHEMD_REMOTE_INSTALL "remote-install.sh"
+./source/aquachemd.c:    // 1. Build a self-contained shell command string
+./source/aquachemd.c:             "curl -fsSl -H 'Accept: application/vnd.github.raw' "
+./source/aquachemd.c:             "\"https://api.github.com/repos/%s/contents/release/%s\" -o /tmp/%s && "
+./source/aquachemd.c:    if (pid == -1) {
+./source/aquachemd.c:        char *args[] = {"/bin/sh", "-c", cmd, NULL};
+./source/aquachemd.c:static int _lock_fd = -1;   // kept open for the life of the process -- do not close early
+./source/aquachemd.c:    return false;   // fail closed -- if we can't even open the lock file, don't proceed
+./source/aquachemd.c:    _lock_fd = -1;
+./source/aquachemd.c:  // We hold the lock -- record our PID purely for diagnostics (cat /run/aquachemd.pid)
+./source/aquachemd.c:  write(_lock_fd, pidstr, len);   // best-effort; not critical if this fails
+./source/aquachemd.c:// Optional at clean shutdown -- exiting the process (even via SIGKILL)
+./source/aquachemd.c:    _lock_fd = -1;
+./source/aquachemd.c:    char *curl_args[] = {"curl", "-fsSl", "-H", "Accept: application/vnd.github.raw", url, NULL};
+./source/aquachemd.c:    char *bash_args[] = {"bash", "-s", "--", (char *)(_upgrade_version ? _upgrade_version : ""), NULL};
+./source/aquachemd.c:    if (pipe(pipe_curl_to_bash) == -1)
+./source/aquachemd.c:    // --- FORK 1: CURL ---
+./source/aquachemd.c:    if (pid_curl == -1)
+./source/aquachemd.c:        if (dup2(pipe_curl_to_bash[1], STDOUT_FILENO) == -1) {
+./source/aquachemd.c:    // --- FORK 2: BASH ---
+./source/aquachemd.c:    if (pid_bash == -1)
+./source/aquachemd.c:        if (dup2(pipe_curl_to_bash[0], STDIN_FILENO) == -1) {
+./source/aquachemd.c:    // --- PARENT PROCESS CLEANUP ---
+./source/aquachemd.c:    if (waitpid(pid_curl, &status_curl, 0) == -1)
+./source/aquachemd.c:    if (waitpid(pid_bash, &status_bash, 0) == -1)
+./source/config.c:* Below is better but needs -Wstrict-aliasing turned off to stop compiller warnings
+./source/config.c:    (strncasecmp((str), (prefix), sizeof(prefix) - 1) == 0)
+./source/config.c:    (strlen(str) >= sizeof(suffix) - 1 && \
+./source/config.c:     strcasecmp((str) + strlen(str) - (sizeof(suffix) - 1), (suffix)) == 0)
+./source/config.c:    for (int j = idx; j > 0; j--) {
+./source/config.c:        bool swap = (sort_descending) ? (steps[j].threshold > steps[j - 1].threshold) : (steps[j].threshold < steps[j - 1].threshold);
+./source/config.c:            steps[j] = steps[j - 1];
+./source/config.c:            steps[j - 1] = temp;
+./source/config.c:            // --- INTERCEPT ALL RANGE ARRAYS AND DYNAMIC ENTRY PARSERS ---
+./source/config.c:                            char *end = b_ptr + strlen(b_ptr) - 1;
+./source/config.c:                            while (end > b_ptr && isspace(*end)) end--;
+./source/config.c:                            LOG(LOG_ERR, "Unknown config parameter '%.*s'\n", (int)(end - b_ptr + 1), b_ptr);
+./source/config.c:    acdata->keys->next = _acdconfig_.keys;
+./source/config.c:        acd_key_t *next = curr->next;
+./source/config.c:        if (curr->label) free(curr->label);
+./source/config.c:        if (curr->ID) free(curr->ID);
+./source/config.c:        if (curr->type == ACD_TYPE_MQTT_COND || curr->type == ACD_TYPE_MQTT_TEMP) {
+./source/config.c:            if (curr->data.mqtt.topic) free(curr->data.mqtt.topic);
+./source/config.c:            if (curr->data.mqtt.target_value) free(curr->data.mqtt.target_value);
+./source/config.c:        if (curr->type == ACD_TYPE_SYSFS_VALUE) {
+./source/config.c:            if (curr->data.sysfs.regex_pattern) free(curr->data.sysfs.regex_pattern);
+./source/config.c:            // Type-specific validation
+./source/config.c:// Helper to extract the active in-memory variable value as a string while we loop over the saving json config
+./source/config.c:// and before rename(). Non-fatal on failure -- logs and lets the rename
+./source/config.c:      // First-ever write -- nothing to preserve, tmp_file's own mode stands.
+./source/config.c:  // chown to a different uid typically requires root/CAP_CHOWN -- if this
+./source/config.c:        return -1;
+./source/config.c:        return -1;
+./source/config.c:            // Find the bitmask for this parameter ---
+./source/config.c:                if (strcasecmp(k->valuestring, _cfgParams[i].name) == 0) {
+./source/config.c:            // Spoof Protection ---
+./source/config.c:            if (k->valuestring[0] != '\0') {
+./source/config.c:                char current_first_char = k->valuestring[0]; 
+./source/config.c:            if (t && cJSON_IsString(t) && strcmp(t->valuestring, "array_text") == 0) {
+./source/config.c:                            fprintf(fp, "%s=%s\n", k->valuestring, arr_item->valuestring);
+./source/config.c:                if (cJSON_IsString(v)) snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
+./source/config.c:                    if (v->valueint == v->valuedouble) snprintf(val_str, sizeof(val_str), "%d", v->valueint);
+./source/config.c:                    else snprintf(val_str, sizeof(val_str), "%.6g", v->valuedouble);
+./source/config.c:                // Password Mask and Read-Only Interception ---
+./source/config.c:                // If the UI sent back "********" OR the field is read-only, pull the REAL value from memory.
+./source/config.c:                    get_config_val_str(k->valuestring, val_str, sizeof(val_str));
+./source/config.c:                if (is_valid_config(k->valuestring, val_str)) {
+./source/config.c:                    fprintf(fp, "%s=%s\n", k->valuestring, val_str);
+./source/config.c:            // --- THE FIX: Explicitly extract and write the Label FIRST ---
+./source/config.c:                int type = type_id->valueint;
+./source/config.c:                const char *lbl = label->valuestring;
+./source/config.c:            // --- NOW safely iterate through the rest of the fields ---
+./source/config.c:                        snprintf(val_str, sizeof(val_str), "%s", v->valuestring);
+./source/config.c:                        if (v->valueint == v->valuedouble) snprintf(val_str, sizeof(val_str), "%d", v->valueint);
+./source/config.c:                        else snprintf(val_str, sizeof(val_str), "%.6g", v->valuedouble);
+./source/config.c:                    if (is_valid_config(k->valuestring, val_str)) {
+./source/config.c:                        // Skip re-writing the label if the UI accidentally included it in the fields array, or if the value is empty
+./source/config.c:                        if (strstr(k->valuestring, "_label") == NULL && strlen(val_str) > 0 ) {
+./source/config.c:                            fprintf(fp, "%s=%s\n", k->valuestring, val_str);
+./source/config.c:        return -1;
+./source/config.c:            return -1;
+./source/config.c:        cJSON_AddStringToObject(block, "label", curr->label ? curr->label : "");
+./source/config.c:        cJSON_AddNumberToObject(block, "block_type_id", (double)curr->type);
+./source/config.c:        if (isMASKSET(curr->flags, ACD_FLAG_VIRTUAL)) {
+./source/config.c:            //LOG(LOG_DEBUG, "Device %s is virtual, ignoring for config\n",curr->label);
+./source/config.c:            curr = curr->next;
+./source/config.c:        switch (curr->type) {
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", curr->data.mqtt.topic ? curr->data.mqtt.topic : "");
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", curr->data.mqtt.target_value ? curr->data.mqtt.target_value : "");
+./source/config.c:                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_ACTION_BLOCK?true:false);
+./source/config.c:                cJSON_AddNumberToObject(f_item, "value", curr->delay_on);
+./source/config.c:                cJSON_AddNumberToObject(f_item, "value", curr->data.gpio.pin);
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", gpio_active_to_str(curr->data.gpio.active));
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", gpio_req_to_str(curr->data.gpio.required));
+./source/config.c:                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_ACTION_BLOCK?true:false);
+./source/config.c:                cJSON_AddNumberToObject(f_item, "value", curr->delay_on);
+./source/config.c:                cJSON_AddStringToObject(f_item, "key", (curr->type == ACD_TYPE_EZO_PH) ? "ph_sensor_address" : 
+./source/config.c:                                                       (curr->type == ACD_TYPE_EZO_ORP) ? "orp_sensor_address" : 
+./source/config.c:                                                       (curr->type == ACD_TYPE_EZO_PRS) ? "prs_sensor_address" : "temp_sensor_address");
+./source/config.c:                snprintf(tmp_buf, sizeof(tmp_buf), "0x%02x", curr->data.ezo.address);
+./source/config.c:                if (curr->type == ACD_TYPE_EZO_PH) {
+./source/config.c:                else if (curr->type == ACD_TYPE_EZO_ORP) {
+./source/config.c:                else if (curr->type == ACD_TYPE_EZO_PRS) {
+./source/config.c:                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+./source/config.c:                duration_seconds_to_string(curr->stats.tau_seconds, tmp_buf, sizeof(tmp_buf));
+./source/config.c:                cJSON_AddStringToObject(s_item, "value", curr->stats.tau_seconds > 0.0 ? tmp_buf : "");
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", i2c_get_driver_name(curr->data.i2c.type));
+./source/config.c:                snprintf(tmp_buf, sizeof(tmp_buf), "0x%02x", curr->data.i2c.address);  
+./source/config.c:                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+./source/config.c:                duration_seconds_to_string(curr->stats.tau_seconds, tmp_buf, sizeof(tmp_buf));
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", curr->stats.tau_seconds > 0.0 ? tmp_buf : "");
+./source/config.c:                cJSON_AddFloat(f_item, "value", curr->data.i2c.min_value);
+./source/config.c:                cJSON_AddFloat(f_item, "value", curr->data.i2c.max_value);
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", curr->data.mqtt.topic ? curr->data.mqtt.topic : "");
+./source/config.c:                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+./source/config.c:                duration_seconds_to_string(curr->stats.tau_seconds, tmp_buf, sizeof(tmp_buf));
+./source/config.c:                cJSON_AddStringToObject(s_item, "value", curr->stats.tau_seconds > 0.0 ? tmp_buf : "");
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", (curr->data.w1.path[0] != '\0') ? curr->data.w1.path : "");
+./source/config.c:                cJSON_AddFloat(f_item, "value", curr->data.w1.offset);
+./source/config.c:                cJSON_AddFloat(f_item, "value", curr->data.w1.scale);
+./source/config.c:                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+./source/config.c:                duration_seconds_to_string(curr->stats.tau_seconds, tmp_buf, sizeof(tmp_buf));
+./source/config.c:                cJSON_AddStringToObject(s_item, "value", curr->stats.tau_seconds > 0.0 ? tmp_buf : "");
+./source/config.c:                //bool is_ph = (curr->flags & PH_PUMP);
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", pump_type_to_str(curr->flags));
+./source/config.c:                cJSON_AddNumberToObject(f_item, "value", curr->data.gpio.pin);
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", gpio_active_to_str(curr->data.gpio.active));
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", gpio_req_to_str(curr->data.gpio.required));
+./source/config.c:                cJSON_AddFloat(f_item, "value", curr->dose_stats.flow_rate);
+./source/config.c:                cJSON_AddFloat(f_item, "value", curr->dose_stats.running_total_max_ml);
+./source/config.c:                if (curr->child && curr->child->type == ACD_TYPE_VIR_TANK) {
+./source/config.c:                  cJSON_AddNumberToObject(f_item, "value", curr->child->data.tank.total_volume);
+./source/config.c:                  cJSON_AddStringToObject(s_item, "value", uom_to_fullstr(curr->child->data.tank.uom));
+./source/config.c:                  cJSON_AddNumberToObject(t_item, "value", curr->child->data.tank.min_volume);
+./source/config.c:                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_ACTION_BLOCK?true:false);
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", gpio_direction_to_str(curr->data.gpio.direction));
+./source/config.c:                cJSON_AddNumberToObject(f_item, "value", curr->data.gpio.pin);
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", gpio_active_to_str(curr->data.gpio.active));
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", gpio_req_to_str(curr->data.gpio.required));
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
+./source/config.c:                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_ACTION_BLOCK?true:false);
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", (curr->data.sysfs.path[0] != '\0') ? curr->data.sysfs.path : "");
+./source/config.c:                cJSON_AddFloat(f_item, "value", curr->data.sysfs.offset);
+./source/config.c:                cJSON_AddFloat(f_item, "value", curr->data.sysfs.multiplier);
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", (curr->data.sysfs.regex_pattern != NULL) ? curr->data.sysfs.regex_pattern : "");
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", uom_to_fullstr(curr->uom));
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", curr->data.mqtt.topic ? curr->data.mqtt.topic : "");
+./source/config.c:                cJSON_AddStringToObject(f_item, "value", uom_to_fullstr(curr->uom));
+./source/config.c:                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+./source/config.c:        curr = curr->next;
+./source/config.c:    // Define: 1-Wire Temperature Template
+./source/config.c:    cJSON_AddStringToObject(drv, "default_label", "New 1-Wire Sensor");
+./source/config.c:  if (IS_CONDITION(key->type)) {
+./source/config.c:    switch (key->scope) {
+./source/config.c:    switch (key->scope) {
+./source/config.c:  //acdata->conditions = _acdconfig_.conditions; // Make conditions available in main data struct for future use.
+./source/config.c:  acdata->keys->next = _acdconfig_.keys; // Make sensors available in main data struct keys, first key is pre-set 
+./source/config.c:  LOG(LOG_NOTICE, "%-*s = %s\n",MAX_PRINTLEN,"Configuration file", _acdconfig_.config_file);
+./source/config.c:          LOG(LOG_NOTICE, "%-*s =\n", MAX_PRINTLEN, name);
+./source/config.c:            LOG(LOG_NOTICE, "%-*s = %s\n", MAX_PRINTLEN, name, PASSWD_MASK_TEXT);
+./source/config.c:            LOG(LOG_NOTICE, "%-*s = %s\n", MAX_PRINTLEN, name, *(char **)_cfgParams[i].value_ptr);
+./source/config.c:          LOG(LOG_NOTICE, "%-*s =\n", MAX_PRINTLEN, name);
+./source/config.c:          LOG(LOG_NOTICE, "%-*s = %d\n", MAX_PRINTLEN, name, *(int *)_cfgParams[i].value_ptr);
+./source/config.c:        LOG(LOG_NOTICE, "%-*s = %s\n", MAX_PRINTLEN, name, bool_to_str(*(bool *)_cfgParams[i].value_ptr));
+./source/config.c:        LOG(LOG_NOTICE, "%-*s = 0x%02hhx\n", MAX_PRINTLEN, name, *(unsigned char *)_cfgParams[i].value_ptr);
+./source/config.c:        LOG(LOG_NOTICE, "%-*s = %f\n", MAX_PRINTLEN, name, *(float *)_cfgParams[i].value_ptr);
+./source/config.c:        LOG(LOG_NOTICE, "%-*s = %s\n", MAX_PRINTLEN, name, (*(uint16_t *)_cfgParams[i].value_ptr & _cfgParams[i].bit_flag) == _cfgParams[i].bit_flag?bool_to_str(true):bool_to_str(false));
+./source/config.c:          LOG(LOG_NOTICE, "%-*s = %s\n", MAX_PRINTLEN, name, log_priority_to_str(_acdconfig_.log_level));
+./source/config.c:          LOG(LOG_NOTICE, "%-*s = NEED TO ADD CODE TO HANDLE THIS\n", MAX_PRINTLEN, name);
+./source/config.c:      LOG(LOG_NOTICE, "%-*s = >= %.2f (%ds)\n",MAX_PRINTLEN, "pH Dosing Range", _acdconfig_.ph_steps[s].threshold, _acdconfig_.ph_steps[s].seconds);
+./source/config.c:      LOG(LOG_NOTICE, "%-*s = <= %.2f (%ds)\n",MAX_PRINTLEN, "ORP Dosing Range", _acdconfig_.orp_steps[s].threshold, _acdconfig_.orp_steps[s].seconds);
+./source/config.c:  for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
+./source/config.c:    const char *role = (curr->flags & PH_PUMP)  ? "pH" :
+./source/config.c:                       (curr->flags & ORP_PUMP) ? "ORP" :
+./source/config.c:                       (curr->flags & H2O_PUMP) ? "H2O" : "undefined";
+./source/config.c:    switch (curr->type) {
+./source/config.c:      case ACD_TYPE_D1W_TEMP:    type_str = "sensor (1-Wire Temp)"; break;
+./source/config.c:        snprintf(buffer, sizeof(buffer), "(%s)", curr->data.i2c.type == I2C_SENSOR_PTE7300 ? "PTE7300" : "UNKNOWN");
+./source/config.c:        if (curr->data.i2c.type == I2C_SENSOR_PTE7300){ snprintf(buffer, sizeof(buffer), "(PTE7300)");}
+./source/config.c:    // GPIO pin/mode/required-state moved to the INFO block below -- NOTICE line
+./source/config.c:    if (IS_CONDITION(curr->type)) {
+./source/config.c:      snprintf(&buffer[len], sizeof(buffer)-len, "(delay=%ds)", curr->delay_on);
+./source/config.c:    LOG(LOG_NOTICE, "%-*s = %-8.8s| %s %s\n", MAX_PRINTLEN, type_str, curr->ID, curr->label, buffer);
+./source/config.c:    if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_COND ||
+./source/config.c:        curr->type == ACD_TYPE_GPIO_OUTPUT || curr->type == ACD_TYPE_GPIO_INPUT) {
+./source/config.c:      LOG(LOG_INFO, "%-*s   -> pin = %d, mode = %s, required state = %s, scope = %s\n", MAX_PRINTLEN, "",
+./source/config.c:          curr->data.gpio.pin, gpio_active_to_str(curr->data.gpio.active), gpio_req_to_str(curr->data.gpio.required),
+./source/config.c:    if (curr->type == ACD_TYPE_MQTT_COND) {
+./source/config.c:      LOG(LOG_INFO, "%-*s   -> MQTT topic = %s, expected value = %s, scope = %s\n", MAX_PRINTLEN, "",
+./source/config.c:          curr->data.mqtt.topic, curr->data.mqtt.target_value, config_scope_detail_str(curr));
+./source/config.c:    if (curr->type == ACD_TYPE_MQTT_TEMP) {
+./source/config.c:      LOG(LOG_INFO, "%-*s   -> MQTT topic = %s, scope = %s\n", MAX_PRINTLEN, "",
+./source/config.c:          curr->data.mqtt.topic, config_scope_detail_str(curr));
+./source/config.c:    if (curr->type == ACD_TYPE_EZO_TEMP || curr->type == ACD_TYPE_EZO_PH || curr->type == ACD_TYPE_EZO_ORP) {
+./source/config.c:      LOG(LOG_INFO, "%-*s   -> I2C address = 0x%02x, scope = %s\n", MAX_PRINTLEN, "",
+./source/config.c:          curr->data.ezo.address, config_scope_detail_str(curr));
+./source/config.c:    if (curr->type == ACD_TYPE_D1W_TEMP) {
+./source/config.c:      LOG(LOG_INFO, "%-*s   -> path = %s, scale = %.4f, offset = %.2f, scope = %s\n", MAX_PRINTLEN, "",
+./source/config.c:          curr->data.w1.path, curr->data.w1.scale, curr->data.w1.offset, config_scope_detail_str(curr));
+./source/config.c:    if (curr->type == ACD_TYPE_I2C_PRS || curr->type == ACD_TYPE_I2C_TEMP) {
+./source/config.c:      LOG(LOG_INFO, "%-*s   -> I2C address = 0x%02x, range = %.2f to %.2f, scope = %s\n", MAX_PRINTLEN, "",
+./source/config.c:          curr->data.i2c.address, curr->data.i2c.min_value, curr->data.i2c.max_value, config_scope_detail_str(curr));
+./source/config.c:    if (curr->type == ACD_TYPE_MQTT_VALUE) {
+./source/config.c:      LOG(LOG_INFO, "%-*s   -> MQTT topic = %s%s%s\n", MAX_PRINTLEN, "", curr->data.mqtt.topic,
+./source/config.c:          curr->data.mqtt.target_value ? ", expected value = " : "",
+./source/config.c:          curr->data.mqtt.target_value ? curr->data.mqtt.target_value : "");
+./source/config.c:    if (curr->type == ACD_TYPE_SYSFS_VALUE) {
+./source/config.c:      LOG(LOG_INFO, "%-*s   -> path = %s%s%s, multiplier = %.4f, offset = %.2f\n", MAX_PRINTLEN, "",
+./source/config.c:          curr->data.sysfs.path,
+./source/config.c:          curr->data.sysfs.parser_type == PARSER_REGEX ? ", regex = " : "",
+./source/config.c:          curr->data.sysfs.parser_type == PARSER_REGEX ? curr->data.sysfs.regex_pattern : "",
+./source/config.c:          curr->data.sysfs.multiplier, curr->data.sysfs.offset);
+./source/config.c:    if (curr->type == ACD_TYPE_VIR_TANK) {
+./source/config.c:      LOG(LOG_INFO, "%-*s   -> total volume = %.2f %s, min volume = %.2f %s\n", MAX_PRINTLEN, "",
+./source/config.c:          curr->data.tank.total_volume, uom_to_str(curr->data.tank.uom), curr->data.tank.min_volume, uom_to_str(curr->data.tank.uom));
+./source/config.c:    if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_EZO_PMP) {
+./source/config.c:      LOG(LOG_INFO, "%-*s   -> flow rate = %.2f ml/s, max per period = %.2f ml, scope = %s\n", MAX_PRINTLEN, "",
+./source/config.c:          curr->dose_stats.flow_rate, curr->dose_stats.running_total_max_ml, config_scope_detail_str(curr));
+./source/config.c:    static char buf[12]; // Sufficient for -2147483648\0
+./source/config.c:    switch (node->type) {
+./source/config.c:            node->index = count_condition++;
+./source/config.c:            node->index = count_ph++;
+./source/config.c:            node->index = count_orp++;
+./source/config.c:            node->index = count_prs++;
+./source/config.c:            node->index = count_temp++;
+./source/config.c:            node->index = count_pmp++;
+./source/config.c:            node->index = count_sysfs++;
+./source/config.c:            node->index = count_mqtt++;
+./source/config.c:            node->index = count_vir++;
+./source/config.c:            node->index = count_gpio++;
+./source/config.c:            node->index = count_vir++;
+./source/config.c:    snprintf(buf, sizeof(buf), "%s_%d", prefix, node->index);
+./source/config.c:    node->ID = strdup(buf);
+./source/config.c:   node->index = count++;
+./source/config.c:   snprintf(buf, sizeof(buf), "CS_%d", node->index);
+./source/config.c:   node->ID = strdup(buf);
+./source/config.c:    new_node->next = NULL;
+./source/config.c:    int new_prio = node_priority(new_node->type);
+./source/config.c:        node_priority(_acdconfig_.keys->type) > new_prio) {
+./source/config.c:        new_node->next = _acdconfig_.keys;
+./source/config.c:    while (curr->next != NULL && node_priority(curr->next->type) <= new_prio) {
+./source/config.c:        curr = curr->next;
+./source/config.c:    new_node->next = curr->next;
+./source/config.c:    curr->next = new_node;
+./source/config.c:    new_node->type = ACD_TYPE_MQTT_COND;
+./source/config.c:    new_node->label = generate_label(st->topic_path, ACD_LABEL_MQTT, st->label);
+./source/config.c:    new_node->data.mqtt.topic = strdup(st->topic_path);
+./source/config.c:    new_node->data.mqtt.target_value = strdup(st->char_value ? st->char_value : "");
+./source/config.c:    new_node->met = false; // Initial state, not met.
+./source/config.c:    new_node->scope = st->is_global ? ACD_ACTION_BLOCK : ACD_ACTION_LIMIT;
+./source/config.c:    new_node->delay_on = st->value; 
+./source/config.c:    new_node->type = ACD_TYPE_GPIO_COND;
+./source/config.c:    new_node->label = generate_label(int_to_str(st->pin), ACD_LABEL_GPIO, st->label);
+./source/config.c:    new_node->data.gpio.pin = st->pin;
+./source/config.c:    new_node->data.gpio.active = st->pin_mode;
+./source/config.c:    new_node->data.gpio.required = st->pin_state;
+./source/config.c:    new_node->met = false; // Initial state, not met.
+./source/config.c:    new_node->scope = st->is_global ? ACD_ACTION_BLOCK : ACD_ACTION_LIMIT;
+./source/config.c:    new_node->delay_on = st->value; 
+./source/config.c:    new_node->type = st->pending_type;
+./source/config.c:    new_node->label = generate_label(hex_to_str(st->address), ACD_LABEL_EZO, st->label);
+./source/config.c:    new_node->data.ezo.address = st->address;
+./source/config.c:    new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+./source/config.c:    new_node->stats.tau_seconds = st->value3;
+./source/config.c:    if (st->flags != 0) {
+./source/config.c:      new_node->flags = st->flags;
+./source/config.c:      //new_node->stats.ID = malloc(strlen(new_node->ID)+ 5);
+./source/config.c:      //sprintf(new_node->stats.ID, "STS_%s", new_node->ID);
+./source/config.c:    if (new_node->type == ACD_TYPE_EZO_TEMP)
+./source/config.c:      if (st->uom != UOM_NONE) {new_node->uom = st->uom;}
+./source/config.c:      else {new_node->uom = UOM_CELSIUS;}
+./source/config.c:    } else if (new_node->type == ACD_TYPE_EZO_PH) {
+./source/config.c:      new_node->uom = UOM_PH;
+./source/config.c:    } else if (new_node->type == ACD_TYPE_EZO_ORP) {
+./source/config.c:      new_node->uom = UOM_MV;
+./source/config.c:    } else if (new_node->type == ACD_TYPE_EZO_PRS) {
+./source/config.c:      new_node->uom = UOM_PSI;
+./source/config.c:    new_node->type = st->pending_type;
+./source/config.c:    new_node->label = generate_label(st->topic_path, ACD_LABEL_MQTT, st->label);
+./source/config.c:    new_node->data.mqtt.topic = strdup(st->topic_path);
+./source/config.c:    //new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+./source/config.c:    new_node->scope = ACD_SCOPE_LOCAL;
+./source/config.c:    if (st->flags != 0) {
+./source/config.c:      new_node->flags = st->flags;
+./source/config.c:      //new_node->stats.ID = malloc(strlen(new_node->ID)+ 5);
+./source/config.c:      //sprintf(new_node->stats.ID, "STS_%s", new_node->ID);
+./source/config.c:    if (st->uom != UOM_NONE) {
+./source/config.c:      new_node->uom = st->uom;
+./source/config.c:    } else if ( new_node->type == ACD_TYPE_MQTT_TEMP) {
+./source/config.c:      new_node->uom = UOM_CELSIUS;
+./source/config.c:// Specialized function for DS18B20 1-Wire
+./source/config.c:    new_node->type = st->pending_type;
+./source/config.c:    new_node->label = generate_label(st->topic_path, ACD_LABEL_D1W, st->label);
+./source/config.c:    strcpy(new_node->data.w1.path, st->topic_path);
+./source/config.c:    new_node->data.w1.offset = st->value;  // Mapped from _staging.value
+./source/config.c:    new_node->data.w1.scale = st->value2;  // Mapped from _staging.value2
+./source/config.c:    new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+./source/config.c:    new_node->stats.tau_seconds = st->value3;
+./source/config.c:    if (st->flags != 0) {
+./source/config.c:      new_node->flags = st->flags;
+./source/config.c:      //new_node->stats.ID = malloc(strlen(new_node->ID)+ 5);
+./source/config.c:      //sprintf(new_node->stats.ID, "STS_%s", new_node->ID);
+./source/config.c:    if (st->uom != UOM_NONE) {
+./source/config.c:      new_node->uom = st->uom;
+./source/config.c:      new_node->uom = UOM_CELSIUS;
+./source/config.c:    new_node->type = st->pending_type;
+./source/config.c:    new_node->label = generate_label(int_to_str(st->pin), ACD_LABEL_GPIO, st->label);
+./source/config.c:    new_node->data.gpio.pin = st->pin;
+./source/config.c:    new_node->data.gpio.active = st->pin_mode;
+./source/config.c:    new_node->data.gpio.required = st->pin_state;
+./source/config.c:    new_node->met = false; // Initial state, not met.
+./source/config.c:    new_node->scope = st->scope;
+./source/config.c:    if (new_node->type==ACD_TYPE_GPIO_INPUT) {new_node->delay_on = st->value;}
+./source/config.c:    if (new_node->type==ACD_TYPE_GPIO_OUTPUT) {set_pump_default_duration(new_node,_acdconfig_.switch_max_runtime / 2);} // Default to half of the max runtime for switches
+./source/config.c:    new_node->type = st->pending_type;
+./source/config.c:    new_node->label = generate_label(int_to_str(st->pin), (new_node->type==ACD_TYPE_GPIO_OUTPUT)?ACD_LABEL_GPIO:ACD_LABEL_PMP, st->label);
+./source/config.c:    new_node->data.gpio.pin = st->pin;
+./source/config.c:    new_node->data.gpio.active = st->pin_mode;
+./source/config.c:    new_node->data.gpio.required = st->pin_state;
+./source/config.c:    new_node->dose_stats.flow_rate = st->value; // Mapped from _staging.value (ml_ps)
+./source/config.c:    new_node->dose_stats.running_total_max_ml = st->value4;
+./source/config.c:    new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+./source/config.c:    //printf("**** Tank %s: running_total_max_ml=%f\n", new_node->label, new_node->dose_stats.running_total_max_ml);
+./source/config.c:    if (st->flags != 0) {
+./source/config.c:        new_node->flags = st->flags;
+./source/config.c:    if isMASKSET(new_node->flags, PH_PUMP)       set_pump_default_duration(new_node,_acdconfig_.ph_default_dose_time);
+./source/config.c:    else if isMASKSET(new_node->flags, ORP_PUMP) set_pump_default_duration(new_node,_acdconfig_.orp_default_dose_time);
+./source/config.c:    else if isMASKSET(new_node->flags, H2O_PUMP) set_pump_default_duration(new_node,_acdconfig_.h2o_default_dose_time);
+./source/config.c:    if (st->value2 > 0) {
+./source/config.c:      new_tank->child = NULL; 
+./source/config.c:      new_tank->next  = NULL;
+./source/config.c:      new_node->child = new_tank; // Link the temperature sensor as a child of the pressure sensor
+./source/config.c:      new_tank->flags = new_node->flags;
+./source/config.c:      setMASK(new_tank->flags, ACD_FLAG_VIRTUAL);
+./source/config.c:      new_tank->scope = ACD_SCOPE_LOCAL;
+./source/config.c:      new_tank->type = ACD_TYPE_VIR_TANK;
+./source/config.c:      new_tank->uom = UOM_PERCENT;
+./source/config.c:      char *tank_label = isMASKSET(new_tank->flags, PH_PUMP)?"Acid Tank Level":"Chlorine Tank Level";
+./source/config.c:      new_tank->data.tank.total_volume = st->value2;
+./source/config.c:      new_tank->data.tank.min_volume = st->value3;
+./source/config.c:      //printf("**** Tank uom2: %d, %s\n", st->uom2, uom_to_str(st->uom2));
+./source/config.c:      if (st->uom2 == UOM_GALLONS) {
+./source/config.c:        new_tank->data.tank.uom = st->uom2;
+./source/config.c:        new_tank->data.tank.uom = UOM_LITERS;
+./source/config.c:      new_tank->label = generate_label(hex_to_str(st->address), ACD_LABEL_VIRTUAL, tank_label);
+./source/config.c:      LOG(LOG_NOTICE, "Added Virtual Tank Level Sensor: %s, from Doser : %s", new_tank->label, new_node->label);
+./source/config.c:    new_node->child = NULL; 
+./source/config.c:    new_node->next  = NULL;
+./source/config.c:    key->child = new_node; // Link the temperature sensor as a child of the pressure sensor
+./source/config.c:    new_node->flags = ACD_FLAG_VIRTUAL;
+./source/config.c:    new_node->type = ACD_TYPE_I2C_TEMP;
+./source/config.c:    new_node->uom = UOM_CELSIUS;
+./source/config.c:      st->label, 
+./source/config.c:    new_node->label = generate_label(hex_to_str(st->address), ACD_FLAG_VIRTUAL, new_node);
+./source/config.c:    LOG(LOG_NOTICE, "Added I2C Temperature Sensor: %s, from I2C Pressure Sensor: %s, Address: 0x%02x", new_i2c_temp->label, new_node->label, new_node->data.i2c.address);
+./source/config.c:    new_node->type = st->pending_type;
+./source/config.c:    new_node->label = generate_label(st->topic_path, ACD_LABEL_SYSFS, st->label);
+./source/config.c:    strcpy(new_node->data.sysfs.path, st->topic_path);
+./source/config.c:    new_node->data.sysfs.offset = st->value;  // Mapped from _staging.value
+./source/config.c:    new_node->data.sysfs.multiplier = st->value2;  // Mapped from _staging.value2
+./source/config.c:    if (st->char_value) {
+./source/config.c:      new_node->data.sysfs.regex_pattern = strdup(st->char_value);
+./source/config.c:      new_node->data.sysfs.parser_type = PARSER_REGEX;
+./source/config.c:      new_node->data.sysfs.parser_type = PARSER_RAW;    
+./source/config.c:    //new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+./source/config.c:    new_node->scope = ACD_SCOPE_LOCAL;
+./source/config.c:    new_node->uom = st->uom;
+./source/config.c:    new_node->type = st->pending_type;
+./source/config.c:    new_node->label = generate_label(hex_to_str(st->address), ACD_LABEL_PRS, st->label);
+./source/config.c:    new_node->data.i2c.type = st->pin_mode;
+./source/config.c:    if (new_node->data.i2c.type != I2C_SENSOR_PTE7300) {
+./source/config.c:    new_node->data.i2c.address = st->address;
+./source/config.c:    new_node->data.i2c.min_value = st->value2;
+./source/config.c:    new_node->data.i2c.max_value = st->value3;
+./source/config.c:    //new_node->scope = ACD_SCOPE_LOCAL;
+./source/config.c:    new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
+./source/config.c:    new_node->uom = UOM_PSI;
+./source/config.c:    //new_node->uom = st->uom;
+./source/config.c:    new_node->data.gpio.pin = st->pin;
+./source/config.c:    new_node->data.gpio.active = st->pin_mode;
+./source/config.c:    new_node->data.gpio.required = st->pin_state;
+./source/config.c:    new_node->flow_rate = st->value; // Mapped from _staging.value (ml_ps)
+./source/config.c:    if (st->flags != 0) {
+./source/config.c:        new_node->flags = st->flags;
+./source/config.c:    if (new_node->data.i2c.type == I2C_SENSOR_PTE7300) {
+./source/config.c:      new_i2c_temp->child = NULL; 
+./source/config.c:      new_i2c_temp->next  = NULL;
+./source/config.c:      new_node->child = new_i2c_temp; // Link the temperature sensor as a child of the pressure sensor
+./source/config.c:      new_i2c_temp->flags = ACD_FLAG_VIRTUAL;
+./source/config.c:      new_i2c_temp->type = ACD_TYPE_I2C_TEMP;
+./source/config.c:      new_i2c_temp->uom = UOM_CELSIUS;
+./source/config.c:        st->label, 
+./source/config.c:      new_i2c_temp->label = generate_label(hex_to_str(st->address), ACD_LABEL_VIRTUAL, new_i2c_temp_label);
+./source/config.c:      LOG(LOG_NOTICE, "Added I2C Temperature Sensor: %s, from I2C Pressure Sensor: %s, Address: 0x%02x", new_i2c_temp->label, new_node->label, new_node->data.i2c.address);
+./source/config.c:      //LOG(LOG_NOTICE, "Added I2C Pressure Sensor: %s, Address: 0x%02x, Min: %.2f, Max: %.2f", new_node->label, new_node->data.i2c.address, new_node->data.i2c.min_value, new_node->data.i2c.max_value);
+./source/config.c:    // 1. Search for a matching suffix at the end of orig (case-insensitive)
+./source/config.c:                if (strncasecmp(orig + (orig_len - suf_len), suffixes[i], suf_len) == 0) {
+./source/config.c:                    base_len = orig_len - suf_len;
+./source/config.c:    // 2. Trim trailing whitespace left on the base string (e.g., "Filter " -> "Filter")
+./source/config.c:    while (base_len > 0 && isspace((unsigned char)orig[base_len - 1])) {
+./source/config.c:        base_len--;
+./source/config.c:    new_node->next = NULL;
+./source/config.c:    int new_prio = node_priority(new_node->type);
+./source/config.c:        node_priority(_acdconfig_.keys->type) > new_prio) {
+./source/config.c:        new_node->next = _acdconfig_.keys;
+./source/config.c:    while (curr->next != NULL && node_priority(curr->next->type) <= new_prio) {
+./source/config.c:        curr = curr->next;
+./source/config.c:    new_node->next = curr->next;
+./source/config.c:    curr->next = new_node;
+./source/config.c:    new_node->type = ACD_TYPE_MQTT_COND;
+./source/config.c:    new_node->label = generate_label(topic, ACD_LABEL_MQTT, label);
+./source/config.c:    new_node->data.mqtt.topic = strdup(topic);
+./source/config.c:    new_node->data.mqtt.target_value = strdup(value);
+./source/config.c:    new_node->met = false; // Initial state, not met.
+./source/config.c:    new_node->scope = is_global?ACD_ACTION_BLOCK:ACD_ACTION_LIMIT;
+./source/config.c:    //new_node->target_value = UNKNOWN;
+./source/config.c:    new_node->type = ACD_TYPE_GPIO_COND;
+./source/config.c:    new_node->label = generate_label(int_to_str(pin), ACD_LABEL_GPIO, label);
+./source/config.c:    new_node->data.gpio.pin = pin;
+./source/config.c:    new_node->data.gpio.active = pin_mode;
+./source/config.c:    new_node->data.gpio.required = pin_state;
+./source/config.c:    new_node->met = false; // Initial state, not met.
+./source/config.c:    new_node->scope = is_global?ACD_ACTION_BLOCK:ACD_ACTION_LIMIT;
+./source/config.c:    //LOG(LOG_ERR, "GPIO %s Pin %d, active %d, state %d",new_node->label, new_node->data.gpio.pin, new_node->data.gpio.active, pin_state);
+./source/config.c:  //LOG(LOG_DEBUG, "Committing EZO: Label=%s, Type=%d, Addr=0x%02x ---- %s", label, type, address, hex_to_str(address));
+./source/config.c:  new_node->type = type;
+./source/config.c:  new_node->label = generate_label(hex_to_str(address), ACD_LABEL_EZO, label);
+./source/config.c:  new_node->data.ezo.address = address;
+./source/config.c:  new_node->scope = is_global?ACD_SCOPE_GLOBAL:ACD_SCOPE_LOCAL;
+./source/config.c:  new_node->type = type;
+./source/config.c:  new_node->label = generate_label(topic, ACD_LABEL_MQTT, label);
+./source/config.c:  new_node->data.mqtt.topic = strdup(topic);
+./source/config.c:  new_node->scope = is_global?ACD_SCOPE_GLOBAL:ACD_SCOPE_LOCAL;
+./source/config.c:  new_node->type = type;
+./source/config.c:  new_node->label = generate_label(path, ACD_LABEL_D1W, label);
+./source/config.c:  strcpy(new_node->data.w1.path, path);
+./source/config.c:  new_node->data.w1.offset = offset;
+./source/config.c:  new_node->data.w1.scale = scale;
+./source/config.c:  new_node->scope = is_global?ACD_SCOPE_GLOBAL:ACD_SCOPE_LOCAL;
+./source/config.c:  new_node->type = type;
+./source/config.c:  new_node->label = generate_label(int_to_str(pin), ACD_LABEL_PMP, label);
+./source/config.c:  new_node->data.gpio.pin = pin;
+./source/config.c:  new_node->data.gpio.active = pin_mode;
+./source/config.c:  new_node->data.gpio.required = pin_state;
+./source/config.c:  new_node->flow_rate = ml_per_sec;
+./source/config.c:  //printf("***** %s required_state %s\n",new_node->label, gpio_req_to_str(new_node->data.gpio.required));
+./source/config.c:    new_node->flags = flags;
+./source/config.c:  //LOG(LOG_ERR, "GPIO %s Pin %d, active %d, state %d",new_node->label, new_node->data.gpio.pin, new_node->data.gpio.active, pin_state);
+./source/ezo.c:#include <linux/i2c-dev.h>
+./source/ezo.c:  strncpy(response, (char *)&buf[1], len - 1);
+./source/ezo.c:  response[len - 1] = '\0';
+./source/ezo.c:  int len = end - start;
+./source/ezo.c:        printf("-- ");
+./source/ezo.c:      printf("  0x%02x  confirmed: %-6s  (default addr for: %s)\n",
+./source/ezo.c:      printf("  0x%02x  likely:    %-6s  (by default address, unconfirmed)\n",
+./source/ezo.c:      cal->points = points;
+./source/ezo.c:      cal->points = EZO_ERROR;
+./source/ezo.c:// ─── Pressure sensor (EZO-PRS) ────────────────────────────────────────────────
+./source/ezo.c:// ─── Dosing pump (EZO-PMP) ────────────────────────────────────────────────────
+./source/ezo.c:    return -1.0f;
+./source/ezo.c:// Small random float drift in range [-range, +range]
+./source/ezo.c:  return ((float)(rand() % 1000) / 1000.0f - 0.5f) * 2.0f * range;
+./source/ezo.c:  cal->points = 3;
+./source/ezo.c:  // Return between -5 and 75
+./source/gpio.c:// sudo apt install libgpiod-dev
+./source/gpio.c:    if (strncmp(entry->d_name, "gpiochip", 8) != 0)
+./source/gpio.c:    snprintf(chip_path, sizeof(chip_path), "/dev/%s", entry->d_name);
+./source/gpio.c:    printf("  %-16s  label: %-30s  lines: %u\n",
+./source/gpio.c:        printf("    line %3u: %-20s %-20s [%s]%s\n",
+./source/gpio.c:  h->pin       = pin;
+./source/gpio.c:  h->direction = direction;
+./source/gpio.c:  h->active    = active;
+./source/gpio.c:  //strncpy(h->label, label ? label : "aquachemd", sizeof(h->label) - 1);
+./source/gpio.c:  h->chip = gpiod_chip_open(chip_path);
+./source/gpio.c:  if (!h->chip)
+./source/gpio.c:    gpiod_chip_close(h->chip);
+./source/gpio.c:    h->chip = NULL;
+./source/gpio.c:    // Default to de-asserted (relay off) on open
+./source/gpio.c:    // FIX: always start de-asserted (relay off)
+./source/gpio.c:    gpiod_chip_close(h->chip);
+./source/gpio.c:    h->chip = NULL;
+./source/gpio.c:    gpiod_chip_close(h->chip);
+./source/gpio.c:    h->chip = NULL;
+./source/gpio.c:  h->request = gpiod_chip_request_lines(h->chip, req_cfg, line_cfg);
+./source/gpio.c:  if (!h->request)
+./source/gpio.c:    gpiod_chip_close(h->chip);
+./source/gpio.c:    h->chip = NULL;
+./source/gpio.c:  if (h->request) gpiod_line_request_release(h->request);
+./source/gpio.c:  if (h->chip)    gpiod_chip_close(h->chip);
+./source/gpio.c:  h->request = NULL;
+./source/gpio.c:  h->chip    = NULL;
+./source/gpio.c:  if (!h || !h->request) return GPIO_ERROR;
+./source/gpio.c:  if (h->direction != GPIO_OUTPUT)
+./source/gpio.c:    fprintf(stderr, "gpio_write: pin %d is not configured as output\n", h->pin);
+./source/gpio.c:  if (h->active == GPIO_ACTIVE_LOW)
+./source/gpio.c:  return gpiod_line_request_set_value(h->request, (unsigned int)h->pin, physical) == 0
+./source/gpio.c:  if (!h || !h->request) return GPIO_ERROR;
+./source/gpio.c:    gpiod_line_request_get_value(h->request, (unsigned int)h->pin);
+./source/gpio.c:  //LOG(LOG_ERR,"********** Read %d, test against %d for closed, return %d",logical ,h->active, ((h->active == GPIO_ACTIVE_LOW) ? !logical : logical) );
+./source/gpio.c:  // Flip if active-low
+./source/gpio.c:  return (h->active == GPIO_ACTIVE_LOW) ? !logical : logical;
+./source/gpio.c:  //int physical_value = (h->active == GPIO_ACTIVE_LOW) ? 0 : 1;
+./source/gpio.c:  //int physical_value = (h->active == GPIO_ACTIVE_LOW) ? 1 : 0;
+./source/gpio.c:  return (logical_state == (int)h->required);
+./source/gpio_monitor.c:#include <sys/eventfd.h> // NEW: For zero-overhead thread signaling
+./source/gpio_monitor.c:static int shutdown_fd = -1; // NEW: The shutdown signal file descriptor
+./source/gpio_monitor.c:        shutdown_fd = -1;
+./source/gpio_monitor.c:// --- 1. Clean Context Structure ---
+./source/gpio_monitor.c:// --- 2. The Setup Helper ---
+./source/gpio_monitor.c:    if (*count >= MAX_GPIO_FDS || !gh || !gh->request) return;
+./source/gpio_monitor.c:    int fd = gpiod_line_request_get_fd(gh->request);
+./source/gpio_monitor.c:        LOG(LOG_ERR, "GPIO: Invalid FD for pin %d\n", gh->pin);
+./source/gpio_monitor.c:    for (acd_key_t *curr = acddata->keys; curr; curr = curr->next)
+./source/gpio_monitor.c:        // Register Keys (Outputs) - Monitor for ERRORS ONLY
+./source/gpio_monitor.c:        if ((curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_OUTPUT) && curr->data.gpio.request)
+./source/gpio_monitor.c:            int fd = gpiod_line_request_get_fd(curr->data.gpio.request);
+./source/gpio_monitor.c:                ctx_map[num_lines] = (monitor_ctx_t){curr, &curr->data.gpio, false};
+./source/gpio_monitor.c:        else if ( (curr->type == ACD_TYPE_GPIO_COND || curr->type == ACD_TYPE_GPIO_INPUT) && curr->data.gpio.request)
+./source/gpio_monitor.c:            // Register Conditions (Inputs) - Monitor for EVENTS + ERRORS
+./source/gpio_monitor.c:            int fd = gpiod_line_request_get_fd(curr->data.gpio.request);
+./source/gpio_monitor.c:                ctx_map[num_lines] = (monitor_ctx_t){curr, &curr->data.gpio, true};
+./source/gpio_monitor.c:        int ret = poll(poll_fds, num_lines + 1, -1);
+./source/gpio_monitor.c:            // --- CATCH HARDWARE ERRORS ---
+./source/gpio_monitor.c:                LOG(LOG_ERR, "GPIO CRITICAL: Hardware failure on Pin %d\n", ctx_map[i].handle->pin);
+./source/gpio_monitor.c:            // --- HANDLE INPUT EVENTS (Conditions/Sensors) ---
+./source/gpio_monitor.c:                if (gpiod_line_request_read_edge_events(ctx_map[i].handle->request, event_buffer, 16) > 0)
+./source/gpio_monitor.c:                    // Use our new domain-specific function
+./source/gpio_monitor.c:                        if (c->met != (bool)met)
+./source/gpio_monitor.c:                            c->met = (bool)met;
+./source/gpio_monitor.c:                                c->label,
+./source/gpio_monitor.c:                                c->met ? "SATISFIED" : "NOT MET");
+./source/gpio_monitor.c:                            SET_DIRTY(acddata->is_dirty);
+./source/gpio_monitor.c:                            set_key_state(acddata, c, (c->met ? ACD_LED_ON : ACD_LED_OFF));
+./source/i2c.c:#include <linux/i2c-dev.h>
+./source/i2c.c:// Set to 0 if bring-up shows PTE7300 registers are actually big-endian on
+./source/i2c.c:// with i2c-tools from the shell (adjust bus/addr as needed):
+./source/i2c.c://   i2cset -y 1 0x6c 0x22 0x93 0x8b i   # write START, LSB-first as this driver does
+./source/i2c.c://   i2cget -y 1 0x6c 0x2e w             # i2c_smbus word read is LSB-first too
+./source/i2c.c:// ─── Known-device table (extend this as you add more generic I2C sensors) ───
+./source/i2c.c:// HSC/SSC addresses are order-code specific, so they're deliberately absent.
+./source/i2c.c:  { PTE7300_ADDR_DEFAULT, "PTE7300 pressure (non-CRC)" },
+./source/i2c.c:        printf("-- ");
+./source/i2c.c:  return min_value + (float)(raw - min_counts) * (max_value - min_value) / (float)(max_counts - min_counts);
+./source/i2c.c:// Bit-serial CRC exactly as in their reference implementation — translated
+./source/i2c.c:// line-for-line from PTE7300_I2C.cpp's calc_crc4()/calc_crc8(), not
+./source/i2c.c:// reverse-engineered, so the framing matches what the ASIC's CRC-protected
+./source/i2c.c:    for (int j = 7; j >= 0; j--) {
+./source/i2c.c:      if (i >= len - 1 && j < 4) break;
+./source/i2c.c:    for (int j = 7; j >= 0; j--) {
+./source/i2c.c:// CRC-protected command write — mirrors writeRegisterCRC() from Sensata's
+./source/i2c.c:// library for the single-word command case (number=1). Their library
+./source/i2c.c:// requires it specifically for command-channel writes, even though it's
+./source/i2c.c:// been accepting plain non-CRC reads fine.
+./source/i2c.c:  // node byte: 7-bit address shifted into an 8-bit form with read=0, crc=1 —
+./source/i2c.c:  // s->address=0x6C, this evaluates to exactly 0xDA.
+./source/i2c.c:  unsigned char node = (unsigned char)(((s->address << 1) & 0xFC) | 0x02);
+./source/i2c.c:  unsigned char header[2] = { PTE7300_REG_CMD, 0x10 };   // 0x10 = ((1 word * 2)-1)<<4
+./source/i2c.c:  // Wire frame after the CRC-mode slave address (0x6D): [reg][len/crc4][lo][hi][crc8]
+./source/i2c.c:#define PTE7300_USE_CRC_COMMANDS 1   // set to 0 to fall back to plain (non-CRC) command writes
+./source/i2c.c:  return i2c_write_reg(I2C_GENERIC_BUS, s->address, PTE7300_REG_CMD, data, 2);
+./source/i2c.c:  int status = i2c_read_reg(I2C_GENERIC_BUS, s->address, reg, data, 2);
+./source/i2c.c:  int status = i2c_read_reg(I2C_GENERIC_BUS, s->address, reg, data, 2);
+./source/i2c.c:  // Empirically observed on this unit alongside independently-verified
+./source/i2c.c:  // semantics -- Sensata's bit table for 0x36 remains unconfirmed, and even
+./source/i2c.c:  // EPFL's hardware-tested driver doesn't attempt to interpret this register.
+./source/i2c.c:        // Handle unexpected lower-byte fault flags here if they occur
+./source/i2c.c:// Logging-only — see NOTE ON STATUS BITS in i2c.h. Nothing gates on this.
+./source/i2c.c:  LOG(LOG_DEBUG, "--- PTE7300 STATUS DECODER (Raw: 0x%04X) ---", status);
+./source/i2c.c:    LOG(LOG_INFO, "  [OK] System Normal - No diagnostic faults latched");
+./source/i2c.c:  // --- High Byte System & DSP Diagnostics (Bits 15..8) ---
+./source/i2c.c:  if (status & 0x8000) LOG(LOG_ERR,   "  [!] Bit 15 (0x8000): GLOBAL DIAGNOSTIC FAULT - ASIC in error state");
+./source/i2c.c:  if (status & 0x4000) LOG(LOG_ERR,   "  [!] Bit 14 (0x4000): COMMAND ERROR - Invalid command or bad sequence");
+./source/i2c.c:  if (status & 0x2000) LOG(LOG_NOTICE,   "  [*] Bit 13 (0x2000): DSP BUSY - Conversion actively in progress");
+./source/i2c.c:  if (status & 0x1000) LOG(LOG_ERR,   "  [!] Bit 12 (0x1000): EEPROM/RAM FAULT - Memory CRC parity error");
+./source/i2c.c:  if (status & 0x0800) LOG(LOG_ERR,   "  [!] Bit 11 (0x0800): EXECUTION REJECTED - Command ignored by state machine");
+./source/i2c.c:  if (status & 0x0400) LOG(LOG_ERR,   "  [!] Bit 10 (0x0400): SUPPLY VOLTAGE FAULT - VDD under-voltage drop");
+./source/i2c.c:  if (status & 0x0200) LOG(LOG_ERR,   "  [!] Bit  9 (0x0200): THERMAL WARNING - Silicon temp exceeds operating limit");
+./source/i2c.c:  if (status & 0x0100) LOG(LOG_ERR,   "  [!] Bit  8 (0x0100): MATH FAULT - DSP raw count overflow/underflow");
+./source/i2c.c:  // --- Low Byte Analog Front-End & Sensor Element (Bits 7..0) ---
+./source/i2c.c:  if (status & 0x0080) LOG(LOG_ERR,   "  [!] Bit  7 (0x0080): INTERNAL DIAGNOSTIC - Reserved ASIC flag");
+./source/i2c.c:  if (status & 0x0040) LOG(LOG_ERR,   "  [!] Bit  6 (0x0040): BRIDGE DRIVE FAULT - Strain-gauge supply failure");
+./source/i2c.c:  if (status & 0x0020) LOG(LOG_ERR,   "  [!] Bit  5 (0x0020): SENSOR DIE FAULT - Open/Short circuit on element");
+./source/i2c.c:  if (status & 0x0010) LOG(LOG_ERR,   "  [!] Bit  4 (0x0010): PRESSURE AFE FAULT - Pressure ADC signal out-of-bounds");
+./source/i2c.c:  if (status & 0x0008) LOG(LOG_ERR,   "  [!] Bit  3 (0x0008): TEMP AFE FAULT - Diode ADC signal out-of-bounds");
+./source/i2c.c:  if (status & 0x0004) LOG(LOG_ERR,   "  [!] Bit  2 (0x0004): CALIBRATION FAULT - Factory EEPROM trim unreadable");
+./source/i2c.c:  if (status & 0x0002) LOG(LOG_NOTICE,   "  [*] Bit  1 (0x0002): MODE - Continuous/Cyclic mode active");
+./source/i2c.c:  if (status & 0x0001) LOG(LOG_NOTICE,   "  [*] Bit  0 (0x0001): STATE - Measurement ready / Run state active");
+./source/i2c.c:  LOG(LOG_DEBUG, "---------------------------------------------");
+./source/i2c.c:  s->type       = I2C_SENSOR_PTE7300;
+./source/i2c.c:  s->address    = address;
+./source/i2c.c:  s->min_value  = min_value;
+./source/i2c.c:  s->max_value  = max_value;
+./source/i2c.c:  s->min_counts = -16000;   // fixed by hardware, not part-dependent
+./source/i2c.c:  s->max_counts =  16000;
+./source/i2c.c:  // RESET's own write result isn't checked here — the ASIC power-cycles
+./source/i2c.c:    LOG(LOG_ERR, "PTE7300 init failed: sensor at 0x%02X not responding post-reset", s->address);
+./source/i2c.c:    LOG(LOG_ERR, "PTE7300 init failed: sensor at 0x%02X returned error status post-reset: 0x%04X", s->address, status_reg);
+./source/i2c.c:  LOG(LOG_INFO, "PTE7300 init success at 0x%02X (post-reset status: 0x%04X)", s->address, status_reg);
+./source/i2c.c:  pte7300_read_u16(s, PTE7300_REG_STATUS, &raw_status);   // best-effort, non-fatal
+./source/i2c.c:  result.value  = i2c_scale(raw_pressure, s->min_counts, s->max_counts, s->min_value, s->max_value);
+./source/i2c.c:  result.temp_c = i2c_scale(raw_temp, -16000, 16000, -40.0f, 125.0f);
+./source/i2c.c:    LOG(LOG_ERR, "PTE7300 at 0x%02X: computed non-finite value (pressure=%f temp=%f) — "
+./source/i2c.c:        s->address, result.value, result.temp_c, s->min_counts, s->max_counts);
+./source/i2c.c:  if (s->type != I2C_SENSOR_PTE7300) return I2C_UNSUPPORTED;
+./source/i2c.c:  if (s->type != I2C_SENSOR_PTE7300) return I2C_UNSUPPORTED;
+./source/i2c.c:  s->type       = I2C_SENSOR_HSC;
+./source/i2c.c:  s->address    = address;
+./source/i2c.c:  s->min_value  = min_value;
+./source/i2c.c:  s->max_value  = max_value;
+./source/i2c.c:  s->min_counts = min_counts;
+./source/i2c.c:  s->max_counts = max_counts;
+./source/i2c.c:  // No command needed — the device free-runs; just read the last conversion.
+./source/i2c.c:  int status = i2c_read_bytes(I2C_GENERIC_BUS, s->address, buf, sizeof(buf));
+./source/i2c.c:  unsigned int raw_pressure = ((buf[0] & 0x3F) << 8) | buf[1];                       // 14-bit
+./source/i2c.c:  unsigned int raw_temp     = ((unsigned int)buf[2] << 3) | (buf[3] >> 5);           // 11-bit
+./source/i2c.c:  result.value  = i2c_scale(raw_pressure, s->min_counts, s->max_counts, s->min_value, s->max_value);
+./source/i2c.c:      LOG(LOG_DEBUG, "i2c_sensor_init: PTE7300 at 0x%02x, %.2f-%.2f", address, min_value, max_value);
+./source/i2c.c:      LOG(LOG_DEBUG, "i2c_sensor_init: HSC at 0x%02x, %.2f-%.2f", address, min_value, max_value);
+./source/i2c.c:  return i2c_probe_address(I2C_GENERIC_BUS, s->address);
+./source/i2c.c:  switch (s->type)
+./source/i2c.c:  switch (s->type)
+./source/i2c.c:    case I2C_SENSOR_HSC:     return I2C_UNSUPPORTED;   // free-running, no sleep command over I2C
+./source/i2c.c:  switch (s->type)
+./source/i2c.c:  printf("  0x6c  likely: PTE7300 pressure (non-CRC) (by default address, unconfirmed)\n\n");
+./source/i2c.c:  s->type       = I2C_SENSOR_PTE7300;
+./source/i2c.c:  s->address    = address;
+./source/i2c.c:  s->min_value  = min_value;
+./source/i2c.c:  s->max_value  = max_value;
+./source/i2c.c:  s->min_counts = -16000;
+./source/i2c.c:  s->max_counts =  16000;
+./source/i2c.c:  s->type       = I2C_SENSOR_HSC;
+./source/i2c.c:  s->address    = address;
+./source/i2c.c:  s->min_value  = min_value;
+./source/i2c.c:  s->max_value  = max_value;
+./source/i2c.c:  s->min_counts = min_counts;
+./source/i2c.c:  s->max_counts = max_counts;
+./source/i2c.c:  // your span isn't psi-ish) with a little drift, clamped to the configured span.
+./source/i2c.c:  float mid   = (s->min_value + s->max_value) / 2.0f;
+./source/i2c.c:  float value = (s->max_value - s->min_value > 5.0f) ? 15.0f + dummy_drift(1.0f) : mid + dummy_drift((s->max_value - s->min_value) * 0.02f);
+./source/i2c.c:  if (value < s->min_value) value = s->min_value;
+./source/i2c.c:  if (value > s->max_value) value = s->max_value;
+./source/i2c.c:  return (s->type == I2C_SENSOR_PTE7300) ? I2C_SUCCESS : I2C_UNSUPPORTED;
+./source/i2c.c:  return (s->type == I2C_SENSOR_PTE7300) ? I2C_SUCCESS : I2C_UNSUPPORTED;
+./source/i2c.c:  return (s->type == I2C_SENSOR_PTE7300) ? I2C_SUCCESS : I2C_UNSUPPORTED;
+./source/i2c.c:  if (s->type != I2C_SENSOR_PTE7300) return I2C_UNSUPPORTED;
+./source/json_messages.c:#include <systemd/sd-journal.h>
+./source/json_messages.c:#define JSON_ERROR_OVERFLOW "{\"error\":\"server - buffer overflow\"}"
+./source/json_messages.c: * or a URL-encoded string (value=1.5).
+./source/json_messages.c:        cJSON *root = cJSON_ParseWithLength(start, len - (start - buf));
+./source/json_messages.c:                result = (float)val->valuedouble;
+./source/json_messages.c:                result = strtof(val->valuestring, NULL);
+./source/json_messages.c:    // 2. URL-encoded Fallback (value=1.5&arg2=...)
+./source/json_messages.c:    // memmem is the safest way to search a non-null-terminated buffer
+./source/json_messages.c:        // strtof will stop at the first non-numeric char (like '&' or space)
+./source/json_messages.c: * Parses URI and Value from a non-null-terminated JSON buffer.
+./source/json_messages.c:    // Use the length-aware parser for non-null-terminated strings
+./source/json_messages.c:    if (cJSON_IsString(uri) && (uri->valuestring != NULL)) {
+./source/json_messages.c:        strncpy(uri_out, uri->valuestring, URI_LEN - 1);
+./source/json_messages.c:        uri_out[URI_LEN - 1] = '\0';
+./source/json_messages.c:        *val_out = (float)val->valuedouble;
+./source/json_messages.c:        *val_out = strtof(val->valuestring, NULL);
+./source/json_messages.c:    // %I = 12-hour hour, %M = minute, %p = AM/PM
+./source/json_messages.c:  cJSON_AddStringToObject(device, "id", acddata->keys->ID);
+./source/json_messages.c:  cJSON_AddStringToObject(device, "label", acddata->keys->label);
+./source/json_messages.c:  cJSON_AddStringToObject(device, "status", acd_state_to_str(acddata->keys->state));
+./source/json_messages.c:  cJSON_AddNumberToObject(device, "int_status", acddata->keys->state);
+./source/json_messages.c:  cJSON_AddItemToObject(devices, acddata->keys->ID, device);
+./source/json_messages.c:  for (acd_key_t *curr = acddata->keys->next; curr != NULL; curr = curr->next) { 
+./source/json_messages.c:    cJSON_AddStringToObject(device, "id", curr->ID);
+./source/json_messages.c:    cJSON_AddStringToObject(device, "label", curr->label);
+./source/json_messages.c:    if (IS_CONDITION(curr->type)) {
+./source/json_messages.c:      cJSON_AddStringToObject(device, "status", acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
+./source/json_messages.c:      cJSON_AddNumberToObject(device, "int_status", curr->met);
+./source/json_messages.c:      if (curr->delay_on > 0) {
+./source/json_messages.c:      cJSON_AddStringToObject(device, "status", acd_state_to_str(curr->state));
+./source/json_messages.c:      cJSON_AddNumberToObject(device, "int_status", curr->state);
+./source/json_messages.c:      cJSON_AddNumberToObject(device, "value", curr->value);
+./source/json_messages.c:      if (IS_OUTPUT(curr->type)) {
+./source/json_messages.c:        if (curr->scope != ACD_ACTION_ALLOW) { // Only allow ON/OFF for non-master keys with scope allow. 
+./source/json_messages.c:        if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
+./source/json_messages.c:        if (isMASKSET(curr->flags, PH_PUMP)) {
+./source/json_messages.c:        } else if (isMASKSET(curr->flags, ORP_PUMP)) {
+./source/json_messages.c:        } else if (isMASKSET(curr->flags, H2O_PUMP)) {
+./source/json_messages.c:        } else if (curr->type == ACD_TYPE_GPIO_OUTPUT) {
+./source/json_messages.c:        if (uom_to_display_str(curr->uom) != UOM_NONE) { // ph UOM is set pH, 
+./source/json_messages.c:          cJSON_AddStringToObject(device, "uom", uom_to_display_str(curr->uom));
+./source/json_messages.c:        if (isMASKSET(curr->flags,CALC_AVERAGE) ) {
+./source/json_messages.c:          snprintf(buf, 15, "%s_stats", curr->ID);
+./source/json_messages.c:          cJSON_AddNumberToObject(stats, "avg", curr->stats.average);
+./source/json_messages.c:          cJSON_AddNumberToObject(stats, "max", curr->stats.max);
+./source/json_messages.c:          cJSON_AddNumberToObject(stats, "min", curr->stats.min);
+./source/json_messages.c:          //cJSON_AddStringToObject(stats, "range", time_range_to_str(curr->flags));
+./source/json_messages.c:          duration_seconds_to_string(curr->stats.tau_seconds, buf, sizeof(buf));
+./source/json_messages.c:        if (curr->type == ACD_TYPE_VIR_TANK ) {
+./source/json_messages.c:          snprintf(buf, 15, "%s_alt", curr->ID);
+./source/json_messages.c:          cJSON_AddNumberToObject(alt, "value", curr->data.tank.remaining_volume);  
+./source/json_messages.c:          cJSON_AddStringToObject(alt, "uom", uom_to_display_str(curr->data.tank.uom));
+./source/json_messages.c:    cJSON_AddItemToObject(devices, curr->ID, device);
+./source/json_messages.c:    item = cJSON_GetObjectItemCaseSensitive(devices_map, acddata->keys->ID);
+./source/json_messages.c:    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), acddata->keys->value);
+./source/json_messages.c:    cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(acddata->keys->state));
+./source/json_messages.c:    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), acddata->keys->state);
+./source/json_messages.c:    for (acd_key_t *curr = acddata->keys->next; curr != NULL; curr = curr->next) { 
+./source/json_messages.c:      item = cJSON_GetObjectItemCaseSensitive(devices_map, curr->ID);
+./source/json_messages.c:      if (IS_CONDITION(curr->type)) {
+./source/json_messages.c:        //cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
+./source/json_messages.c:        if (isMASKSET(curr->flags, DELAY_ACTIVE) || curr->state == ACD_LED_DELAY) {
+./source/json_messages.c:          cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_condition_met_to_str(curr->met));
+./source/json_messages.c:          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), curr->met);
+./source/json_messages.c:        if (curr->delay_on > 0) {
+./source/json_messages.c:        cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), curr->value);
+./source/json_messages.c:        cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->state));
+./source/json_messages.c:        cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), curr->state);
+./source/json_messages.c:        if (IS_OUTPUT(curr->type)) {
+./source/json_messages.c:          if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
+./source/json_messages.c:        } else if ( IS_INPUT(curr->type) && (isMASKSET(curr->flags,CALC_AVERAGE)) ) {
+./source/json_messages.c:          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(stats, "avg"), curr->stats.average);
+./source/json_messages.c:          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(stats, "max"), curr->stats.max);
+./source/json_messages.c:          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(stats, "min"), curr->stats.min);
+./source/json_messages.c:        if (curr->type == ACD_TYPE_VIR_TANK ) {
+./source/json_messages.c:          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), curr->value);
+./source/json_messages.c:          cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(alt, "value"), curr->data.tank.remaining_volume);
+./source/json_messages.c:    for (acd_condition_t *curr = acddata->conditions; curr != NULL; curr = curr->next) { 
+./source/json_messages.c:      cJSON *item = cJSON_GetObjectItemCaseSensitive(devices_map, curr->ID);
+./source/json_messages.c:      cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(curr->met?ACD_LED_ON:ACD_LED_OFF));
+./source/json_messages.c:      cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), curr->met);
+./source/json_messages.c:    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), acddata->sensorMetrics.ph_daily.average);
+./source/json_messages.c:    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "max_value"), acddata->sensorMetrics.ph_daily.max);
+./source/json_messages.c:    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "min_value"), acddata->sensorMetrics.ph_daily.min);
+./source/json_messages.c:    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), acddata->sensorMetrics.orp_daily.average);
+./source/json_messages.c:    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "max_value"), acddata->sensorMetrics.orp_daily.max);
+./source/json_messages.c:    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "min_value"), acddata->sensorMetrics.orp_daily.min);
+./source/json_messages.c:  cJSON_AddStringToObject(root, "display_message", acddata->display_message);
+./source/json_messages.c: * simply replace any non-printable char with a space
+./source/json_messages.c:    size_t limit = (src_len < dest_len - 1) ? src_len : (dest_len - 1);
+./source/json_messages.c:        // Replace JSON-breaking characters and non-printables
+./source/json_messages.c:    int written = snprintf(buffer, buf_size, "{\"logmsg\":\"%-8.8s", log_priority_to_str(loglevel));
+./source/json_messages.c:        return -1; // Buffer is too small even for the header
+./source/json_messages.c:        current_len += json_chars(buffer + current_len, src_msg, (buf_size - current_len - 3), src_len);
+./source/json_messages.c:    int tail = snprintf(buffer + current_len, buf_size - current_len, "\"}");
+./source/json_messages.c:        strncpy(stats[i].pump_name, name, sizeof(stats[i].pump_name) - 1);
+./source/json_messages.c:        stats[i].pump_name[sizeof(stats[i].pump_name) - 1] = '\0'; // Ensure null-termination
+./source/json_messages.c:    strncpy(stats[*count].pump_id, id, sizeof(stats[*count].pump_id) - 1);
+./source/json_messages.c:    stats[*count].pump_id[sizeof(stats[*count].pump_id) - 1] = '\0';
+./source/json_messages.c:    strncpy(stats[*count].pump_name, name, sizeof(stats[*count].pump_name) - 1);
+./source/json_messages.c:    stats[*count].pump_name[sizeof(stats[*count].pump_name) - 1] = '\0';
+./source/json_messages.c:  //uint64_t since_usec = ((uint64_t)tv.tv_sec * 1000000) - ((uint64_t)days * 24 * 3600 * 1000000);
+./source/json_messages.c:  // days=1 -> start of today, days=2 -> start of yesterday, etc.
+./source/json_messages.c:  localtime_r(&now_sec, &tm_start);   // use gmtime_r instead if you want UTC-based "day" boundaries
+./source/json_messages.c:  tm_start.tm_mday -= (days - 1);     // step back whole days; mktime() normalizes this
+./source/json_messages.c:  // Filter by our specific 128-bit Pump Event Message ID
+./source/json_messages.c:      p->total_seconds += sec;
+./source/json_messages.c:      p->total_ml += ml;
+./source/json_messages.c:    LOG(LOG_ERR, "sd_journal_next failed: %d (%s)\n", r, strerror(-r));
+./source/json_messages.c:  // 7. Print to the pre-allocated buffer
+./source/json_messages.c:  uint64_t since_usec = ((uint64_t)tv.tv_sec * 1000000) - ((uint64_t)days * 24 * 3600 * 1000000);
+./source/json_messages.c:  // Filter by our specific 128-bit Pump Event Message ID
+./source/json_messages.c:      p->total_seconds += sec;
+./source/json_messages.c:      p->total_ml += ml;
+./source/json_messages.c:  // 6. Print to the pre-allocated buffer
+./source/mqtt_discovery.c:    // Template for Select entities - Now accepts a custom value_template
+./source/mqtt_discovery.c:        "\"icon_template\":\"{{ 'mdi:timer-sand' if states(entity_id)|int > 0 else 'mdi:timer-outline' }}\""
+./source/mqtt_discovery.c:// Template for the settable Timer Duration (number slider) - lets HA both set
+./source/mqtt_discovery.c:        "\"icon\":\"mdi:timer-outline\""
+./source/mqtt_discovery.c:// Template for dosing events - FIXED STATE_CLASS
+./source/mqtt_discovery.c:        "\"icon\":\"mdi:flask-plus-outline\""
+./source/mqtt_discovery.c:                 iface->mac, iface->url);
+./source/mqtt_discovery.c:             iface->url);
+./source/mqtt_discovery.c:    for (acd_key_t *curr = acdata->keys; curr != NULL; curr = curr->next) {
+./source/mqtt_discovery.c:        if (IS_INPUT(curr->type) && _acdconfig_.mqtt_strict_avail) {
+./source/mqtt_discovery.c:          snprintf(avail_json, sizeof(avail_json), HASS_AVAIL_SENSOR_TEMPLATE, _acdconfig_.mqtt_aquachemd_topic, _acdconfig_.mqtt_aquachemd_topic, curr->ID);
+./source/mqtt_discovery.c:        } else if (IS_OUTPUT(curr->type) && _acdconfig_.mqtt_strict_avail) {
+./source/mqtt_discovery.c:          snprintf(avail_json, sizeof(avail_json), HASS_AVAIL_PUMP_TEMPLATE, _acdconfig_.mqtt_aquachemd_topic, _acdconfig_.mqtt_aquachemd_topic, curr->ID);
+./source/mqtt_discovery.c:        switch (curr->type) {
+./source/mqtt_discovery.c:                icon      = "mdi:shield-check";
+./source/mqtt_discovery.c:                // Mapping: 0->off, 1->on, 2->enabled, 3->off
+./source/mqtt_discovery.c:                icon = "mdi:flask-outline";
+./source/mqtt_discovery.c:                icon = "mdi:lightning-bolt-outline";
+./source/mqtt_discovery.c:                if (curr->uom && curr->uom != UOM_NONE) {
+./source/mqtt_discovery.c:                    uom_to_str(curr->uom));
+./source/mqtt_discovery.c:                if (IS_UOM_TEMPERATURE(curr->uom)) {
+./source/mqtt_discovery.c:                    uom_to_str(curr->uom));
+./source/mqtt_discovery.c:                    uom_to_str(curr->uom));
+./source/mqtt_discovery.c:                    icon = "mdi:chemical-weapon";
+./source/mqtt_discovery.c:                icon = "mdi:alert-circle-outline";
+./source/mqtt_discovery.c:                icon = "mdi:cup-water";
+./source/mqtt_discovery.c:                         curr->ID, curr->label,
+./source/mqtt_discovery.c:                         _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:                         _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:                         curr->ID, curr->label,
+./source/mqtt_discovery.c:                         _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:                         curr->ID, curr->label,
+./source/mqtt_discovery.c:                         _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:                     _acdconfig_.mqtt_discovery_topic, hass_type, curr->ID);
+./source/mqtt_discovery.c:            if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_EZO_PMP) {
+./source/mqtt_discovery.c:                         _acdconfig_.mqtt_discovery_topic, curr->ID);
+./source/mqtt_discovery.c:                         curr->ID, curr->label,
+./source/mqtt_discovery.c:                         _acdconfig_.mqtt_aquachemd_topic, curr->ID);
+./source/mqtt_discovery.c:                // Timer (settable number/slider) - shares the same duration state_topic
+./source/mqtt_discovery.c:                         _acdconfig_.mqtt_discovery_topic, curr->ID);
+./source/mqtt_discovery.c:                         curr->ID, curr->label,
+./source/mqtt_discovery.c:                         _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:                         _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:                         (curr->flags & PH_PUMP) ? _acdconfig_.ph_max_dose_time : _acdconfig_.orp_max_dose_time);
+./source/mqtt_discovery.c:                const char *dose_suffix = ((curr->flags & PH_PUMP)  ? MQTT_TL_DOSE_PH : 
+./source/mqtt_discovery.c:                                           (curr->flags & ORP_PUMP) ? MQTT_TL_DOSE_ORP : MQTT_TL_DOSE_UNKNOWN );
+./source/mqtt_discovery.c:                                                _acdconfig_.mqtt_discovery_topic, curr->ID);
+./source/mqtt_discovery.c:                         curr->ID, curr->label,
+./source/mqtt_discovery.c:                         _acdconfig_.mqtt_aquachemd_topic, curr->ID, MQTT_TL_LAST_DOSE);
+./source/mqtt_discovery.c:            if (curr->type == ACD_TYPE_VIR_TANK) {
+./source/mqtt_discovery.c:                snprintf(full_label, sizeof(full_label), "%s Remaining", curr->label);
+./source/mqtt_discovery.c:                snprintf(topic_label, sizeof(topic_label), "%s/level/remaining", curr->ID);
+./source/mqtt_discovery.c:                         _acdconfig_.mqtt_discovery_topic, curr->ID);
+./source/mqtt_discovery.c:                         curr->ID, full_label,
+./source/mqtt_discovery.c:                         curr->data.tank.total_volume,
+./source/mqtt_discovery.c:                         uom_to_str(curr->data.tank.uom),
+./source/mqtt_discovery.c:                        "mdi:cup-water");
+./source/mqtt_discovery.c:            if (isMASKSET(curr->flags, CALC_AVERAGE)) {
+./source/mqtt_discovery.c:                snprintf(id, 16, "%s_average", curr->ID);
+./source/mqtt_discovery.c:                snprintf(label, 32, "%s (average)", curr->label);
+./source/mqtt_discovery.c:                snprintf(sensor_topic, 32, "%s/average", curr->ID);
+./source/mqtt_discovery.c:  if (IS_INPUT(device->type) && _acdconfig_.mqtt_strict_avail)
+./source/mqtt_discovery.c:    snprintf(avail_json, sizeof(avail_json), HASS_AVAIL_SENSOR_TEMPLATE, _acdconfig_.mqtt_aquachemd_topic, _acdconfig_.mqtt_aquachemd_topic, device->ID);
+./source/mqtt_discovery.c:  else if (IS_OUTPUT(device->type) && _acdconfig_.mqtt_strict_avail)
+./source/mqtt_discovery.c:    snprintf(avail_json, sizeof(avail_json), HASS_AVAIL_PUMP_TEMPLATE, _acdconfig_.mqtt_aquachemd_topic, _acdconfig_.mqtt_aquachemd_topic, device->ID);
+./source/mqtt_discovery.c:  switch (device->type)
+./source/mqtt_discovery.c:        icon = "mdi:shield-check";
+./source/mqtt_discovery.c:        // Mapping: 0->off, 1->on, 2->enabled, 3->off
+./source/mqtt_discovery.c:        icon = "mdi:flask-outline";
+./source/mqtt_discovery.c:        icon = "mdi:lightning-bolt-outline";
+./source/mqtt_discovery.c:        if (IS_UOM_TEMPERATURE(device->uom))
+./source/mqtt_discovery.c:                     uom_to_str(device->uom));
+./source/mqtt_discovery.c:                     uom_to_str(device->uom));
+./source/mqtt_discovery.c:            icon = "mdi:chemical-weapon";
+./source/mqtt_discovery.c:        icon = "mdi:alert-circle-outline";
+./source/mqtt_discovery.c:                     device->ID, device->label,
+./source/mqtt_discovery.c:                     _acdconfig_.mqtt_aquachemd_topic, device->ID,
+./source/mqtt_discovery.c:                     _acdconfig_.mqtt_aquachemd_topic, device->ID,
+./source/mqtt_discovery.c:                     device->ID, device->label,
+./source/mqtt_discovery.c:                     _acdconfig_.mqtt_aquachemd_topic, device->ID,
+./source/mqtt_discovery.c:                     device->ID, device->label,
+./source/mqtt_discovery.c:                     _acdconfig_.mqtt_aquachemd_topic, device->ID,
+./source/mqtt_discovery.c:                 _acdconfig_.mqtt_discovery_topic, hass_type, device->ID);
+./source/mqtt_discovery.c:        if (device->type == ACD_TYPE_GPIO_PMP || device->type == ACD_TYPE_EZO_PMP)
+./source/mqtt_discovery.c:                     _acdconfig_.mqtt_discovery_topic, device->ID);
+./source/mqtt_discovery.c:                     device->ID, device->label,
+./source/mqtt_discovery.c:                     _acdconfig_.mqtt_aquachemd_topic, device->ID);
+./source/mqtt_discovery.c:            const char *dose_suffix = ((device->flags & PH_PUMP) ? MQTT_TL_DOSE_PH : (device->flags & ORP_PUMP) ? MQTT_TL_DOSE_ORP
+./source/mqtt_discovery.c:                     _acdconfig_.mqtt_discovery_topic, device->ID);
+./source/mqtt_discovery.c:                     device->ID, device->label,
+./source/mqtt_discovery.c:                     _acdconfig_.mqtt_aquachemd_topic, device->ID, dose_suffix);
+./source/mqtt_discovery.c:                 iface->mac, iface->url);
+./source/mqtt_discovery.c:                 "\"configuration_url\": \"%s\",", iface->url);
+./source/mqtt_discovery.c:    for (acd_key_t *curr = acdata->keys; curr != NULL; curr = curr->next) {
+./source/mqtt_discovery.c:      switch (curr->type) {
+./source/mqtt_discovery.c:                     curr->ID, 
+./source/mqtt_discovery.c:                     curr->label, 
+./source/mqtt_discovery.c:                     _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:                     _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:                     "mdi:toggle-switch-variant");
+./source/mqtt_discovery.c:          snprintf(topic, sizeof(topic), "%s/sensor/aquachemd/aquachemd_%s/config", _acdconfig_.mqtt_discovery_topic, curr->ID);
+./source/mqtt_discovery.c:                    curr->ID,
+./source/mqtt_discovery.c:                    curr->label,
+./source/mqtt_discovery.c:                    _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:          snprintf(topic, sizeof(topic), "%s/sensor/aquachemd/aquachemd_%s/config", _acdconfig_.mqtt_discovery_topic, curr->ID);
+./source/mqtt_discovery.c:                    curr->ID,
+./source/mqtt_discovery.c:                    curr->label,
+./source/mqtt_discovery.c:                    _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:                    "mdi:water-outline");
+./source/mqtt_discovery.c:          snprintf(topic, sizeof(topic), "%s/sensor/aquachemd/aquachemd_%s/config", _acdconfig_.mqtt_discovery_topic, curr->ID);
+./source/mqtt_discovery.c:                    curr->ID,
+./source/mqtt_discovery.c:                    curr->label,
+./source/mqtt_discovery.c:                    _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:                    "mdi:water-outline");
+./source/mqtt_discovery.c:          snprintf(topic, sizeof(topic), "%s/sensor/aquachemd/aquachemd_%s/config", _acdconfig_.mqtt_discovery_topic, curr->ID);
+./source/mqtt_discovery.c:                    curr->ID,
+./source/mqtt_discovery.c:                    curr->label,
+./source/mqtt_discovery.c:                    _acdconfig_.mqtt_aquachemd_topic, curr->ID,
+./source/mqtt_discovery.c:                    "mdi:water-outline");
+./source/mqtt_discovery.c:          snprintf(topic, sizeof(topic), "%s/binary_sensor/aquachemd/aquachemd_%s/config", _acdconfig_.mqtt_discovery_topic, curr->ID);
+./source/mqtt_discovery.c:  LOG(LOG_NOTICE, "Publishing MQTT discovery - NOT IMPLIMENTED\n");
+./source/mqtt_discovery.c:    sprintf(connections, "\"connections\": [[\"mac\", \"%s\"]],\"configuration_url\": \"%s\",", iface->mac, iface->url);
+./source/mqtt_discovery.c:    sprintf(connections,"\"configuration_url\": \"%s\",", iface->url);
+./source/mqtt_discovery.c:  for (acd_key_t *curr = acdata->keys; curr != NULL; curr = curr->next) { 
+./source/mqtt_discovery.c:    //sprintf(topic, "%s/%s/label", _acdconfig_.mqtt_aquachemd_topic, curr->ID);
+./source/mqtt_discovery.c:    //send_mqtt(nc, topic, curr->label);
+./source/mqtt_discovery.c:    switch(curr->type) {
+./source/mqtt_discovery.c:             curr->ID, 
+./source/mqtt_discovery.c:             curr->label, 
+./source/mqtt_discovery.c:             _acdconfig_.mqtt_aquachemd_topic,curr->ID,
+./source/mqtt_discovery.c:             _acdconfig_.mqtt_aquachemd_topic,curr->ID,
+./source/mqtt_discovery.c:             "mdi:toggle-switch-variant");
+./source/mqtt_discovery.c:        sprintf(topic, "%s/switch/aquachemd/aquachemd_%s/config", _acdconfig_.mqtt_discovery_topic, curr->ID);
+./source/net_interface.c:  if (getifaddrs(&ifaddr) == -1)
+./source/net_interface.c:  for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
+./source/net_interface.c:    if (!ifa->ifa_addr)
+./source/net_interface.c:    family = ifa->ifa_addr->sa_family;
+./source/net_interface.c:    if (!found && family == AF_INET && !(ifa->ifa_flags & IFF_LOOPBACK))
+./source/net_interface.c:      struct sockaddr_in *sa = (struct sockaddr_in *)ifa->ifa_addr;
+./source/net_interface.c:      inet_ntop(AF_INET, &sa->sin_addr, info.ip, sizeof(info.ip));
+./source/net_interface.c:      strncpy(info.name, ifa->ifa_name, sizeof(info.name) - 1);
+./source/net_interface.c:      info.name[sizeof(info.name) - 1] = '\0';
+./source/net_interface.c:      struct sockaddr_ll *s = (struct sockaddr_ll *)ifa->ifa_addr;
+./source/net_interface.c:      if (s->sll_halen == 6 &&
+./source/net_interface.c:          (!found || strcmp(info.name, ifa->ifa_name) == 0))
+./source/net_interface.c:                 (unsigned char)s->sll_addr[0],
+./source/net_interface.c:                 (unsigned char)s->sll_addr[1],
+./source/net_interface.c:                 (unsigned char)s->sll_addr[2],
+./source/net_interface.c:                 (unsigned char)s->sll_addr[3],
+./source/net_interface.c:                 (unsigned char)s->sll_addr[4],
+./source/net_interface.c:                 (unsigned char)s->sll_addr[5]);
+./source/net_interface.c:                 (unsigned char)s->sll_addr[0],
+./source/net_interface.c:                 (unsigned char)s->sll_addr[1],
+./source/net_interface.c:                 (unsigned char)s->sll_addr[2],
+./source/net_interface.c:                 (unsigned char)s->sll_addr[3],
+./source/net_interface.c:                 (unsigned char)s->sll_addr[4],
+./source/net_interface.c:                 (unsigned char)s->sll_addr[5]);
+./source/net_interface.c:      sprintf(info.url, "%.*s://%s:%s", (int)(protocol - _acdconfig_.listen_address), _acdconfig_.listen_address, info.ip, port);
+./source/net_interface.c:      sprintf(info.localurl, "%.*s://localhost:%s", (int)(protocol - _acdconfig_.listen_address), _acdconfig_.listen_address, port);
+./source/net_interface.c:    if (_acdconfig_.listen_address[(int)(protocol - _acdconfig_.listen_address)-1] == 's' ||
+./source/net_interface.c:        _acdconfig_.listen_address[(int)(protocol - _acdconfig_.listen_address)-1] == 'S')
+./source/net_interface.c:      if (info != NULL && info->rawmac[0] != '\0')
+./source/net_interface.c:        sprintf(&ID[i], "%.*s", (MQTT_ID_LEN-i), info->rawmac);
+./source/net_interface.c:        sprintf(&ID[i], "%.*d", (MQTT_ID_LEN-i), getpid());
+./source/net_services.c:  #include <systemd/sd-journal.h>
+./source/net_services.c:    tolower((unsigned char)(str)[(len)-3]) == tolower((unsigned char)(SUFFIX)[0]) && \
+./source/net_services.c:    tolower((unsigned char)(str)[(len)-2]) == tolower((unsigned char)(SUFFIX)[1]) && \
+./source/net_services.c:    tolower((unsigned char)(str)[(len)-1]) == tolower((unsigned char)(SUFFIX)[2]) \
+./source/net_services.c:    tolower((unsigned char)(str)[(len)-4]) == tolower((unsigned char)(SUFFIX)[0]) && \
+./source/net_services.c:    tolower((unsigned char)(str)[(len)-3]) == tolower((unsigned char)(SUFFIX)[1]) && \
+./source/net_services.c:    tolower((unsigned char)(str)[(len)-2]) == tolower((unsigned char)(SUFFIX)[2]) && \
+./source/net_services.c:    tolower((unsigned char)(str)[(len)-1]) == tolower((unsigned char)(SUFFIX)[3]) \
+./source/net_services.c:  return conn == NULL ? s->conns : conn->next;
+./source/net_services.c:  size_t len = str.len < sizeof(buf) - 1 ? str.len : sizeof(buf) - 1;
+./source/net_services.c:      LOG(LOG_NOTICE, "Calibrating pH - %.2f",calibrationValue);
+./source/net_services.c:      LOG(LOG_NOTICE, "Calibrating ORP - %.2f",calibrationValue);
+./source/net_services.c:      LOG(LOG_NOTICE, "Calibrating Temperature - %.2f",calibrationValue);
+./source/net_services.c:      LOG(LOG_NOTICE, "Calibrating Pressure - %.2f",calibrationValue);
+./source/net_services.c:  if (FAST_SUFFIX_4_CI(http_msg->uri.buf, http_msg->uri.len, "json"))
+./source/net_services.c:    if (_acdconfig_.web_directory != NULL && strncmp(http_msg->uri.buf, "/config.json", 12) == 0)
+./source/net_services.c:    if (http_msg->uri.len <= 12 && strncmp(http_msg->uri.buf, "/acdmanager", 10) == 0) {
+./source/net_services.c:      for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+./source/net_services.c:        if (uri_strcmp(ri1, curr->ID)) {
+./source/net_services.c:          if (ACD_TYPE_MASTER == curr->type) {
+./source/net_services.c:    for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+./source/net_services.c:      if (uri_strcmp(ri1, curr->ID)) {
+./source/net_services.c:        if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
+./source/net_services.c:          _aquachemd_data->is_dirty = true;
+./source/net_services.c:          *rtnmsg = REJECTED_REQUEST; // not a doser -- nothing to reset here
+./source/net_services.c:    for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+./source/net_services.c:      if (uri_strcmp(ri1, curr->ID) && (value == ACD_LED_OFF || value == ACD_LED_ON || value == ACD_LED_ENABLED)) {
+./source/net_services.c:        LOG(LOG_INFO, "Request to set '%s' to '%s'", curr->label, acd_state_to_str(value));
+./source/net_services.c:        curr->is_dirty = true; // Force an update to be sent to the device, even if the state is already set to the requested value.
+./source/net_services.c:    for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+./source/net_services.c:      if (uri_strcmp(ri1, curr->ID) && (value > 0)) {
+./source/net_services.c:        LOG(LOG_INFO, "Request to set '%s' to run for %f seconds", curr->label, value);
+./source/net_services.c:        curr->is_dirty = true; // Force an update to be sent to the device, even if the state is already set to the requested value.
+./source/net_services.c:    for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+./source/net_services.c:      if (uri_strcmp(ri1, curr->ID) && (value > 0)) {
+./source/net_services.c:        LOG(LOG_INFO, "Request to set '%s' default run time to %f seconds", curr->label, value);
+./source/net_services.c:        _aquachemd_data->is_dirty = true;
+./source/net_services.c:    for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+./source/net_services.c:      if (uri_strcmp(ri1, curr->ID)) {
+./source/net_services.c:          uom = curr->data.tank.uom;
+./source/net_services.c:          LOG(LOG_INFO, "Request to set '%s' tank volume to %f%% %s", curr->label, value, uom_to_str(uom));
+./source/net_services.c:          _aquachemd_data->is_dirty = true; // Force an update to be sent to the device, even if the state is already set to the requested value.
+./source/net_services.c:      //_aqualink_data->upgrade_version = malloc( (sizeof(char*) * strlen(ri2)) + 1);
+./source/net_services.c:      //snprintf(_aqualink_data->upgrade_version, strlen(ri2)+1, ri2);
+./source/net_services.c:      //_aqualink_data->upgrade_version = "latest";
+./source/net_services.c:  log_mg_str(LOG_DEBUG, "URI request", http_msg->uri);
+./source/net_services.c:  log_mg_str(LOG_DEBUG, "Query request", http_msg->query);
+./source/net_services.c:  if (strncmp(http_msg->uri.buf, "/api", 4) != 0)
+./source/net_services.c:  if (http_msg->query.len > 1)
+./source/net_services.c:    // mg_get_http_var(&http_msg->query, "value", buf, sizeof(buf)); // Old mosquitto
+./source/net_services.c:    mg_http_get_var(&http_msg->query, "value", buf, sizeof(buf));
+./source/net_services.c:  else if (http_msg->body.len > 1)
+./source/net_services.c:    value = parse_payload_value(http_msg->body.buf, http_msg->body.len);
+./source/net_services.c:  int len = mg_url_decode(http_msg->uri.buf, http_msg->uri.len, buf, 50, 0);
+./source/net_services.c:  if (strncmp(http_msg->uri.buf, "/api/", 4) == 0)
+./source/net_services.c:    switch (action_URI(&buf[5], len - 5, value, false, &msg)){
+./source/net_services.c:  log_mg_str(LOG_DEBUG, "WS: Websocket message", wm->data);
+./source/net_services.c:  if (!parse_json_uri_command(wm->data.buf, wm->data.len, uri, &val)) {
+./source/net_services.c:    LOG(LOG_ERR, "Failed to parse command payload '%.*s'\n",wm->data.len,wm->data.buf);
+./source/net_services.c:      save_schedules_js((char *)wm->data.buf, wm->data.len, message, sizeof(message));
+./source/net_services.c:      save_aquachem_config_json((char *)wm->data.buf, wm->data.len, message, sizeof(message), _aquachemd_data);
+./source/net_services.c:      save_web_config_json((char *)wm->data.buf, wm->data.len, message, sizeof(message), _aquachemd_data);
+./source/net_services.c:        _aquachemd_data->acdManagerActive = true;
+./source/net_services.c:    log_mg_str(LOG_DEBUG, "MQTT: message topic", msg->topic);
+./source/net_services.c:    log_mg_str(LOG_DEBUG, "MQTT: message payload", msg->data);
+./source/net_services.c:    value = strtof(msg->data.buf, &endptr);
+./source/net_services.c:    // Handle Non-Numeric Payloads (Home Assistant compat)
+./source/net_services.c:    if (endptr == msg->data.buf) {
+./source/net_services.c:        snprintf(payload, sizeof(payload), "%.*s", (int)msg->data.len, msg->data.buf);
+./source/net_services.c:        LOG(LOG_DEBUG, "MQTT: Map '%s' -> %.0f for topic %.*s\n", payload, value, (int)msg->topic.len, msg->topic.buf);
+./source/net_services.c:    if (msg->topic.len > offset) {
+./source/net_services.c:        const char *uri_part = &msg->topic.buf[offset];
+./source/net_services.c:        size_t uri_len = msg->topic.len - offset;
+./source/net_services.c:          LOG(LOG_WARNING, "MQTT: Action failed '%.*s'", (int)msg->topic.len, msg->topic.buf);
+./source/net_services.c:  LOG(LOG_INFO, "MQTT: Received message for condition '%s': %.*s\n", condition->label, mqtt_msg->data.len, mqtt_msg->data.buf);
+./source/net_services.c:  if (strncmp(mqtt_msg->data.buf, condition->data.mqtt.target_value, mqtt_msg->data.len) == 0) {
+./source/net_services.c:    if (ASSIGN_IF_CHANGED(condition->met, true, _aquachemd_data->is_dirty, condition->is_dirty)) {
+./source/net_services.c:      LOG(LOG_INFO, "MQTT Condition Change: %s is now SATISFIED\n", condition->label); 
+./source/net_services.c:    if (ASSIGN_IF_CHANGED(condition->met, false, _aquachemd_data->is_dirty, condition->is_dirty)) {
+./source/net_services.c:      LOG(LOG_INFO, "MQTT Condition Change: %s is now NOT MET\n", condition->label); 
+./source/net_services.c:  LOG(LOG_INFO, "MQTT: Received message for sensor '%s': %.*s\n", sensor->label, mqtt_msg->data.len, mqtt_msg->data.buf);
+./source/net_services.c:  if (sensor->data.mqtt.target_value) free(sensor->data.mqtt.target_value);
+./source/net_services.c:  sensor->data.mqtt.target_value = strndup(mqtt_msg->data.buf, mqtt_msg->data.len);
+./source/net_services.c:  if (sensor->type == ACD_TYPE_MQTT_TEMP || sensor->type == ACD_TYPE_MQTT_VALUE) {
+./source/net_services.c:    float new_value = strtof(sensor->data.mqtt.target_value, NULL);
+./source/net_services.c:    LOG(LOG_INFO, "MQTT: Updating sensor '%s' value to %.2f\n", sensor->label, new_value);
+./source/net_services.c:    //sensor->state = ACD_LED_ON;
+./source/net_services.c:    ASSIGN_IF_CHANGED(sensor->value, new_value, _aquachemd_data->is_dirty, sensor->is_dirty); // Mark data as dirty so it gets sent to clients right away instead of waiting for next sensor read. 
+./source/net_services.c:    LOG(LOG_WARNING, "MQTT: Received message for unsupported sensor type for sensor '%s'\n", sensor->label);
+./source/net_services.c:    //if ( strstr(http_msg->head.buf, "Upgrade: websocket")  ) {
+./source/net_services.c:    if ( mg_http_get_header(http_msg, "Sec-WebSocket-Key") != NULL) {
+./source/net_services.c:    _aquachemd_data->open_websockets++;
+./source/net_services.c:      _aquachemd_data->open_websockets--;
+./source/net_services.c:      LOG(LOG_INFO, "-- Websocket left\n");
+./source/net_services.c:        for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c)){
+./source/net_services.c:        if (!active && _aquachemd_data->acdManagerActive){
+./source/net_services.c:          _aquachemd_data->acdManagerActive = false;
+./source/net_services.c:      nc->is_closing = 1;
+./source/net_services.c:    nc->fn_data = NULL;
+./source/net_services.c:    if (nc->is_tls) {
+./source/net_services.c:    if (nc->is_tls) {
+./source/net_services.c:      LOG(LOG_DEBUG, "MQTT: Connection open %lu\n", nc->id);
+./source/net_services.c:      for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+./source/net_services.c:        if (curr->type == ACD_TYPE_MQTT_TEMP || curr->type == ACD_TYPE_MQTT_COND || curr->type == ACD_TYPE_MQTT_VALUE) {
+./source/net_services.c:          sub_opts.topic = mg_str(curr->data.mqtt.topic);
+./source/net_services.c:          LOG(LOG_INFO, "MQTT: Subscribing to '%s'\n", curr->data.mqtt.topic);
+./source/net_services.c:    if ( FAST_SUFFIX_3_CI(mqtt_msg->topic.buf, mqtt_msg->topic.len, "set"))
+./source/net_services.c:      LOG(LOG_DEBUG, "MQTT: received (msg_id: %d), %.*s\n", mqtt_msg->id, mqtt_msg->topic.len, mqtt_msg->topic.buf);
+./source/net_services.c:      //LOG(LOG_DEBUG, "MQTT: received, %.*s %.*s\n", mqtt_msg->topic.len, mqtt_msg->topic.buf, mqtt_msg->data.len, mqtt_msg->data.buf);
+./source/net_services.c:      for (acd_key_t *curr = _aquachemd_data->keys; curr != NULL; curr = curr->next) {
+./source/net_services.c:        if (curr->type == ACD_TYPE_MQTT_TEMP || curr->type == ACD_TYPE_MQTT_COND || curr->type == ACD_TYPE_MQTT_VALUE) {
+./source/net_services.c:          if (strncasecmp(mqtt_msg->topic.buf, curr->data.mqtt.topic, mqtt_msg->topic.len) == 0) {
+./source/net_services.c:            LOG(LOG_DEBUG, "MQTT: received (msg_id: %d), %.*s checking\n", mqtt_msg->id, mqtt_msg->topic.len, mqtt_msg->topic.buf);
+./source/net_services.c:            if (IS_CONDITION(curr->type)) {
+./source/net_services.c:      LOG(LOG_DEBUG, "MQTT: received (msg_id: %d), %.*s ignoring\n", mqtt_msg->id, mqtt_msg->topic.len, mqtt_msg->topic.buf);
+./source/net_services.c:  sprintf(mqtt_pub_topic, "%s/%s/status", _acdconfig_.mqtt_aquachemd_topic, key->ID);
+./source/net_services.c:  sprintf(msg, "%d", key->state);
+./source/net_services.c:  if (force_all || _aquachemd_data->keys->is_dirty) {
+./source/net_services.c:    send_mqtt_acd_state_msg(nc, _aquachemd_data->keys->ID, _aquachemd_data->keys->state);
+./source/net_services.c:    send_mqtt_string_msg(nc, "display_message", _aquachemd_data->display_message);
+./source/net_services.c:    CLEAR_DIRTY(_aquachemd_data->keys->is_dirty);
+./source/net_services.c:  for (acd_key_t *curr = _aquachemd_data->keys->next; curr != NULL; curr = curr->next) { 
+./source/net_services.c:    if (!curr->is_dirty && !force_all) {continue;}
+./source/net_services.c:    if (IS_CONDITION(curr->type) && _acdconfig_.post_condition) {
+./source/net_services.c:      send_mqtt_acd_state_msg(nc, curr->ID, curr->met?ACD_LED_ON:ACD_LED_OFF);
+./source/net_services.c:    } else if (IS_OUTPUT(curr->type)) {
+./source/net_services.c:      if ( isMASKSET(curr->flags, TIMER_ACTIVE)) {
+./source/net_services.c:        send_mqtt_timer_state_msg(nc, curr->ID, (remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF), remaining_sec, curr->default_duration);
+./source/net_services.c:        send_mqtt_timer_state_msg(nc, curr->ID, ACD_LED_OFF, 0, caculate_dose_time(_aquachemd_data, curr));
+./source/net_services.c:      send_mqtt_acd_state_msg(nc, curr->ID, curr->state);
+./source/net_services.c:      send_mqtt_acd_state_msg(nc, curr->ID, curr->state);
+./source/net_services.c:      if (curr->state == ACD_LED_ON) {
+./source/net_services.c:        send_mqtt_float_msg(nc, curr->ID, curr->value);
+./source/net_services.c:        if (isMASKSET(curr->flags,CALC_AVERAGE) ) {
+./source/net_services.c:          send_mqtt_average_float_msg(nc, curr->ID, curr->stats.average);
+./source/net_services.c:      //if (curr->type == ACD_TYPE_VIR_TANK) {
+./source/net_services.c:      //  if (curr->uom)
+./source/net_services.c:        send_mqtt_level_float_msg(nc, curr->ID, MQTT_TSL_REMAINING_VOLUME, curr->data.tank.remaining_volume);
+./source/net_services.c:        send_mqtt_level_float_msg(nc, curr->ID, MQTT_TSL_TOTAL_VOLUME, curr->data.tank.total_volume);
+./source/net_services.c:    CLEAR_DIRTY(curr->is_dirty);
+./source/net_services.c:      for (acd_key_t *curr = _aquachemd_data->keys->next; curr != NULL; curr = curr->next)
+./source/net_services.c:        if (curr->type == ACD_TYPE_EZO_PH && curr->index == MASTER_ID && curr->state == ACD_LED_ON && curr->value != last_ph)
+./source/net_services.c:          sprintf(msg, "%.2f", curr->value);
+./source/net_services.c:          last_ph = curr->value;
+./source/net_services.c:        else if (curr->type == ACD_TYPE_EZO_ORP && curr->index == MASTER_ID && curr->state == ACD_LED_ON && curr->value != last_orp)
+./source/net_services.c:          sprintf(msg, "%.2f", curr->value);
+./source/net_services.c:          last_orp = curr->value;
+./source/net_services.c:  snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID, 
+./source/net_services.c:                          (_dose_event.key->flags & PH_PUMP)  ? MQTT_TL_DOSE_PH : 
+./source/net_services.c:                          (_dose_event.key->flags & ORP_PUMP) ? MQTT_TL_DOSE_ORP :
+./source/net_services.c:                          (_dose_event.key->flags & H2O_PUMP) ? MQTT_TL_DOSE_H2O : MQTT_TL_DOSE_UNKNOWN );
+./source/net_services.c:  //snprintf(ld_topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_LAST_DOSE);
+./source/net_services.c:  //snprintf(rt_topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_RUNNING_DOSE);
+./source/net_services.c:  for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c)) {
+./source/net_services.c:      snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_LAST_DOSE);
+./source/net_services.c:        snprintf(topic, sizeof(topic), "%s/%s", _dose_event.key->ID,MQTT_TL_RUNNING_DOSE);
+./source/net_services.c:        LOG(LOG_DEBUG, "MQTT send %.2f to topic %s/%s\n",_dose_event.key->dose_stats.running_total_ml,_acdconfig_.mqtt_aquachemd_topic,topic);
+./source/net_services.c:        send_mqtt_float_msg(c, topic, _dose_event.key->dose_stats.running_total_ml);
+./source/net_services.c:      start_mqtt(nc->mgr);
+./source/net_services.c:  for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c)) {
+./source/net_services.c:  CLEAR_DIRTY(_aquachemd_data->is_dirty);
+./source/net_services.c:    mgr->dns4.url = nameserver;
+./source/net_services.c:    if (_aquachemd_data->is_dirty == true || force_all == true) {
+./source/net_services.c:      CLEAR_DIRTY(_aquachemd_data->is_dirty);
+./source/net_services.c:    if (_aquachemd_data->acdManagerActive) {
+./source/net_services.c:  for (c = mg_next(nc->mgr, NULL); c != NULL; c = mg_next(nc->mgr, c))
+./source/net_services.c:  snprintf(filter, sizeof(filter), "SYSLOG_IDENTIFIER=%s", _aquachemd_data->self);
+./source/net_services.c:  if (sd_journal_set_data_threshold(j, WS_LOG_LENGTH - 25) < 0)
+./source/net_services.c:  // the internal inotify subsystem, otherwise sd_journal_process() is a no-op.
+./source/net_services.c:    LOG_SYSTEM_ERR(-journal_fd, "Failed to initialize journal inotify watcher\n");
+./source/net_services.c:    snprintf(filter, sizeof(filter), "SYSLOG_IDENTIFIER=%s", _aquachemd_data->self);
+./source/net_services.c:  // FIX: Re-apply standard identifier filter here so you don't leak all system logs
+./source/net_services.c:  snprintf(filter, sizeof(filter), "SYSLOG_IDENTIFIER=%s", _aquachemd_data->self);
+./source/net_services.c:  snprintf(filter, sizeof(filter), "SYSLOG_IDENTIFIER=%s", _aquachemd_data->self);
+./source/net_services.c:  // Initialization / Re-opening upon a new WebSocket connection
+./source/net_services.c:      // Resuming mid-stream (e.g., transient network hiccup, cursor exists)
+./source/net_services.c:        snprintf(filter, sizeof(filter), "SYSLOG_IDENTIFIER=%s", _aquachemd_data->self);
+./source/net_services.c:      build_logmsg_json(json_msg, sizeof(json_msg), atoi((const char *)pri_data + 9), (const char *)log_data + 8, (int)log_len - 8);
+./source/net_services.c:      // printf("*** broadcast_systemd_logmessages() - close journal\n");
+./source/net_services.c:  // Initialization / Re-opening
+./source/net_services.c:    // printf("*** broadcast_systemd_logmessages() - open_journal()\n");
+./source/net_services.c:  // printf("*** broadcast_systemd_logmessages() - Start New Entries\n");
+./source/net_services.c:    //printf("*** sd_journal_next() - return=%d\n", rtn);
+./source/net_services.c:      build_logmsg_json(json_msg, sizeof(json_msg), atoi((const char *)pri_data + 9), (const char *)log_data + 8, (int)log_len - 8);
+./source/net_services.c:      // printf("*** sd_journal_get_data() - blank\n");
+./source/net_services.c:  // printf("*** broadcast_systemd_logmessages() - END New Entries return=%d\n", rtn);
+./source/net_services.c:    // printf("***** broadcast_systemd_logmessages() - ERROR reading journal\n");
+./source/sensor_stats.c:  if (isMASKSET(key->flags, CALC_AVERAGE)) {
+./source/sensor_stats.c:    _update_sensor_average(&key->stats, key->value);
+./source/sensor_stats.c:  if (isMASKSET(key->flags, AVG_DAILY)) {
+./source/sensor_stats.c:    _update_sensor_average(&key->stats, key->value, FILTER_TAU_DAILY);
+./source/sensor_stats.c:  } else if (isMASKSET(key->flags, AVG_DAILY)) {
+./source/sensor_stats.c:    _update_sensor_average(&key->stats, key->value, FILTER_TAU_WEEKLY);
+./source/sensor_stats.c: * A single, unified function to update any time-based rolling average.
+./source/sensor_stats.c:    pthread_mutex_lock(&stats->lock);
+./source/sensor_stats.c:    if (stats->last_sample_time == 0) {
+./source/sensor_stats.c:        stats->average = new_value;
+./source/sensor_stats.c:        stats->last_sample_time = now;
+./source/sensor_stats.c:        stats->max = new_value;
+./source/sensor_stats.c:        stats->min = new_value;
+./source/sensor_stats.c:        pthread_mutex_unlock(&stats->lock);
+./source/sensor_stats.c:    double delta_t = difftime(now, stats->last_sample_time);
+./source/sensor_stats.c:    stats->last_sample_time = now;
+./source/sensor_stats.c:        pthread_mutex_unlock(&stats->lock);
+./source/sensor_stats.c:    float alpha = 1.0f - expf(-((float)delta_t / stats->tau_seconds));
+./source/sensor_stats.c:    stats->average = (alpha * new_value) + ((1.0f - alpha) * stats->average);
+./source/sensor_stats.c:    if (new_value > stats->max) { stats->max = new_value; }
+./source/sensor_stats.c:    else if (new_value < stats->min || stats->min <= 0.0) { stats->min = new_value; }
+./source/sensor_stats.c:    pthread_mutex_unlock(&stats->lock);
+./source/sensor_stats.c:    pthread_mutex_lock(&stats->lock);
+./source/sensor_stats.c:    stats->average = 0.0f;
+./source/sensor_stats.c:    stats->last_sample_time = 0;
+./source/sensor_stats.c:    stats->max = 0.0f;
+./source/sensor_stats.c:    stats->min = 0.0f;
+./source/sensor_stats.c:    pthread_mutex_unlock(&stats->lock);
+./source/sensor_stats.c:  pthread_mutex_lock(&stats->lock);
+./source/sensor_stats.c:  stats->sample_count++;
+./source/sensor_stats.c:  if (stats->sample_count == 1) {
+./source/sensor_stats.c:    stats->average = new_value;
+./source/sensor_stats.c:    stats->max     = new_value;
+./source/sensor_stats.c:    stats->min     = new_value;
+./source/sensor_stats.c:    stats->average += (new_value - stats->average) / (float)stats->sample_count;
+./source/sensor_stats.c:    if (new_value > stats->max) stats->max = new_value;
+./source/sensor_stats.c:    if (new_value < stats->min) stats->min = new_value;
+./source/sensor_stats.c:  stats->last_sample_time = time(NULL);   // kept for display/"last updated" only, not used in the calc
+./source/sensor_stats.c:  pthread_mutex_unlock(&stats->lock);
+./source/sensor_stats.c:  pthread_mutex_lock(&stats->lock);
+./source/sensor_stats.c:  stats->average       = 0.0f;
+./source/sensor_stats.c:  stats->sample_count  = 0;
+./source/sensor_stats.c:  stats->last_sample_time = 0;
+./source/sensor_stats.c:  stats->max = 0.0f;
+./source/sensor_stats.c:  stats->min = 0.0f;
+./source/sensor_stats.c:  pthread_mutex_unlock(&stats->lock);
+./source/sensor_stats.c:  if (isMASKSET(key->flags, CALC_AVERAGE)) {
+./source/sensor_stats.c:    _reset_sensor_average(&key->stats);
+./source/sensor_stats.c:  for (acd_key_t *key = acdata->keys->next; key != NULL; key = key->next) {
+./source/sensor_stats.c:    if (isMASKSET(key->flags, CALC_AVERAGE) &&
+./source/sensor_stats.c:         key->stats.tau_seconds == tau_seconds) {
+./source/sensor_stats.c:      _reset_sensor_average(&key->stats);
+./source/sensor_stats.c:      LOG(LOG_NOTICE, "Reset %s stats", key->label);
+./source/sensor_stats.c:  for (acd_key_t *key = acdata->keys->next; key != NULL; key = key->next) {
+./source/sensor_stats.c:    if (isMASKSET(key->flags, CALC_AVERAGE) &&
+./source/sensor_stats.c:         key->stats.tau_seconds == tau_seconds) {
+./source/sensor_stats.c:      _reset_sensor_average(&key->stats);
+./source/sensor_stats.c:  for (acd_key_t *key = acdata->keys->next; key != NULL; key = key->next) {
+./source/sensor_stats.c:    if (isMASKSET(key->flags, period)) {
+./source/sensor_stats.c:      _reset_sensor_average(&key->stats);
+./source/sensor_stats.c: * Converts a float of seconds into a human-readable duration string ("1w", "24h", "1.5d", etc.).
+./source/sensor_stats.c:// whether the doser needs to be forced off rather than re-armed.
+./source/sensor_stats.c:    return false; // no tank configured for this doser -- nothing to check
+./source/sensor_stats.c:  LOG(LOG_INFO, "Tank %s is %sempty!",key->label, (key->data.tank.remaining_volume > key->data.tank.min_volume)?"not ":"" );
+./source/sensor_stats.c:  return key->data.tank.remaining_volume <= key->data.tank.min_volume;
+./source/sensor_stats.c:        key->label, key->data.tank.percent_full, key->data.tank.remaining_volume, uom_to_display_str(key->data.tank.uom));
+./source/sensor_stats.c:    key->data.tank.percent_full  = 50.0f;
+./source/sensor_stats.c:    key->data.tank.remaining_volume  = key->data.tank.total_volume * (key->data.tank.percent_full / 100.0f);
+./source/sensor_stats.c:    key->value     = key->data.tank.percent_full;
+./source/sensor_stats.c:    key->is_dirty  = true;
+./source/sensor_stats.c:        key->label, key->data.tank.percent_full, key->data.tank.remaining_volume, uom_to_display_str(key->data.tank.uom));
+./source/sensor_stats.c:  if (tank_is_empty(key->child)) {
+./source/sensor_stats.c:    LOG(LOG_WARNING, "%s: dose tank is empty (%.1f / %.1f %s), forcing doser OFF -- switch back to Enabled once refilled\n", 
+./source/sensor_stats.c:    key->label, key->data.tank.remaining_volume, key->data.tank.total_volume, uom_to_str(key->data.tank.uom));
+./source/sensor_stats.c:    ASSIGN_IF_CHANGED(key->state, ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
+./source/sensor_stats.c:        LOG(LOG_ERR, "set_tank_volume: invalid key or zero total volume for %s", key ? key->label : "NULL");
+./source/sensor_stats.c:      percent = (value / key->data.tank.total_volume) * 100.0f;
+./source/sensor_stats.c:    key->data.tank.percent_full = percent;
+./source/sensor_stats.c:    key->data.tank.remaining_volume    = key->data.tank.total_volume * (percent / 100.0f);
+./source/sensor_stats.c:    key->value                  = percent;
+./source/sensor_stats.c:    key->is_dirty               = true;
+./source/sensor_stats.c:        key->label, percent, key->data.tank.remaining_volume, uom_to_str(key->data.tank.uom));
+./source/sensor_stats.c:// Apply a dose (in ml) taken from a chemical tank -- call this whenever a
+./source/sensor_stats.c:  if (key->data.tank.total_volume <= 0.0f) {
+./source/sensor_stats.c:        key->label, key->data.tank.total_volume);
+./source/sensor_stats.c:    return;   // nothing dosed (or bad input) -- leave the tank level untouched
+./source/sensor_stats.c:  if (key->data.tank.uom == UOM_GALLONS)
+./source/sensor_stats.c:  float new_remaining = key->data.tank.remaining_volume - dose_in_uom;
+./source/sensor_stats.c:  // left doesn't go negative -- e.g. a refill that was never logged, or
+./source/sensor_stats.c:        key->label, dose_ml, key->data.tank.remaining_volume, uom_to_str(key->data.tank.uom));
+./source/sensor_stats.c:  key->data.tank.remaining_volume = new_remaining;
+./source/sensor_stats.c:  float percent = (new_remaining / key->data.tank.total_volume) * 100.0f;
+./source/sensor_stats.c:  // remaining is already floor-clamped above; guard the top too in case
+./source/sensor_stats.c:  key->data.tank.percent_full = percent;   // no rounding needed now that this is a float field
+./source/sensor_stats.c:  key->value    = percent;
+./source/sensor_stats.c:  key->is_dirty = true;
+./source/sensor_stats.c:      key->label, dose_ml, key->data.tank.remaining_volume,
+./source/sensor_stats.c:      key->data.tank.total_volume, uom_to_str(key->data.tank.uom), key->data.tank.percent_full);
+./source/sensor_stats.c:    if (isMASKSET(key->flags, PH_PUMP)) {
+./source/sensor_stats.c:    } else if (isMASKSET(key->flags, ORP_PUMP)) {
+./source/sensor_stats.c:    } else if (isMASKSET(key->flags, H2O_PUMP)) {
+./source/sensor_stats.c:    } else if (key->type == ACD_TYPE_GPIO_OUTPUT) {
+./source/sensor_stats.c:        LOG(LOG_ERR, "set_pump_default_duration: unknown pump flags for %s", key->label ? key->label : "NULL");
+./source/sensor_stats.c:        key->default_duration = max_duration;
+./source/sensor_stats.c:            key->label, default_duration, max_duration);
+./source/sensor_stats.c:        key->default_duration = default_duration;
+./source/sensor_stats.c:    key->is_dirty = true;
+./source/sensor_stats.c:    if (key->dose_stats.running_total_ml > FLT_MAX - dose_ml) {
+./source/sensor_stats.c:        // Would overflow - clamp instead of wrapping/going to inf
+./source/sensor_stats.c:        key->dose_stats.running_total_ml = FLT_MAX;
+./source/sensor_stats.c:        LOG(LOG_WARNING, "Running total overflow clamp for pump %s, please configure a reset\n", key->label);
+./source/sensor_stats.c:        key->dose_stats.running_total_ml += dose_ml;
+./source/sensor_stats.c:  LOG(LOG_INFO, "Running total for %s is %f",key->label, key->dose_stats.running_total_ml);
+./source/sensor_stats.c:  key->is_dirty = true;
+./source/sensor_stats.c:  LOG(LOG_INFO, "Reset Running total for %s\n",key->label);
+./source/sensor_stats.c:  key->dose_stats.running_total_ml = 0.0f;
+./source/sensor_stats.c:  key->is_dirty = true;
+./source/sensor_stats.c:  if (!isMASKSET(key->flags, PH_PUMP) && 
+./source/sensor_stats.c:      !isMASKSET(key->flags, ORP_PUMP) && 
+./source/sensor_stats.c:      !isMASKSET(key->flags, H2O_PUMP)) {
+./source/sensor_stats.c:  if (!key || key->dose_stats.running_total_max_ml <= 0) {
+./source/sensor_stats.c:  if (!key || key->type != ACD_TYPE_TANK || key->data.tank.total_volume <= 0 || key->data.tank.min_volume <= 0 || !isMASKSET(key->flags, ACD_FLAG_VIRTUAL)) {
+./source/state_manager.c:// Directly mirrors the STATE PERMISSIVENESS MATRIX comment -- when that
+./source/state_manager.c:  if (key->type == ACD_TYPE_MASTER) return KC_MASTER;
+./source/state_manager.c:  if (IS_CONDITION(key->type)) return KC_CONDITION;
+./source/state_manager.c:  if (key->type == ACD_TYPE_GPIO_PMP || key->type == ACD_TYPE_EZO_PMP) return KC_PUMP;
+./source/state_manager.c:  if (key->type == ACD_TYPE_GPIO_OUTPUT) return (key->scope == ACD_SCOPE_GLOBAL) ? KC_OUTPUT_GLOBAL : KC_OUTPUT_LOCAL;
+./source/state_manager.c:                    // via set_key_state(), never requested here -- see doc note on "INT".
+./source/state_manager.c:    if (IS_INPUT(key->type)) {
+./source/state_manager.c:      LOG(LOG_WARNING, "%s: state changes on sensors/inputs are internal-only, rejecting external request", key->label);
+./source/state_manager.c:  return (transition_permission[cat][requested] & (1 << acdata->keys->scope)) != 0;
+./source/state_manager.c:// Not routed through state_change_request() -- no request/reject semantics here,
+./source/state_manager.c:// just "what should this sensor's read-state be right now given its scope and
+./source/state_manager.c:  key_category_t cat = (key->scope == ACD_SCOPE_GLOBAL) ? KC_SENSOR_GLOBAL : KC_SENSOR_LOCAL;
+./source/state_manager.c:  return (transition_permission[cat][ACD_LED_ON] & (1 << acdata->keys->scope)) != 0;
+./source/state_manager.c:  switch (key->type) {
+./source/state_manager.c:    case ACD_TYPE_GPIO_OUTPUT: return (key->scope == ACD_SCOPE_GLOBAL) ? KC_OUTPUT_GLOBAL : KC_OUTPUT_LOCAL;
+./source/state_manager.c:  return (transition_permission[cat][requested] & (1 << acdata->keys->scope)) != 0;
+./source/state_manager.c:  for (acd_key_t *curr = _acdconfig_.keys; curr != NULL; curr = curr->next) {
+./source/state_manager.c:    if (curr->type == ACD_TYPE_GPIO_PMP) {
+./source/state_manager.c:      if (relay_is_on(&curr->data.gpio)) {
+./source/state_manager.c:        LOG(LOG_NOTICE,"Pump %s is on, turning off\n", curr->label);
+./source/state_manager.c:        if (relay_off(&curr->data.gpio) == GPIO_ERROR) {
+./source/state_manager.c:          LOG(LOG_ERR,"GPIO Failed, manually turn %s off\n", curr->label);
+./source/state_manager.c:  if (acdata->keys->scope == ACD_ACTION_BLOCK || acdata->keys->state == ACD_LED_OFF){
+./source/state_manager.c:  } else if (acdata->keys->scope == ACD_ACTION_LIMIT){
+./source/state_manager.c:  if (key->err_cnt++ >= SENSOR_FAULT_THRESHOLD) {
+./source/state_manager.c:    LOG(LOG_ERR, "Sensor %s too many read errors, removing from rotation", key->label);
+./source/state_manager.c:    //LOG(LOG_WARNING, "Add code to remove key in sensor_error(), will need to also modify main function for loop since key->next will be null on return", key->label);
+./source/state_manager.c:    setMASK(key->flags,  ACD_FLAG_FAULTED);
+./source/state_manager.c:    //SET_IF_CHANGED(key->state, ACD_LED_DISABLED, acddata->is_dirty);
+./source/state_manager.c:    key->err_cnt = 0;
+./source/state_manager.c:    //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata->is_dirty);
+./source/state_manager.c:  for (acd_key_t *key = acdata->keys->next; key != NULL; key = key->next) {
+./source/state_manager.c:    if( key->type == type) {
+./source/state_manager.c:      return key->value;
+./source/state_manager.c:  return _acdconfig_.ph_steps[_acdconfig_.ph_step_count - 1].seconds;
+./source/state_manager.c:  return _acdconfig_.orp_steps[_acdconfig_.orp_step_count - 1].seconds;
+./source/state_manager.c:  if (isMASKSET(key->flags, PH_PUMP)) {
+./source/state_manager.c:  } else if (isMASKSET(key->flags, ORP_PUMP)) {
+./source/state_manager.c:  } else if (isMASKSET(key->flags, H2O_PUMP)) {
+./source/state_manager.c:    return key->default_duration;
+./source/state_manager.c:  } else if (key->default_duration > 0) {
+./source/state_manager.c:    return key->default_duration;
+./source/state_manager.c:  if (isMASKSET(key->flags, PH_PUMP)) {
+./source/state_manager.c:    LOG(LOG_NOTICE, "Dosing time calculated for %s at %u(s) (pH %.2f)", key->label, runtime, current_ph);
+./source/state_manager.c:  } else if (isMASKSET(key->flags, ORP_PUMP)) {
+./source/state_manager.c:    LOG(LOG_NOTICE, "Dosing time calculated for %s at %u(s) (ORP %.1f)", key->label, runtime, current_orp);
+./source/state_manager.c:  } else if (isMASKSET(key->flags, H2O_PUMP)) {
+./source/state_manager.c:    LOG(LOG_NOTICE, "Dosing time calculated for %s at %u(s)", key->label, runtime);
+./source/state_manager.c:    LOG(LOG_ERR, "Unable to get pump runtime for %s", key->label ? key->label : "NULL");
+./source/state_manager.c:  if (key->type != ACD_TYPE_GPIO_OUTPUT) {
+./source/state_manager.c:    LOG(LOG_ERR, "Add Code in turn_gpio_switch_on.c - turn_gpio_switch_on(), %s is not a GPIO_SWITCH", key->label);
+./source/state_manager.c:  if (isMASKSET(key->flags, TIMER_ACTIVE) && key->state == ACD_LED_ON) {
+./source/state_manager.c:    LOG(LOG_INFO, "Resetting timer for %s to %d\n",key->label, duration_sec);
+./source/state_manager.c:  LOG(LOG_INFO, "Turning on %s\n", key->label);
+./source/state_manager.c:  relay_on(&key->data.gpio);
+./source/state_manager.c:  key->ison = relay_is_on(&key->data.gpio);
+./source/state_manager.c:  if (key->ison) {
+./source/state_manager.c:    LOG(LOG_ERR, "Failed to turn on %s\n", key->label);
+./source/state_manager.c:  if (key->type != ACD_TYPE_GPIO_OUTPUT) {
+./source/state_manager.c:    LOG(LOG_ERR, "Add Code in turn_gpio_switch_on.c - turn_gpio_switch_on(), %s is not a GPIO_SWITCH", key->label);
+./source/state_manager.c:  LOG(LOG_INFO, "Turning off %s\n", key->label);
+./source/state_manager.c:  relay_off(&key->data.gpio);
+./source/state_manager.c:  key->ison = relay_is_on(&key->data.gpio);
+./source/state_manager.c:  //ASSIGN_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:  key->value = 0;
+./source/state_manager.c:    LOG(LOG_NOTICE, "Pump %s runtime is %d, not turning on", key->label, runtime);
+./source/state_manager.c:  // User-configured safety cap: total ml dosed this period (e.g. per day) must stat under running_total_max_ml. This only warns and skips THIS dose -- it does not
+./source/state_manager.c:  // touch key->state, so the doser stays fully enabled and will dose normally again as soon as running_total_ml resets for the next period. A runaway sensor reading
+./source/state_manager.c:  if (key->dose_stats.running_total_max_ml > 0.0f &&
+./source/state_manager.c:      key->dose_stats.running_total_ml >= key->dose_stats.running_total_max_ml) {
+./source/state_manager.c:    LOG(LOG_WARNING, "%s: dosing limit reached for this period (%.1f / %.1f ml) -- skipping dose until reset",
+./source/state_manager.c:        key->label, key->dose_stats.running_total_ml, key->dose_stats.running_total_max_ml);
+./source/state_manager.c:  if (isMASKSET(key->flags, PH_PUMP) && duration_sec > _acdconfig_.ph_max_dose_time) {
+./source/state_manager.c:    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, duration_sec, _acdconfig_.ph_max_dose_time);
+./source/state_manager.c:  } else if (isMASKSET(key->flags, ORP_PUMP) && duration_sec > _acdconfig_.orp_max_dose_time) {
+./source/state_manager.c:    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, duration_sec, _acdconfig_.orp_max_dose_time);
+./source/state_manager.c:  } else if (isMASKSET(key->flags, H2O_PUMP) && duration_sec > _acdconfig_.h2o_max_dose_time) {
+./source/state_manager.c:    LOG(LOG_WARNING, "Pump %s request runtime %d is greater than maximum, reset to %d", key->label, duration_sec, _acdconfig_.h2o_max_dose_time);
+./source/state_manager.c:  if (isMASKSET(key->flags, TIMER_ACTIVE) && key->state == ACD_LED_ON) {
+./source/state_manager.c:    LOG(LOG_INFO, "Resetting timer for %s to %d\n",key->label, duration_sec);
+./source/state_manager.c:  if ( tank_is_empty(key->child)) {
+./source/state_manager.c:    LOG(LOG_ERR, "%s: is below min volume (%.1f / %.1f %s) -- skipping dose until filled",
+./source/state_manager.c:        key->label, key->child->data.tank.remaining_volume, key->child->data.tank.total_volume, uom_to_str(key->child->data.tank.uom));
+./source/state_manager.c:  LOG(LOG_INFO, "Turning on %s\n", key->label);
+./source/state_manager.c:  if (key->type == ACD_TYPE_GPIO_PMP) {
+./source/state_manager.c:    relay_on(&key->data.gpio);
+./source/state_manager.c:    key->ison = pump_is_on(&key->data.gpio);
+./source/state_manager.c:    LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_on()");
+./source/state_manager.c:  ASSIGN_IF_CHANGED(key->state , ACD_LED_ON, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:  if (isMASKSET(key->flags, PH_PUMP)) {
+./source/state_manager.c:    key->value = get_sensor_value(acdata, ACD_TYPE_EZO_PH);
+./source/state_manager.c:  } else if (isMASKSET(key->flags, ORP_PUMP)) {
+./source/state_manager.c:    key->value = get_sensor_value(acdata, ACD_TYPE_EZO_ORP);
+./source/state_manager.c:  LOG(LOG_INFO, "Turning off %s\n", key->label);
+./source/state_manager.c:  if (key->type == ACD_TYPE_GPIO_PMP) {
+./source/state_manager.c:    relay_off(&key->data.gpio);
+./source/state_manager.c:    key->ison = pump_is_on(&key->data.gpio);
+./source/state_manager.c:    LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_off()");
+./source/state_manager.c:    uint32_t actual_runtime = (uint32_t)(now - start);
+./source/state_manager.c:    float dose_ml = actual_runtime * key->dose_stats.flow_rate;
+./source/state_manager.c:    LOG_PUMP_EVENT(key, actual_runtime, key->value, dose_ml);
+./source/state_manager.c:    calculate_tank_volume_after_dose(key->child, dose_ml);
+./source/state_manager.c:  ASSIGN_IF_CHANGED(key->state, ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:  key->value = 0;
+./source/state_manager.c:  if (tank_is_empty(key->child)) {
+./source/state_manager.c:    //LOG(LOG_WARNING, "%s: dose tank is empty (%.1f / %.1f %s), forcing doser OFF -- switch back to Enabled once refilled\n", 
+./source/state_manager.c:    //    key->label, key->child->data.tank.remaining_volume, key->child->data.tank.total_volume, uom_to_str(key->child->data.tank.uom));
+./source/state_manager.c:    //ASSIGN_IF_CHANGED(key->state, ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:  if (key->type == ACD_TYPE_GPIO_PMP) {
+./source/state_manager.c:    relay_off(&key->data.gpio);
+./source/state_manager.c:    key->ison = pump_is_on(&key->data.gpio);
+./source/state_manager.c:    LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_off()");
+./source/state_manager.c:  SET_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty);
+./source/state_manager.c:  int current = relay_is_on(&key->data.gpio);
+./source/state_manager.c:  if (current >= 0 && current != key->ison) {
+./source/state_manager.c:    LOG(LOG_WARNING, "%s %s changed externally\n",key->type==ACD_TYPE_GPIO_PMP?"Pump":"GPIO Output", key->label);
+./source/state_manager.c:    key->ison = current;
+./source/state_manager.c:    set_key_state(acdata, key, key->ison ? ACD_LED_ON : ACD_LED_ENABLED);
+./source/state_manager.c:    LOG(LOG_NOTICE, "Output %s, GPIO %d is now %s/%s/%s",key->label,key->data.gpio.pin,(relay_is_on(&key->data.gpio)?"ON":"OFF"),acd_state_to_str(key->state),key->ison?"ON":"OFF");
+./source/state_manager.c:  int current = pump_is_on(&key->data.gpio);
+./source/state_manager.c:  if (current >= 0 && current != key->ison) {
+./source/state_manager.c:    LOG(LOG_WARNING, "Pump %s changed externally\n", key->label);
+./source/state_manager.c:    key->ison = current;
+./source/state_manager.c:    set_key_state(acdata, key, key->ison ? ACD_LED_ON : ACD_LED_ENABLED);
+./source/state_manager.c:    LOG(LOG_NOTICE, "Output %s, GPIO %d is now %s/%s/%s",key->label,key->data.gpio.pin,(pump_is_on(&key->data.gpio)?"ON":"OFF"),acd_state_to_str(key->state),key->ison?"ON":"OFF");
+./source/state_manager.c:  LOG(LOG_NOTICE, "Request to set %s to %s (current state: %s) with value %d (master scope %s, master state %s)", key->label, acd_state_to_str(state), acd_state_to_str(key->state), value, acd_scope_to_str(acdata->keys->scope), acd_state_to_str(acdata->keys->state));
+./source/state_manager.c:  acdata->is_dirty = true;
+./source/state_manager.c:  key->is_dirty = true;
+./source/state_manager.c:  if (!is_transition_permitted(acdata, key, state) || ( key->type != ACD_TYPE_MASTER && acdata->keys->state == ACD_LED_OFF)) {
+./source/state_manager.c:    LOG(LOG_WARNING, "%s is %s, can't turn %s (master scope %s)", key->label, acd_state_to_str(key->state), acd_state_to_str(state), acd_scope_to_str(acdata->keys->scope));
+./source/state_manager.c:    if (_acdconfig_.log_zerorun_pump_events && state == ACD_LED_ON && IS_PUMP(key->type)) {
+./source/state_manager.c:  switch(key->type) {
+./source/state_manager.c:      if (key->state == ACD_LED_DISABLED && state == ACD_LED_ON) { // if disabled, can't turn on
+./source/state_manager.c:        LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
+./source/state_manager.c:      ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:      } else if ((state == ACD_LED_OFF || state == ACD_LED_ENABLED || state == ACD_LED_DISABLED) &&  key->state == ACD_LED_ON) {
+./source/state_manager.c:      if (state == ACD_LED_DELAY || isMASKSET(key->flags, DELAY_ACTIVE)) {
+./source/state_manager.c:        set_cond_state(acdata, key, key->met?ACD_LED_ON:ACD_LED_OFF);
+./source/state_manager.c:      //SET_IF_CHANGED(key->state , state, acdata->is_dirty);
+./source/state_manager.c:      LOG(LOG_WARNING, "%s is %s, setting to %s not supported", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
+./source/state_manager.c:  LOG(LOG_DEBUG, "%s set to %s", key->label, acd_state_to_str(key->state));
+./source/state_manager.c:  //  Master         off / on / enabled ----> Means a condition is not met.
+./source/state_manager.c:  //  output/doser   on / off / enabled / disabled ----> off, system will ignore on messages. (user turns off)
+./source/state_manager.c:  LOG(LOG_DEBUG, "Request to set %s to %s (current state: %s) with value %d", key->label, acd_state_to_str(state), acd_state_to_str(key->state), value);
+./source/state_manager.c:  if (state == key->state) {
+./source/state_manager.c:    if (!isMASKSET(key->flags, TIMER_ACTIVE) || value <= 0) {
+./source/state_manager.c:      LOG(LOG_DEBUG, "%s is already %s, no state change needed", key->label, acd_state_to_str(state));
+./source/state_manager.c:  acdata->is_dirty = true;
+./source/state_manager.c:  key->is_dirty = true;
+./source/state_manager.c:  switch(key->type) {
+./source/state_manager.c:      if (key->state == ACD_LED_OFF && state == ACD_LED_ON) { //if we are off, use the on state as enabled.
+./source/state_manager.c:        ASSIGN_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:      } else if (key->state == ACD_LED_DISABLED && state == ACD_LED_ON) { // if disabled, can't turn on
+./source/state_manager.c:        LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
+./source/state_manager.c:        ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:        ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:      if (key->state == ACD_LED_OFF && (state == ACD_LED_DISABLED )) {
+./source/state_manager.c:        LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
+./source/state_manager.c:      if (acdata->keys->scope != ACD_ACTION_ALLOW && (state == ACD_LED_ON || state == ACD_LED_ENABLED )) {
+./source/state_manager.c:        LOG(LOG_WARNING, "Master is in %s but with scope %s, can't turn %s to %s, setting to %s", acd_state_to_str(acdata->keys->state), acd_scope_to_str(acdata->keys->scope), key->label, acd_state_to_str(state), acd_state_to_str(ACD_LED_DISABLED));
+./source/state_manager.c:        ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:      if (key->state == ACD_LED_OFF && (state == ACD_LED_ON || state == ACD_LED_ENABLED)) {
+./source/state_manager.c:        if (acdata->keys->state == ACD_LED_OFF) {
+./source/state_manager.c:          ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty); // Master is off, can only set to disabled.
+./source/state_manager.c:        } else if (acdata->keys->state == ACD_LED_ON) { // Master is on, we can set enabled
+./source/state_manager.c:          ASSIGN_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:          ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty); // Master is has ACD_ACTION_BLOCK | ACD_ACTION_LIMIT, can only set disabled.
+./source/state_manager.c:        if (key->state == ACD_LED_ENABLED ) {
+./source/state_manager.c:        } else if (isMASKSET(key->flags, TIMER_ACTIVE) && value > 0 && key->state == ACD_LED_ON) {
+./source/state_manager.c:          LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
+./source/state_manager.c:      } else if (key->state == ACD_LED_ON && state == ACD_LED_OFF) {
+./source/state_manager.c:      } else if (key->state == ACD_LED_ENABLED && state == ACD_LED_OFF) {
+./source/state_manager.c:        ASSIGN_IF_CHANGED(key->state , ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:       } else if (key->state == ACD_LED_DISABLED && state == ACD_LED_OFF) {
+./source/state_manager.c:        ASSIGN_IF_CHANGED(key->state , ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
+./source/state_manager.c:        //SET_IF_CHANGED(key->state , state, acdata->is_dirty);
+./source/state_manager.c:        LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
+./source/state_manager.c:      if (state == ACD_LED_DELAY || isMASKSET(key->flags, DELAY_ACTIVE)) {
+./source/state_manager.c:        set_cond_state(acdata, key, key->met?ACD_LED_ON:ACD_LED_OFF);
+./source/state_manager.c:        LOG(LOG_WARNING, "%s is %s, setting to %s not supported", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
+./source/state_manager.c:      //SET_IF_CHANGED(key->state , state, acdata->is_dirty);
+./source/state_manager.c:      LOG(LOG_WARNING, "%s is %s, setting to %s not supported", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
+./source/state_manager.c:  LOG(LOG_DEBUG, "%s set to %s", key->label, acd_state_to_str(key->state));
+./source/state_manager.c:  if ( acdata->keys->state == ACD_LED_OFF ) {
+./source/state_manager.c:    for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
+./source/state_manager.c:      //if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF /*&& curr->scope != ACD_SCOPE_LOCAL*/) {
+./source/state_manager.c:      if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF && curr->scope != ACD_SCOPE_LOCAL) {
+./source/state_manager.c:        //LOG(LOG_ERR, "State Manager - set %s to disable\n",curr->label);
+./source/state_manager.c:        //LOG(LOG_ERR, "State Manager - leave %s at %s\n",curr->label, acd_state_to_str(curr->state));
+./source/state_manager.c:  acdata->keys->scope = ACD_ACTION_ALLOW; // Reset to good, below will set to bad.
+./source/state_manager.c:  for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
+./source/state_manager.c:    if (IS_CONDITION(curr->type)) {LOG(LOG_INFO, "State Manager - Condition %s, scope %s, %s",curr->label, acd_scope_to_str(curr->scope), curr->met?"Safe":"Not Safe");}
+./source/state_manager.c:    //if (IS_CONDITION(curr->type) && curr->met == false) {
+./source/state_manager.c:    if (IS_CONDITION(curr->type) && (curr->met == false || curr->state == ACD_LED_DELAY)) {
+./source/state_manager.c:      if (curr->scope == ACD_ACTION_BLOCK) {
+./source/state_manager.c:        acdata->keys->scope = ACD_ACTION_BLOCK;
+./source/state_manager.c:      } else if (curr->scope == ACD_ACTION_LIMIT && acdata->keys->scope != ACD_ACTION_BLOCK) {
+./source/state_manager.c:        acdata->keys->scope = ACD_ACTION_LIMIT; 
+./source/state_manager.c:      LOG(LOG_INFO,"Condition %s not met",curr->label);
+./source/state_manager.c:  LOG(LOG_INFO, "State Manager - Master actions = %s",acd_scope_to_str(acdata->keys->scope) );
+./source/state_manager.c:    //SET_IF_CHANGED(acdata->keys->state, ACD_LED_ON, acdata->is_dirty);
+./source/state_manager.c:    set_key_state(acdata, acdata->keys, ACD_LED_ON);
+./source/state_manager.c:    //SET_IF_CHANGED(acdata->keys->state, ACD_LED_ENABLED, acdata->is_dirty);
+./source/state_manager.c:    set_key_state(acdata, acdata->keys, ACD_LED_ENABLED);
+./source/state_manager.c:  for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
+./source/state_manager.c:    if (IS_OUTPUT(curr->type)) {
+./source/state_manager.c:      if ( (failed_condition != NULL || acdata->keys->scope == ACD_ACTION_LIMIT) && curr->state == ACD_LED_ON) {
+./source/state_manager.c:          LOG(LOG_INFO, "State Manager - Condition %s not safe!, %s is on turning off", failed_condition->label, curr->label);
+./source/state_manager.c:          LOG(LOG_INFO, "State Manager - Condition not safe!, %s is on turning off", curr->label);
+./source/state_manager.c:      if ((failed_condition != NULL || acdata->keys->scope == ACD_ACTION_LIMIT) && curr->state != ACD_LED_OFF /*&& curr->scope != ACD_SCOPE_LOCAL*/) {
+./source/state_manager.c:      } else if (failed_condition == NULL && curr->state != ACD_LED_OFF && curr->state != ACD_LED_ON) {
+./source/state_manager.c:    } else if (IS_INPUT(curr->type)) {
+./source/state_manager.c:      if (acdata->keys->scope == ACD_ACTION_ALLOW || acdata->keys->scope == ACD_ACTION_LIMIT) {
+./source/state_manager.c:        if (curr->state != ACD_LED_ON) {set_key_state(acdata, curr, ACD_LED_ENABLED);}
+./source/state_manager.c:       if (curr->scope == ACD_SCOPE_GLOBAL) {
+./source/state_manager.c:          if (curr->state != ACD_LED_ON) {set_key_state(acdata, curr, ACD_LED_ENABLED);}
+./source/state_manager.c:  //  Master         off / on / enabled ----> Means a condition is not met.
+./source/state_manager.c:  switch(key->type){
+./source/state_manager.c:      if (goodState && acdata->keys->state != ACD_LED_ON && state == ACD_LED_ON && key->scope == ACD_SCOPE_GLOBAL) {
+./source/state_manager.c:      if (state == ACD_LED_ENABLED && acdata->keys->state != ACD_LED_ON) {
+./source/state_manager.c:    if (isMASKSET(key->flags, DELAY_ACTIVE) || key->state == ACD_LED_DELAY) {
+./source/state_manager.c:    LOG(LOG_WARNING, "Device %s can't be set to %s", key->label, acd_state_to_str(state));
+./source/state_manager.c:  if ( (state == ACD_LED_ON || state == ACD_LED_ENABLED) && isMASKSET(key->flags, ACD_FLAG_FAULTED)) {
+./source/state_manager.c:    removeMASK(key->flags, ACD_FLAG_FAULTED);
+./source/state_manager.c:  //return SET_IF_CHANGED(key->state , state, acdata->is_dirty);
+./source/state_manager.c:  if (ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty)) {
+./source/state_manager.c:    LOG(LOG_INFO, "State Manager - Set %s to %s (scope %s)",key->label, acd_state_to_str(key->state), acd_scope_to_str(key->scope));
+./source/state_manager.c:    LOG(LOG_DEBUG, "State Manager - Request to set same state, ignored %s to %s (scope %s)",key->label, acd_state_to_str(key->state), acd_scope_to_str(key->scope));
+./source/state_manager.c:    //LOG(LOG_INFO, "State Manager - No change for %s, remains at %s (scope %s)",curr->label, acd_state_to_str(curr->state), acd_scope_to_str(curr->scope));
+./source/state_manager.c:  if (state == ACD_LED_ON && cond->delay_on > 0) {
+./source/state_manager.c:    if (cond->state == ACD_LED_OFF) {
+./source/state_manager.c:      LOG(LOG_NOTICE, "Condition '%s' met, delaying activation %d seconds!",cond->label, cond->delay_on);
+./source/state_manager.c:      ASSIGN_IF_CHANGED(cond->state , ACD_LED_DELAY, acdata->is_dirty, cond->is_dirty);
+./source/state_manager.c:      start_delay(acdata, cond, 0, cond->delay_on);
+./source/state_manager.c:    } else if (cond->state == ACD_LED_DELAY || isMASKSET(cond->flags, DELAY_ACTIVE)) {
+./source/state_manager.c:        LOG(LOG_WARNING, "State Manager - Request to set '%s' on, but still in delay, ignored!",cond->label);
+./source/state_manager.c:  } else if (state == ACD_LED_OFF && cond->state == ACD_LED_DELAY) {
+./source/state_manager.c:    if (ASSIGN_IF_CHANGED(cond->state , state, acdata->is_dirty, cond->is_dirty)) {
+./source/state_manager.c:      LOG(LOG_INFO, "State Manager - Condition %s changed to %s",cond->label, acd_state_to_str(cond->state));
+./source/state_manager.c:    //if ( state == ACD_LED_OFF && acdata->keys->state == ACD_LED_ON) {
+./source/state_manager.c:     //LOG(LOG_ERR, "Condition %s can't be set to %s", cond->label, acd_state_to_str(state));
+./source/state_manager.c:  if (key->state == ACD_LED_ON) {
+./source/state_manager.c:  LOG(LOG_WARNING, "%s: dose tank is empty (%.2f / %.2f %s), forcing doser OFF -- switch back to Enabled once refilled\n", 
+./source/state_manager.c:        key->label, key->child->data.tank.remaining_volume, key->child->data.tank.total_volume, uom_to_str(key->child->data.tank.uom));
+./source/state_manager.c:  key->state = ACD_LED_OFF;
+./source/state_manager.c:  setMASK(key->flags, SET_OFF_DUE_TO_TANK_VOLUME);
+./source/state_manager.c:  for (acd_key_t *key = acdata->keys->next; key != NULL; key = key->next) {
+./source/state_manager.c:    if (IS_OUTPUT(key->type) && key->child != NULL && IS_TANK_EMPTY_LOCKOUT_ENABLED(key->child)) {
+./source/state_manager.c:      if (tank_is_empty(key->child)) {
+./source/state_manager.c:        if (key->state == ACD_LED_ENABLED || key->state == ACD_LED_ON) {
+./source/state_manager.c:      } else if(isMASKSET(key->flags, SET_OFF_DUE_TO_TANK_VOLUME)) {
+./source/state_manager.c:            key->label, key->child->data.tank.remaining_volume, key->child->data.tank.total_volume, uom_to_str(key->child->data.tank.uom));
+./source/state_manager.c:        removeMASK(key->flags, SET_OFF_DUE_TO_TANK_VOLUME);
+./source/sysfs.c:      "factor": 0.001       // Divide by 1000 (milli-celsius to celsius)
+./source/sysfs.c:      "regex": "^([0-9.]+)", // Capture the first group
+./source/sysfs.c:    if (cfg->parser_type == PARSER_REGEX && cfg->regex_pattern) {
+./source/sysfs.c:        if (regcomp(&compiled_regex, cfg->regex_pattern, REG_EXTENDED) != 0) {
+./source/sysfs.c:    FILE *fp = fopen(cfg->path, "r");
+./source/sysfs.c:    if (cfg->parser_type == PARSER_RAW) {
+./source/sysfs.c:    else if (cfg->parser_type == PARSER_REGEX) {
+./source/sysfs.c:            int len = matches[1].rm_eo - matches[1].rm_so;
+./source/sysfs.c:    result.value = (result.raw * cfg->multiplier) + cfg->offset;
+./source/sysfs.c:        result.raw, cfg->path, result.value);
+./source/uom.c:    // Scan through our map table using case-insensitive validation
+./source/uom.c:    // If a string was provided but didn't match any pre-defined metric,
+./source/utils.c:#include <systemd/sd-journal.h>
+./source/utils.c:    while (len > 0 && (message[len - 1] == '\n' || message[len - 1] == '\r' || message[len - 1] == ' ')) {
+./source/utils.c:        message[--len] = '\0';
+./source/utils.c:    printf("%-8.8s: %s\n", log_priority_to_str(msg_level), message);
+./source/utils.c:    // Using %s for the whole thing inside LOG() prevents double-formatting bugs
+./source/utils.c:  // key->value = value of sensor when pump started (ie ph or orp)
+./source/utils.c:  // Always do a standard human-readable log
+./source/utils.c:  LOG(LOG_NOTICE, "PUMP_EVENT: %s ran for %us (Value: %.2f) estimated %.2fml", key->ID, seconds, reading, ml);
+./source/utils.c:    const char *chem_type = (key->flags & PH_PUMP)  ? "ACID" : 
+./source/utils.c:                            (key->flags & ORP_PUMP) ? "CHLORINE" :
+./source/utils.c:                            (key->flags & H2O_PUMP) ? "WATER" : "UNKNOWN";
+./source/utils.c:                    "APP_EVENT=ACD-PMP-Event",
+./source/utils.c:                    "PUMP_ID=%s", key->ID,
+./source/utils.c:                    "PUMP_NAME=%s", key->label,
+./source/utils.c:    LOG(LOG_NOTICE, "Tank: %s level set to %.1f%%", key->label, key->data.tank.percent_full);
+./source/utils.c:    const char *chem_type = (key->flags & PH_PUMP)  ? "ACID" : 
+./source/utils.c:                            (key->flags & ORP_PUMP) ? "CHLORINE" :
+./source/utils.c:                            (key->flags & H2O_PUMP) ? "WATER" : "UNKNOWN";
+./source/utils.c:                    "APP_EVENT=ACD-TANK-LEVEL-Event",
+./source/utils.c:                    "TANK_ID=%s", key->ID,
+./source/utils.c:                    "TANK_NAME=%s", key->label,
+./source/utils.c:                    "LEVEL_PERCENT=%f", key->data.tank.percent_full,
+./source/utils.c:                    "LEVEL_VOLUME=%f", key->data.tank.remaining_volume,
+./source/utils.c:// sd_journal_get_data() returns "field=value" as a raw, length-delimited
+./source/utils.c:// blob -- it is NOT guaranteed to be null-terminated, so treating it as a
+./source/utils.c:// value portion into a small local buffer and null-terminate it first.
+./source/utils.c:  size_t value_len = length - prefix_len;
+./source/utils.c:  if (value_len >= sizeof(buf)) value_len = sizeof(buf) - 1;
+./source/utils.c:    LOG(LOG_ERR, "READ_LAST_TANK_LEVEL_EVENT: failed to open journal: %s", strerror(-ret));
+./source/utils.c:  snprintf(match_tank, sizeof(match_tank), "TANK_ID=%s", key->ID);
+./source/utils.c:  // Two add_match calls on different field names AND together -- this
+./source/utils.c:    LOG(LOG_NOTICE, "READ_LAST_TANK_LEVEL_EVENT: no prior tank level event found for %s", key->ID);
+./source/utils.c:    LOG(LOG_ERR, "READ_LAST_TANK_LEVEL_EVENT: found event for %s but couldn't parse level fields", key->ID);
+./source/utils.c:  key->data.tank.percent_full = percent_full;
+./source/utils.c:  key->data.tank.remaining_volume = remaining;
+./source/utils.c:  key->value    = percent_full;
+./source/utils.c:  key->is_dirty = true;
+./source/utils.c:      key->label, percent_full, remaining, uom_to_display_str(key->data.tank.uom));
+./source/utils.c:  end = str + strlen(str) - 1;
+./source/utils.c:  while(end > str && isspace(*end)) end--;
+./source/utils.c:  if (end != (str + strlen(str) - 1) )
+./source/utils.c:// Search for needle in haystack, case-insensitive, length-limited.
+./source/utils.c:  // Pre-compute first character of needle in both cases to avoid
+./source/utils.c:  // tolower() on every byte — we only call strncasecmp on a first-char hit
+./source/utils.c:  const char *end = haystack + haystack_len - needle_len;
+./source/utils.c:    // Fast first-character filter
+./source/utils.c: * surrounding whitespace. Returns 0 on success, -1 on mismatch.
+./source/utils.c:    if (!haystack || !needle) return -1;
+./source/utils.c:    const char *h_end = haystack + strlen(haystack) - 1;
+./source/utils.c:    const char *n_end = needle + strlen(needle) - 1;
+./source/utils.c:    while (h_end > haystack && isspace((unsigned char)*h_end)) h_end--;
+./source/utils.c:    while (n_end > needle && isspace((unsigned char)*n_end)) n_end--;
+./source/utils.c:    size_t h_len = (h_end >= haystack) ? (size_t)(h_end - haystack + 1) : 0;
+./source/utils.c:    size_t n_len = (n_end >= needle) ? (size_t)(n_end - needle + 1) : 0;
+./source/utils.c:        return -1;
+./source/utils.c:// dst: destination buffer to write result (must be pre-allocated by caller)
+./source/utils.c:// find: character to replace, use '-', not "-", to avoid confusion with string literals
+./source/utils.c:    len = ACD_MIN(len, dst_len - 1); // -1 to leave room for \0
+./source/utils.c:  return ((fahrenheit-32) / 1.8);
+./source/utils.c:// Small random float drift in range [-range, +range]
+./source/utils.c:  return ((float)(rand() % 1000) / 1000.0f - 0.5f) * 2.0f * range;

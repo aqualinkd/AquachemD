@@ -38,6 +38,19 @@ CFG_ENTRY( "mqtt_timed_update",      mqtt_timed_update,      true,              
 CFG_ENTRY( "mqtt_repost_sensors",    mqtt_repost_sensors,    false,                CFG_BOOL,    CFG_ADVANCED,                                  0,                CFG_O_BOOL )
 CFG_ENTRY( "mqtt_discovery_strict_availability",mqtt_strict_avail,false,           CFG_BOOL,    CFG_ADVANCED,                                  0,               CFG_O_BOOL )
 
+/* --- REMOTE INSTANCE --- */
+/*
+remote_instance_label=Spa House
+remote_instance_url=http://spa-aquachemd.local:88
+remote_instance_mqtt_topic=aquachemd_spa
+remote_instance_id_suffix=S2
+
+CFG_ENTRY( "remote_instance_label",      remote_instance_label,            NULL,    CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
+CFG_ENTRY( "remote_instance_url",        remote_instance_url,              NULL,    CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
+CFG_ENTRY( "remote_instance_mqtt_topic", remote_instance_mqtt_topic,       NULL,    CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
+CFG_ENTRY( "remote_instance_id_suffix",  remote_instance_id_suffix,        NULL,    CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
+*/
+
 /* --- 4. GPIO CONFIGURATION --- */
 CFG_ENTRY( "gpio_chip",              gpio_chip,              "/dev/gpiochip0",     CFG_STRING,  CFG_ADVANCED,                       0,                NULL )
 

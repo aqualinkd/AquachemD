@@ -105,6 +105,7 @@ struct aquachemdata
   char display_message[DISPLAY_MSG_SIZE];
 };
 
+static inline acd_key_t *get_master(struct aquachemdata *acdata) { return acdata->keys; }
 
 #define UNKNOWN -9999 
 

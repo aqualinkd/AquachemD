@@ -83,13 +83,13 @@ typedef enum {
 
     // Outputs (Actuators)
     ACD_TYPE_GPIO_PMP,
-    //ACD_TYPE_GPIO_PMP_PH,
-    //ACD_TYPE_GPIO_PMP_ORP,
     ACD_TYPE_EZO_PMP,
-    ACD_TYPE_GPIO_OUTPUT, // SWITCH Below needs to be delted once codebase is updated.
-    //ACD_TYPE_GPIO_SWITCH,
+    ACD_TYPE_GPIO_OUTPUT, 
+
+    #define ACD_PMP_FIRST ACD_TYPE_GPIO_PMP
+    #define ACD_PMP_LAST  ACD_TYPE_EZO_PMP
+
     #define ACD_OUT_FIRST ACD_TYPE_GPIO_PMP
-    //#define ACD_OUT_LAST  ACD_TYPE_EZO_PMP
     #define ACD_OUT_LAST  ACD_TYPE_GPIO_OUTPUT
 
     // Self managed
@@ -106,6 +106,9 @@ typedef enum {
 
 // Returns true for any output/actuator (Pumps, etc.)
 #define IS_OUTPUT(t)    ((t) >= ACD_OUT_FIRST  && (t) <= ACD_OUT_LAST)
+
+// REturns true for any pump (GPIO or EZO)
+#define IS_PUMP(t)      ((t) >= ACD_PMP_FIRST && (t) <= ACD_PMP_LAST)
 
 // Don't have a MQTT sensor code, so place it here.
 typedef struct {
@@ -174,6 +177,93 @@ typedef enum {
 // Sensor scope has no effect while the master is ALLOW or LIMIT - all
 // sensors read normally in those states regardless of their own scope.
 
+
+
+/*
+ * =====================================================================================
+ *                               STATE PERMISSIVENESS MATRIX
+ * =====================================================================================
+ *
+
+ *
+ * =====================================================================================
+ *
+ * CONDITIONS
+ *  Failed Condition with SCOPE_LOCAL  = Set Master to Soft Limit (Block outputs, carry on reading sensors) 
+ *  Failed Condition with SCOPE_GLOBAL = Set Master to Hard Limit (Block output and sensors)
+ *
+ * LEGEND:
+ *   [ALL] = State valid under ALL Master Actions (ALLOW, LIMIT, BLOCK)
+ *   [ A ] = Valid ONLY when Master Scope == ACD_ACTION_ALLOW
+ *   [ L ] = Valid ONLY when Master Scope == ACD_ACTION_LIMIT
+ *   [ B ] = Valid ONLY when Master Scope == ACD_ACTION_BLOCK
+ *
+ * +----------------------+-------+-------+---------+----------+-------+
+ * | KEY TYPE             | OFF   | ON    | ENABLED | DISABLED | DELAY |
+ * +----------------------+-------+-------+---------+----------+-------+
+ * | GPIO_PMP / EZO_PMP   | ALL   |   A   |    A    |   L/B    |   -   |
+ * | GPIO_OUTPUT (GLOBAL) | ALL   |   A   |    -    |   L/B    |   -   |
+ * | GPIO_OUTPUT (LOCAL)  | ALL   |  ALL  |    -    |    -     |   -   |
+ * +----------------------+-------+-------+---------+----------+-------+
+ *
+ * SENSORS
+ * Scope Local  — always reads, regardless of system state.
+ * Scope Global — reads normally under Allow or Limit; stops reading only when the system is Blocked.
+ *
+ * MASTER
+ * Master OFF   - Display OFF    - Manual, system-wide off. Overrides everything.
+ * Master ALLOW - Display ON     - No condition failed. Outputs and sensors both run normally.
+ * Master LIMIT - Display ON     - A Local-scope condition failed. Outputs pause; sensors keep reading.
+ * Master BLOCK - Display ENABLE - A Global-scope condition failed (or Master is OFF). Outputs pause;
+ *                                 Global-scoped sensors also pause. Local-scoped sensors keep reading.
+ *              
+ * STATE TO DISPLAY
+ * +---------------------------+----------+----------+----------+----------+
+ * | Master's acd_state_t is   | OFF      | ON       | ON       | ENABLED  |
+ * | Scope / system severity   |    -     | ALLOW    | LIMIT    | BLOCK    |
+ * +---------------------------+----------+----------+----------+----------+
+ * | GPIO_PMP / EZO_PMP (ON)   | DISABLED | ON       |    -     |    -     |
+ * | GPIO_PMP / EZO_PMP (OFF)  | DISABLED | ENABLED  | DISABLED | DISABLED |
+ * | GPIO_OUTPUT (LOCAL) (ON)  | DISABLED | ON       |    ON    |   ON     |
+ * | GPIO_OUTPUT (LOCAL) (OFF) | DISABLED | OFF      |    OFF   |   OFF    |
+ * | GPIO_OUTPUT (GLOBAL) (ON) | DISABLED | ON       |    ON    | DISABLED |
+ * | GPIO_OUTPUT (GLOBAL) (OFF)| DISABLED | OFF      |    OFF   | DISABLED |
+ * |                           |          |          |          |          |
+ * | SENSOR (LOCAL)            | DISABLED | reading  | reading  | reading  |
+ * | SENSOR (GLOBAL)           | DISABLED | reading  | reading  | DISABLED |
+ * | GPIO_INPUT                | reading  | reading  | reading  | reading  |
+ * | EXTERNAL SENSOR (mqtt)    | reading  | reading  | reading  | reading  |
+ * +---------------------------+----------+----------+----------+----------+
+ * 
+ * ENABLED state = why pumps have ENABLED.
+ *   OFF      = Pump off / Put in off state by user or system due to tank level - 
+                           Can't be turned to ON until manually set to enabled (or tank filled). -
+                           ie no automation work
+ *   ENABLED  = Pump off / Ready to go to ON state by automation or user.
+ *   DISABLED = Pump off / Pump can't be turned on until condition/interlock is met -
+                           Or Master turned on.
+ *   ON       = Pump is on.
+ *
+ * =====================================================================================
+ *                             ACTION SCOPE QUICK-REFERENCE
+ * =====================================================================================
+ *
+ *  ACD_ACTION_ALLOW (0) | All conditions met.
+ *                       | - Outputs: Allowed ON / ENABLED
+ *                       | - Sensors: Full active polling
+ *  -----------------------------------------------------------------------------------
+ *  ACD_ACTION_LIMIT (1) | Local condition failed (ACD_SCOPE_LOCAL).
+ *                       | - Outputs: Forced DISABLED / OFF (Pumps blocked)
+ *                       | - Sensors: Full active polling continues
+ *  -----------------------------------------------------------------------------------
+ *  ACD_ACTION_BLOCK (2) | Global condition failed (ACD_SCOPE_GLOBAL) or Master OFF.
+ *                       | - Outputs: Forced DISABLED / OFF
+ *                       | - Global Sensors: Forced DISABLED
+ *                       | - Local Sensors: Remain ENABLED / Polling
+ * =====================================================================================
+ */
+
+
 typedef enum {
     ACD_SCOPE_ALLOW  = 0, // Default / No restriction (ONLY FOR MASTER)
     ACD_SCOPE_LOCAL  = 1, // Acts as a Soft Limit for specific outputs
@@ -209,6 +299,7 @@ typedef struct acd_key_t {
     acd_type_t type;
     acd_state_t state;
     acd_scope_t scope;
+    //char *remote_instance;  // Future // NULL for local devices; the remote instance's ID/label if mirrored
     
     volatile bool is_dirty;
     char *label;

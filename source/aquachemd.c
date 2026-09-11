@@ -477,12 +477,11 @@ reload_configuration:
         pthread_mutex_init(&curr->stats.lock, NULL);
         reset_sensor_average(curr);
       }
-    } else if (curr->type == ACD_TYPE_GPIO_OUTPUT || curr->type == ACD_TYPE_GPIO_INPUT) {
-      curr->state = ACD_LED_OFF;
-      //if (sensor_is_met(&curr->data.gpio)) {
-        //ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty); 
-        //set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
-      //}
+    } else if (curr->type == ACD_TYPE_GPIO_OUTPUT /*|| curr->type == ACD_TYPE_GPIO_INPUT*/) {
+      if (curr->scope == ACD_ACTION_ALLOW)
+        curr->state = ACD_LED_OFF;
+      else
+        curr->state = ACD_LED_ENABLED; // ACD_ACTION_ LIMIT | BLOCK
     } else if (IS_OUTPUT(curr->type)) {
       // GPIO status will be set from sync_pump_state() above
       //if (curr->type != ACD_TYPE_GPIO_PMP) {
@@ -523,6 +522,7 @@ reload_configuration:
     float temp_reading_for_ph = UNKNOWN;
     char *master_temp_label;
     bool all_conditions_met = true; // Should be able to get rid of this all together now, and just use acddata.keys->state 
+    int gpio_state = GPIO_ERROR;
 
     LOG(reading_log_level,"---- taking reading(s) ----\n");
     update_display_message(&acddata, ACD_MSG_CLEAR, NULL);
@@ -536,10 +536,16 @@ reload_configuration:
       if (IS_CONDITION(curr->type)) {
         if (curr->type == ACD_TYPE_GPIO_COND) {
           // This should have been changed from the gpio_monitor, but 2nd check doesn't hurt
-          if (sensor_is_met(&curr->data.gpio) > 0 && !curr->met) {
+          gpio_state = sensor_is_met(&curr->data.gpio);
+          if (gpio_state != GPIO_ERROR && gpio_state != curr->met) {
             ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
             set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
-          }
+          } else if (gpio_state == GPIO_ERROR) LOG(LOG_ERR, "Reading %s GPIO pin %d\n",curr->label,curr->data.gpio.pin);
+          /*
+          if (sensor_is_met(&curr->data.gpio) >= 0 && !curr->met) {
+            ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
+            set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
+          }*/
         }
         if (!curr->met) {
           if ( !isMASKSET(curr->flags, CONDITION_NOTIFIED)) {
@@ -553,10 +559,11 @@ reload_configuration:
           LOG(LOG_NOTICE,"Condition satisfied: %s\n", curr->label);
         }
       } else if (curr->type == ACD_TYPE_GPIO_INPUT) {
-        if (sensor_is_met(&curr->data.gpio) > 0 && !curr->met) {
+        gpio_state = sensor_is_met(&curr->data.gpio);
+        if (gpio_state != GPIO_ERROR && gpio_state != curr->met) {
           ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
           set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
-        }
+        } else if (gpio_state == GPIO_ERROR) LOG(LOG_ERR, "Reading %s GPIO pin %d\n",curr->label,curr->data.gpio.pin);  
       } else if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_OUTPUT) {
         check_gpio_output_state(&acddata, curr);
       }
@@ -764,12 +771,7 @@ reload_configuration:
 
         case ACD_TYPE_GPIO_INPUT:
         case ACD_TYPE_GPIO_OUTPUT:
-          // For GPIO may want to read state
-          /*
-          if (sensor_is_met(&key->data.gpio) > 0 && !key->met) {
-            ASSIGN_IF_CHANGED(key->met, !key->met, acddata.is_dirty, key->is_dirty); 
-            set_key_state(&acddata, key, key->met?ACD_LED_ON:ACD_LED_OFF);
-          }*/
+        // These are handled in the condition loop, not sure if we should move them here?
         break;
 
         default:
