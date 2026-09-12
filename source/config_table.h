@@ -31,7 +31,7 @@ CFG_ENTRY( "mqtt_server",            mqtt_server,            NULL,              
 CFG_ENTRY( "mqtt_user",              mqtt_user,              NULL,                 CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
 CFG_ENTRY( "mqtt_passwd",            mqtt_passwd,            NULL,                 CFG_STRING,  CFG_ADVANCED|CFG_PASSWD_MASK,  0,                NULL )
 CFG_ENTRY( "mqtt_aquachemd_topic",   mqtt_aquachemd_topic,   "aquachemd",          CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
-CFG_ENTRY( "7",   mqtt_aqualinkd_topic,   "aqualinkd",          CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
+CFG_ENTRY( "mqtt_aqualinkd_topic",   mqtt_aqualinkd_topic,   "aqualinkd",          CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
 CFG_ENTRY( "mqtt_discovery_topic",   mqtt_discovery_topic,   "homeassistant",      CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
 CFG_ENTRY( "mqtt_discovery_use_mac", mqtt_discovery_use_mac, true,                 CFG_BOOL,    CFG_ADVANCED,                                  0,                CFG_O_BOOL )
 CFG_ENTRY( "mqtt_timed_update",      mqtt_timed_update,      true,                 CFG_BOOL,    CFG_ADVANCED,                                  0,                CFG_O_BOOL )
@@ -95,35 +95,41 @@ CFG_ENTRY( "log_zerorun_pump_events",log_zerorun_pump_events,false,             
 CFG_ENTRY( "mqtt_condition_label",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_condition_topic",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_condition_value",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "mqtt_condition_scope_global",  keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "mqtt_condition_scope_global",  keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "mqtt_condition_scope",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_condition_met_delay",     keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 CFG_ENTRY( "gpio_condition_label",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_pin",           keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_pin_mode",      keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_required_state",keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_condition_scope_global",  keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "gpio_condition_scope_global",  keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_condition_scope",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_met_delay",     keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 
 CFG_ENTRY( "ph_sensor_label",        keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "ph_sensor_type",         keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "ph_sensor_address",      keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "ph_sensor_scope_global", keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "ph_sensor_scope_global", keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "ph_sensor_scope",        keys,                   NULL,                 CFG_STRING,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "ph_sensor_statistics",   keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 
 CFG_ENTRY( "orp_sensor_label",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "orp_sensor_type",        keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "orp_sensor_address",     keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "orp_sensor_scope_global",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "orp_sensor_scope_global",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "orp_sensor_scope",       keys,                   NULL,                 CFG_STRING,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+
 CFG_ENTRY( "orp_sensor_statistics",  keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 
 CFG_ENTRY( "prs_sensor_label",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_type",        keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_address",     keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "prs_sensor_scope_global",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "prs_sensor_scope_global",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "prs_sensor_scope",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "prs_sensor_statistics",  keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 // For I2C (not EZO)
 CFG_ENTRY( "prs_sensor_min_value",   keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -143,7 +149,8 @@ CFG_ENTRY( "temp_sensor_topic",      keys,                   NULL,              
 CFG_ENTRY( "temp_sensor_path",       keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "temp_sensor_offset",     keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "temp_sensor_scale",      keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "temp_sensor_scope_global",keys,                  NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "temp_sensor_scope_global",keys,                  NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "temp_sensor_scope",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "temp_sensor_statistics", keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "temp_sensor_uom",        keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
@@ -153,13 +160,14 @@ CFG_ENTRY( "gpio_doser_type",          keys,                   NULL,            
 CFG_ENTRY( "gpio_doser_pin",           keys,                   NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_address",       keys,                   NULL,                 CFG_HEX,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_pin_mode",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_doser_required_state",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "gpio_doser_required_state",keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_ml_per_second", keys,                   NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_tank_total_volume", keys,               NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_tank_min_volume", keys,                 NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_tank_uom",      keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_doser_running_dose_max_ml", keys,             NULL,                 CFG_FLOAT,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_doser_scope_global",  keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+//CFG_ENTRY( "gpio_doser_scope_global",  keys,                   NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_doser_scope",         keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 /*
 CFG_ENTRY( "gpio_switch_label",         keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -243,6 +251,8 @@ CFG_ENTRY( "sysfs_sensor_uom",        keys,                   NULL,             
 
 #define CFG_O_GPIO_DIRECTION "[\"Input\",\"Output\"]"
 
-#define CFG_O_SCOPE "[\"Allow\",\"Local\",\"Global\"]"
+#define CFG_O_SCOPE "[\"Local\",\"Global\"]"
+#define CFG_O_SCOPE_FULL "[\"Allow\",\"Local\",\"Global\"]"
+
 
 //#define CFG_O_STATS "[\"None\",\"Daily\",\"Weekly\"]"

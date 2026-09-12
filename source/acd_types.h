@@ -320,7 +320,7 @@ typedef struct acd_key_t {
 
     union {
       bool met;    // For conditions, met or not.
-      bool ison;   // For output pump,
+      bool ison;   // For output pump, or gpio inputs
     };
 
     union {

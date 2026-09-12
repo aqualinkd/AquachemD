@@ -540,7 +540,7 @@ reload_configuration:
           // This should have been changed from the gpio_monitor, but 2nd check doesn't hurt
           gpio_state = sensor_is_met(&curr->data.gpio);
           if (gpio_state != GPIO_ERROR && gpio_state != curr->met) {
-            ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
+            ASSIGN_IF_CHANGED(curr->met, gpio_state, acddata.is_dirty, curr->is_dirty);
             set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
           } else if (gpio_state == GPIO_ERROR) {
             LOG(LOG_ERR, "Reading %s GPIO pin %d\n",curr->label,curr->data.gpio.pin);
@@ -775,9 +775,9 @@ reload_configuration:
     
         case ACD_TYPE_GPIO_INPUT:
           gpio_state = sensor_is_met(&key->data.gpio);
-          if (gpio_state != GPIO_ERROR && gpio_state != key->met) {
-            ASSIGN_IF_CHANGED(key->met, !key->met, acddata.is_dirty, key->is_dirty);
-            set_key_state(&acddata, key, key->met?ACD_LED_ON:ACD_LED_OFF);
+          if (gpio_state != GPIO_ERROR && ( gpio_state != key->ison || (key->ison?ACD_LED_ON:ACD_LED_OFF) != key->state )) {
+            ASSIGN_IF_CHANGED(key->ison, gpio_state, acddata.is_dirty, key->is_dirty);
+            set_key_state(&acddata, key, key->ison?ACD_LED_ON:ACD_LED_OFF);
           } else if (gpio_state == GPIO_ERROR) {
             LOG(LOG_ERR, "Reading %s GPIO pin %d\n",key->label,key->data.gpio.pin);
           }
