@@ -449,6 +449,8 @@ reload_configuration:
       if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_INPUT, curr->data.gpio.active) != 0) {
         LOG(LOG_ERR, "Failed to open GPIO for %s, pin %d\n", curr->label, curr->data.gpio.pin);
       }
+      //curr->met = sensor_is_met(&curr->data.gpio);
+      //curr->state = curr->met?ACD_LED_ON:ACD_LED_OFF;
     } else if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_OUTPUT) {
       LOG(LOG_DEBUG,"Setting up GPIO %s: %s, pin %d\n", (curr->type == ACD_TYPE_GPIO_PMP?"Pump":"Output"), curr->label, curr->data.gpio.pin);
       if (gpio_open(&curr->data.gpio, _acdconfig_.gpio_chip, curr->data.gpio.pin, GPIO_OUTPUT, curr->data.gpio.active) != 0) {
@@ -478,10 +480,10 @@ reload_configuration:
         reset_sensor_average(curr);
       }
     } else if (curr->type == ACD_TYPE_GPIO_OUTPUT /*|| curr->type == ACD_TYPE_GPIO_INPUT*/) {
-      if (curr->scope == ACD_ACTION_ALLOW)
+      //if (curr->scope == ACD_ACTION_ALLOW)
         curr->state = ACD_LED_OFF;
-      else
-        curr->state = ACD_LED_ENABLED; // ACD_ACTION_ LIMIT | BLOCK
+      //else
+      //  curr->state = ACD_LED_ENABLED; // ACD_ACTION_ LIMIT | BLOCK
     } else if (IS_OUTPUT(curr->type)) {
       // GPIO status will be set from sync_pump_state() above
       //if (curr->type != ACD_TYPE_GPIO_PMP) {
@@ -518,7 +520,7 @@ reload_configuration:
   //while ( _runstate == ACD_KEEPRUNNING )
   while (atomic_load_explicit(&_thread_control.state, memory_order_relaxed) == ACD_KEEPRUNNING)
   {
-    acd_scope_t sensors_read_scope = ACD_SCOPE_GLOBAL;
+    //acd_scope_t sensors_read_scope = ACD_SCOPE_GLOBAL;
     float temp_reading_for_ph = UNKNOWN;
     char *master_temp_label;
     bool all_conditions_met = true; // Should be able to get rid of this all together now, and just use acddata.keys->state 
@@ -540,7 +542,9 @@ reload_configuration:
           if (gpio_state != GPIO_ERROR && gpio_state != curr->met) {
             ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
             set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
-          } else if (gpio_state == GPIO_ERROR) LOG(LOG_ERR, "Reading %s GPIO pin %d\n",curr->label,curr->data.gpio.pin);
+          } else if (gpio_state == GPIO_ERROR) {
+            LOG(LOG_ERR, "Reading %s GPIO pin %d\n",curr->label,curr->data.gpio.pin);
+          }
           /*
           if (sensor_is_met(&curr->data.gpio) >= 0 && !curr->met) {
             ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
@@ -558,6 +562,8 @@ reload_configuration:
           removeMASK(curr->flags, CONDITION_NOTIFIED);
           LOG(LOG_NOTICE,"Condition satisfied: %s\n", curr->label);
         }
+      // ALL BELOW needs to be moved down to main loop, once we have new validation in place
+      /*
       } else if (curr->type == ACD_TYPE_GPIO_INPUT) {
         gpio_state = sensor_is_met(&curr->data.gpio);
         if (gpio_state != GPIO_ERROR && gpio_state != curr->met) {
@@ -565,7 +571,7 @@ reload_configuration:
           set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
         } else if (gpio_state == GPIO_ERROR) LOG(LOG_ERR, "Reading %s GPIO pin %d\n",curr->label,curr->data.gpio.pin);  
       } else if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_OUTPUT) {
-        check_gpio_output_state(&acddata, curr);
+        check_gpio_output_state(&acddata, curr); */
       }
     }
     
@@ -573,7 +579,7 @@ reload_configuration:
     //  Master state = ENABLED, scope = Global   // Condition set to Global failed (but can read local sensors)
     //  Master state = ON, scope = Local         // Condition set to local failed (is can read all sensors, but not dose)
     //LOG(LOG_ERR, "Master state = %s, scope = %s\n",acd_state_to_str(acddata.keys->state), acd_scope_to_str(acddata.keys->scope) );
-
+#ifndef USE_LOGIC_TABLE
     if (all_conditions_met && acddata.keys->state != ACD_LED_OFF) {
       sensors_read_scope = ACD_SCOPE_ALLOW;
     //} else if (!all_conditions_met && acddata.keys->state == ACD_LED_ENABLED && acddata.keys->scope == ACD_SCOPE_GLOBAL) {
@@ -584,14 +590,20 @@ reload_configuration:
       LOG(reading_log_level, "Master state = %s, scope = %s, skipping reading of sensors!\n",acd_state_to_str(acddata.keys->state), acd_scope_to_str(acddata.keys->scope) );
       goto next_wake; // Skip the rest of the loop and go straight to sleep if any condition is not met
     }
-
+#endif
 
     for (acd_key_t *key = acddata.keys->next; key != NULL; key = key->next) {
-      
+ 
+#ifdef USE_LOGIC_TABLE
+      if (!should_sensor_read(&acddata, key)) {
+        LOG(LOG_NOTICE,"AquachemD sensor %s set to not read, ignoring\n",key->label);
+        continue;
+#else
       if (sensors_read_scope == ACD_SCOPE_LOCAL && key->scope == ACD_SCOPE_GLOBAL) {
         LOG(LOG_DEBUG,"AquachemD sensor read scope local, skipping reading of global sensor %s\n",key->label);
         //LOG(LOG_INFO, "Master  %s state=%s, scope=%s. Skipping reading of sensors",acd_state_to_str(curr->state), curr->label, acd_scope_to_str(curr->scope));
         continue;
+#endif
       } else if (isMASKSET(key->flags,  ACD_FLAG_FAULTED)) {
         LOG(LOG_DEBUG,"Sensor %s failed, skipping\n",key->label);
         continue;
@@ -761,17 +773,25 @@ reload_configuration:
           }
         } break;
     
+        case ACD_TYPE_GPIO_INPUT:
+          gpio_state = sensor_is_met(&key->data.gpio);
+          if (gpio_state != GPIO_ERROR && gpio_state != key->met) {
+            ASSIGN_IF_CHANGED(key->met, !key->met, acddata.is_dirty, key->is_dirty);
+            set_key_state(&acddata, key, key->met?ACD_LED_ON:ACD_LED_OFF);
+          } else if (gpio_state == GPIO_ERROR) {
+            LOG(LOG_ERR, "Reading %s GPIO pin %d\n",key->label,key->data.gpio.pin);
+          }
+          break;
+
+        case ACD_TYPE_GPIO_OUTPUT:
+          check_gpio_output_state(&acddata, key); 
+        break;
 
         case ACD_TYPE_GPIO_PMP:
         case ACD_TYPE_EZO_PMP:
         case ACD_TYPE_MQTT_COND:
         case ACD_TYPE_GPIO_COND:
         case ACD_TYPE_MQTT_VALUE:
-        break;
-
-        case ACD_TYPE_GPIO_INPUT:
-        case ACD_TYPE_GPIO_OUTPUT:
-        // These are handled in the condition loop, not sure if we should move them here?
         break;
 
         default:

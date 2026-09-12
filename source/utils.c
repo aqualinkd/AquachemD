@@ -687,6 +687,15 @@ const char* acd_scope_to_str( acd_scope_t scope) {
     default:                   return "UNKNOWN";
   }
 }
+// Simply the opposite of above.
+const char* acd_action_to_str( acd_scope_t scope) {
+  switch (scope) {
+    case ACD_ACTION_ALLOW:     return "Allow";
+    case ACD_ACTION_LIMIT:     return "Limit";
+    case ACD_ACTION_BLOCK:     return "Block";
+    default:                   return "UNKNOWN";
+  }
+}
 
 
 const char* acd_condition_met_to_str(bool met) {

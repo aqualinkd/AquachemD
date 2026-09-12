@@ -29,7 +29,7 @@ void set_pump_off_due_to_tank_empty(struct aquachemdata *acdata, acd_key_t *key)
 * This is used to enforce the rules in state_change_request() and state_change_request_extended().
 */
 
-#define USE_LOGIC_TABLE
+
 
 typedef enum { KC_MASTER, KC_PUMP_GLOBAL, KC_PUMP_LOCAL, KC_OUTPUT_ALLOW, KC_OUTPUT_GLOBAL, KC_OUTPUT_LOCAL, KC_CONDITION, KC_SENSOR_GLOBAL, KC_SENSOR_LOCAL, KC_COUNT } key_category_t;
 
@@ -45,19 +45,21 @@ static const uint8_t transition_permission[KC_COUNT][5] = {
   [KC_MASTER]        = { SCOPE_ALL, SCOPE_ALL,       SCOPE_L|SCOPE_B, 0,               0 },
   [KC_PUMP_GLOBAL]   = { SCOPE_ALL, SCOPE_A,         SCOPE_A,         SCOPE_L|SCOPE_B, 0 },  // Allow dosing while GLOBAL
   [KC_PUMP_LOCAL]    = { SCOPE_ALL, SCOPE_A|SCOPE_L, SCOPE_A|SCOPE_L, SCOPE_B,         0 },  // Allow dosing while LOCAL & GLOBAL
-  [KC_OUTPUT_ALLOW]  = { SCOPE_ALL, SCOPE_ALL,       SCOPE_ALL,       SCOPE_ALL,       0 },
-  [KC_OUTPUT_GLOBAL] = { SCOPE_ALL, SCOPE_A,         SCOPE_A,         SCOPE_L|SCOPE_B, 0 },  // pending REVALIDATE THIS. (curently same as pump)
-  [KC_OUTPUT_LOCAL]  = { SCOPE_ALL, SCOPE_ALL,       SCOPE_A|SCOPE_L, SCOPE_B,         0 },
+  [KC_OUTPUT_ALLOW]  = { SCOPE_ALL, SCOPE_ALL,       0,               0,               0 },
+  [KC_OUTPUT_GLOBAL] = { SCOPE_ALL, SCOPE_A,         0,               SCOPE_L|SCOPE_B, 0 },  
+  [KC_OUTPUT_LOCAL]  = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               SCOPE_B,         0 },
   [KC_CONDITION]     = { SCOPE_ALL, SCOPE_ALL,       0,               0,               SCOPE_ALL },
-  [KC_SENSOR_GLOBAL] = { SCOPE_ALL, SCOPE_ALL,       0,               SCOPE_B,         0 },  // Need to validate
-  [KC_SENSOR_LOCAL]  = { SCOPE_ALL, SCOPE_ALL,       SCOPE_ALL,       SCOPE_B,         0 },  // Need to validate
+  //[KC_SENSOR_GLOBAL] = { SCOPE_ALL, SCOPE_ALL,       0,               SCOPE_B,         0 },  // Need to validate
+  //[KC_SENSOR_LOCAL]  = { SCOPE_ALL, SCOPE_ALL,       SCOPE_ALL,       SCOPE_B,         0 },  // Need to validate
+  [KC_SENSOR_GLOBAL] = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               SCOPE_B,         0 },
+  [KC_SENSOR_LOCAL]  = { SCOPE_ALL, SCOPE_ALL,       SCOPE_ALL,       SCOPE_B,         0 },
 };
 
 static key_category_t classify_key(acd_key_t *key) {
   if (key->type == ACD_TYPE_MASTER)      return KC_MASTER;
   if (IS_CONDITION(key->type))           return KC_CONDITION;
   if (IS_PUMP(key->type))                return (key->scope == ACD_SCOPE_GLOBAL) ? KC_PUMP_GLOBAL : KC_PUMP_LOCAL;
-  if (key->type == ACD_TYPE_GPIO_OUTPUT) return (key->scope == ACD_SCOPE_ALLOW) ? KC_OUTPUT_GLOBAL : (key->scope == ACD_SCOPE_GLOBAL) ? KC_OUTPUT_GLOBAL : KC_OUTPUT_LOCAL;
+  if (key->type == ACD_TYPE_GPIO_OUTPUT) return (key->scope == ACD_SCOPE_ALLOW) ? KC_OUTPUT_ALLOW : (key->scope == ACD_SCOPE_GLOBAL) ? KC_OUTPUT_GLOBAL : KC_OUTPUT_LOCAL;
   if (IS_INPUT(key->type))               return (key->scope == ACD_SCOPE_GLOBAL) ? KC_SENSOR_GLOBAL : KC_SENSOR_LOCAL;
   return KC_COUNT; // VIR_TANK only ????? What about Virtual keys??????
 }
@@ -76,7 +78,7 @@ static bool is_transition_permitted(struct aquachemdata *acdata, acd_key_t *key,
 // just "what should this sensor's read-state be right now given its scope and
 // the current master scope." Shares the same table data as the pump/output
 // permission checks, so the two can't silently drift apart from each other.
-static bool should_sensor_read(struct aquachemdata *acdata, acd_key_t *key) {
+bool should_sensor_read(struct aquachemdata *acdata, acd_key_t *key) {
   key_category_t cat = (key->scope == ACD_SCOPE_GLOBAL) ? KC_SENSOR_GLOBAL : KC_SENSOR_LOCAL;
   return (transition_permission[cat][ACD_LED_ON] & (1 << get_master(acdata)->scope)) != 0;
 }
@@ -427,11 +429,16 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
 }
 */
 void check_gpio_output_state(struct aquachemdata *acdata, acd_key_t *key) {
+  
   int current = relay_is_on(&key->data.gpio);
+
+  //LOG(LOG_NOTICE, "Checking Output %s, currently %d, state is %d\n",key->label, current, key->ison);
+
   if (current >= 0 && current != key->ison) {
     LOG(LOG_WARNING, "%s %s changed externally\n",key->type==ACD_TYPE_GPIO_PMP?"Pump":"GPIO Output", key->label);
     key->ison = current;
-    set_key_state(acdata, key, key->ison ? ACD_LED_ON : ACD_LED_ENABLED);
+    //set_key_state(acdata, key, key->ison ? ACD_LED_ON : ACD_LED_ENABLED);
+    set_key_state(acdata, key, key->ison ? ACD_LED_ON : resting_state_for_scope(classify_key(key), acdata->keys->scope));
     LOG(LOG_NOTICE, "Output %s, GPIO %d is now %s/%s/%s",key->label,key->data.gpio.pin,(relay_is_on(&key->data.gpio)?"ON":"OFF"),acd_state_to_str(key->state),key->ison?"ON":"OFF");
   }
 }
@@ -515,13 +522,16 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
       break;
 
     case ACD_TYPE_GPIO_OUTPUT:
+      // No ENABLED for GPIO_OUTPUT.  Below check shouldn't get here
+      if (state == ACD_LED_ENABLED) {
+        LOG(LOG_WARNING,"GPIO Output %s request set to enabled, not supported using off\n",key->label);
+        state = ACD_LED_OFF;
+      }
       if (state == ACD_LED_ON) {
         turn_gpio_switch_on(acdata, key, value<=0?0:value);
-      } else if ((state == ACD_LED_OFF || state == ACD_LED_ENABLED || state == ACD_LED_DISABLED)  &&  key->state == ACD_LED_ON) {
+      } else if ((state == ACD_LED_OFF || state == ACD_LED_DISABLED)  &&  key->state == ACD_LED_ON) {
         turn_gpio_switch_off(acdata, key, state);
       } else if (state == ACD_LED_OFF || state == ACD_LED_DISABLED) {
-        ASSIGN_IF_CHANGED(key->state, state, acdata->is_dirty, key->is_dirty);
-      } else if (state == ACD_LED_ENABLED && key->state != ACD_LED_ON) {
         ASSIGN_IF_CHANGED(key->state, state, acdata->is_dirty, key->is_dirty);
       }
       break;
@@ -720,11 +730,20 @@ void check_master(struct aquachemdata *acdata) {
   set_key_state(acdata, acdata->keys, failed_condition == NULL ? ACD_LED_ON : ACD_LED_ENABLED);
 
   for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
-    if (curr->state == ACD_LED_OFF) continue; // never auto-touch a manually/tank-empty OFF device
+    key_category_t cat = classify_key(curr);
+    if (cat == KC_COUNT) continue;
+
+    bool on_permitted = transition_permission[cat][ACD_LED_ON] & (1 << acdata->keys->scope);
+
+    LOG(LOG_DEBUG, "Validating status of %s, scope %s, state %s against Master scope %s. is permitted = %s\n",
+        curr->label, acd_scope_to_str(curr->scope), acd_state_to_str(curr->state),
+        acd_action_to_str(get_master(acdata)->scope), on_permitted ? "Yes" : "No");
 
     if (IS_OUTPUT(curr->type)) {
-      key_category_t cat = classify_key(curr);
-      bool on_permitted = transition_permission[cat][ACD_LED_ON] & (1 << acdata->keys->scope);
+      if (cat == KC_OUTPUT_LOCAL || cat == KC_OUTPUT_ALLOW) continue; // no Enabled/Disabled concept -- scope severity never touches these
+
+      //if ((IS_PUMP(curr->type) || cat == KC_OUTPUT_GLOBAL) && curr->state == ACD_LED_OFF) continue; // sticky-off, manual/tank-only recovery
+      if (IS_PUMP(curr->type) && curr->state == ACD_LED_OFF) continue; // sticky-off, manual/tank-only recovery
 
       if (curr->state == ACD_LED_ON && !on_permitted) {
         acd_state_t target = resting_state_for_scope(cat, acdata->keys->scope);
@@ -736,10 +755,8 @@ void check_master(struct aquachemdata *acdata) {
         if (curr->state != target) set_key_state(acdata, curr, target);
       }
     } else if (IS_INPUT(curr->type)) {
-      key_category_t cat = classify_key(curr);
-      bool should_read = transition_permission[cat][ACD_LED_ON] & (1 << acdata->keys->scope);
-      if (should_read && curr->state != ACD_LED_ON) set_key_state(acdata, curr, ACD_LED_ENABLED);
-      else if (!should_read) set_key_state(acdata, curr, ACD_LED_DISABLED);
+      if (on_permitted && curr->state != ACD_LED_ON) set_key_state(acdata, curr, ACD_LED_ENABLED);
+      else if (!on_permitted) set_key_state(acdata, curr, ACD_LED_DISABLED);
     }
   }
 }

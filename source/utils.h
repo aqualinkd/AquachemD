@@ -47,6 +47,7 @@ const char *gpio_direction_to_str(gpio_dir_t direction);
 
 acd_scope_t parse_acd_scope(const char *str);
 const char* acd_scope_to_str( acd_scope_t scope);
+const char* acd_action_to_str( acd_scope_t scope); // Opposite of above
 
 /*
 uint8_t parse_statistics(const char *str);

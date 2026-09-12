@@ -9,6 +9,8 @@ bool state_change_request_extended(struct aquachemdata *acdata, acd_key_t *key, 
 void check_gpio_output_state(struct aquachemdata *acdata, acd_key_t *key);
 void sensor_read_error(struct aquachemdata *acddata, acd_key_t *key);
 
+bool should_sensor_read(struct aquachemdata *acdata, acd_key_t *key);
+
 void devices_emergency_stop();
 
 uint32_t caculate_dose_time(struct aquachemdata *acdata, acd_key_t *key);

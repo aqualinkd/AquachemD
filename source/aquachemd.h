@@ -9,6 +9,8 @@
 #include "config.h"
 #include "acd_types.h"
 
+// Testing new logic
+#define USE_LOGIC_TABLE
 
 #define SET_DIRTY(flag)    ((flag) = true)
 #define CLEAR_DIRTY(flag)  ((flag) = false)

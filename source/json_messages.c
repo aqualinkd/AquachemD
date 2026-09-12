@@ -191,11 +191,12 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
         cJSON_AddItemToArray(attributes, cJSON_CreateString("timer"));
         cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ON)));
         cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_OFF)));
-        if (curr->scope != ACD_ACTION_ALLOW) { // Only allow ON/OFF for non-master keys with scope allow. 
-          cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ENABLED)));
-        }
-        
-        if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
+        //if (curr->scope != ACD_ACTION_ALLOW) { // Only allow ON/OFF for non-master keys with scope allow. 
+        //  cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ENABLED)));
+        //}
+        //if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
+        if (IS_PUMP(curr->type)) {
+          cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ENABLED)));  // Pumps have an ENABLED state as well
           cJSON_AddItemToArray(attributes, cJSON_CreateString("dose_stats"));
           cJSON_AddItemToArray(attributes, cJSON_CreateString("valve")); // For Homekit.
         }
