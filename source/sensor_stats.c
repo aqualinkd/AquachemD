@@ -15,6 +15,7 @@
 #include "utils.h"
 
 
+
 void _update_sensor_average(sensor_stats_t *stats, float new_value/*, float tau_seconds*/);
 
 void update_sensor_average(acd_key_t *key) {

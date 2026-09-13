@@ -151,6 +151,7 @@ void intHandler(int sig_num)
     }
   }
 
+  aquachemd_force_sensor_poll(); // If waiting force the next poll, that will allow this to execute quicker
   LOG(LOG_NOTICE, "Received request to stop %s!\n",AQUACHEMD_SHORT_NAME);
 
   //exit(EXIT_SUCCESS);
@@ -178,6 +179,13 @@ void aquachemd_request_reload(void) {
     // changes are fully flushed to disk/OS caches before the state becomes visible.
     atomic_store_explicit(&_thread_control.state, ACD_RELOAD, memory_order_release);
     LOG(LOG_NOTICE, "Subsystem requested an application reload.\n");
+}
+
+void aquachemd_force_sensor_poll(void) {
+    pthread_mutex_lock(&_thread_control.mutex);
+    pthread_cond_signal(&_thread_control.cond);
+    pthread_mutex_unlock(&_thread_control.mutex);
+    LOG(LOG_DEBUG, "Sensor poll forced by external thread.\n");
 }
 
 typedef enum {
@@ -397,8 +405,17 @@ int main(int argc, char *argv[])
   }
 */
 
+  //pthread_mutex_init(&_thread_control.mutex, NULL);
+  //pthread_cond_init(&_thread_control.cond, NULL);
+
+  // Need to replace CLOCK_REALTIME with CLOCK_MONOTONIC for the main loop/sleep
   pthread_mutex_init(&_thread_control.mutex, NULL);
-  pthread_cond_init(&_thread_control.cond, NULL);
+  pthread_condattr_t cattr;
+  pthread_condattr_init(&cattr);
+  pthread_condattr_setclock(&cattr, CLOCK_MONOTONIC);
+  pthread_cond_init(&_thread_control.cond, &cattr);
+  pthread_condattr_destroy(&cattr);
+
   _thread_control.state = ACD_STARTING;
   _thread_control.id = pthread_self();
 
@@ -523,7 +540,9 @@ reload_configuration:
     //acd_scope_t sensors_read_scope = ACD_SCOPE_GLOBAL;
     float temp_reading_for_ph = UNKNOWN;
     char *master_temp_label;
+#ifndef USE_LOGIC_TABLE
     bool all_conditions_met = true; // Should be able to get rid of this all together now, and just use acddata.keys->state 
+#endif
     int gpio_state = GPIO_ERROR;
 
     LOG(reading_log_level,"---- taking reading(s) ----\n");
@@ -557,7 +576,9 @@ reload_configuration:
             update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, curr->label);
             setMASK(curr->flags, CONDITION_NOTIFIED);
           }
+#ifndef USE_LOGIC_TABLE
           all_conditions_met = false;
+#endif
         } else if (curr->met && isMASKSET(curr->flags, CONDITION_NOTIFIED)) {
           removeMASK(curr->flags, CONDITION_NOTIFIED);
           LOG(LOG_NOTICE,"Condition satisfied: %s\n", curr->label);
@@ -596,7 +617,7 @@ reload_configuration:
  
 #ifdef USE_LOGIC_TABLE
       if (!should_sensor_read(&acddata, key)) {
-        LOG(LOG_NOTICE,"AquachemD sensor %s set to not read, ignoring\n",key->label);
+        LOG(LOG_INFO,"Sensor %s set to not read, ignoring\n",key->label);
         continue;
 #else
       if (sensors_read_scope == ACD_SCOPE_LOCAL && key->scope == ACD_SCOPE_GLOBAL) {
@@ -801,8 +822,31 @@ reload_configuration:
 
 
 next_wake:
-    
+
     LOG(reading_log_level,"- reading(s) took: %.2fs -\n", elapsed_ms(&next_wake) / 1000);
+
+    // Sleep until next_wake OR until forced by force_sensor_poll() / state change
+    pthread_mutex_lock(&_thread_control.mutex);
+    int wait_res = 0;
+    if (atomic_load_explicit(&_thread_control.state, memory_order_relaxed) == ACD_KEEPRUNNING) {
+        wait_res = pthread_cond_timedwait(&_thread_control.cond, &_thread_control.mutex, &next_wake);
+    }
+    pthread_mutex_unlock(&_thread_control.mutex);
+
+    if (wait_res == 0) {LOG(LOG_INFO,"Woken early to read sensors\n");}
+
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+
+    // If woken early by force_sensor_poll() (wait_res == 0) or fell behind schedule:
+    if (wait_res == 0 || now.tv_sec >= next_wake.tv_sec) {
+        next_wake = now; // Reset poll timer base to right now
+    }
+
+    // Advance the target wake time for the next iteration
+    next_wake.tv_sec += _acdconfig_.sensor_poll_time;
+
+    /*
     // Advance the target wake time by one interval
     next_wake.tv_sec += _acdconfig_.sensor_poll_time;
 
@@ -816,6 +860,7 @@ next_wake:
     }
     // Sleep until the next wake time
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake, NULL);
+    */
   }
 
 

@@ -52,6 +52,13 @@ and
  }
 */
 
+// NOT USED YET
+typedef enum {
+  ACD_MAIN,
+  ACD_WEBSOCKET,
+  ACD_HTTP,
+  ACD_MQTT
+} acd_source_t;
 
 typedef enum {
     ACD_TYPE_NONE = 0,

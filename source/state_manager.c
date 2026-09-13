@@ -523,7 +523,7 @@ bool state_change_request_extended(struct aquachemdata *acdata, acd_key_t *key, 
 #ifdef USE_LOGIC_TABLE
 bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state, uint32_t value)
 {
-  LOG(LOG_NOTICE, "Request to set %s to %s (current state: %s) with value %d (master scope %s, master state %s)", key->label, acd_state_to_str(state), acd_state_to_str(key->state), value, acd_scope_to_str(get_master(acdata)->scope), acd_state_to_str(get_master(acdata)->state));
+  LOG(LOG_INFO, "Request to set %s to %s (current state: %s) with value %d (master scope %s, master state %s)", key->label, acd_state_to_str(state), acd_state_to_str(key->state), value, acd_scope_to_str(get_master(acdata)->scope), acd_state_to_str(get_master(acdata)->state));
 
   // If MQTT requested a change, we need to send back the new state regardless of if it changed ot not, so simply force that.
   // We need to pass a value here to know who requested the change, MQTT / WebSocket / API
@@ -550,6 +550,7 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
       }
       ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty);
       check_master(acdata); // Set things to disabled
+      if (state == ACD_LED_ON) aquachemd_force_sensor_poll();
       break;
 
     case ACD_TYPE_GPIO_PMP:
@@ -1099,7 +1100,6 @@ bool set_cond_state(struct aquachemdata *acdata, acd_key_t *cond, acd_state_t st
     clear_timer(acdata, cond);
   }
 
-
   if (state == ACD_LED_ON || state == ACD_LED_OFF ) {
     if (ASSIGN_IF_CHANGED(cond->state , state, acdata->is_dirty, cond->is_dirty)) {
       LOG(LOG_INFO, "State Manager - Condition %s changed to %s",cond->label, acd_state_to_str(cond->state));
@@ -1113,6 +1113,9 @@ bool set_cond_state(struct aquachemdata *acdata, acd_key_t *cond, acd_state_t st
   }
 
   check_master(acdata);
+  if (state == ACD_LED_ON) { // NSF in future see if we can pass and use acd_source_t here and ignore if from ACD_MAIN
+    aquachemd_force_sensor_poll();
+  }
   return true;
 }
 

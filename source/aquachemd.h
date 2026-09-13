@@ -27,6 +27,7 @@
 void intHandler(int sig_num);
 void set_upgrade_version(char *version);
 void aquachemd_request_reload(void);
+void aquachemd_force_sensor_poll(void);
 
 /**
  * SET_IF_CHANGED: Updates a variable and sets a flag if the value has changed.

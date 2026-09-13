@@ -415,6 +415,26 @@
       box-sizing: border-box;
     }
 
+    .options_button_small {
+      color: var(--body_text);
+      background-color: var(--options_button_background);
+      font-family: var(--fonts);
+      font-weight: 500;
+      font-size: 14px;
+      border-radius: 8px !important;
+      cursor: pointer;
+      border: 0px solid var(--options_pane_bordercolor);
+      /*width: 60px;*/
+      /* Fixed width */
+      height: 20px;
+      /* Fixed height */
+      padding: 0 6px; /* 0 top/bottom, 15px left/right */
+      /* Remove padding to prevent internal growth */
+      flex-shrink: 0;
+      flex-grow: 0;
+      box-sizing: border-box;
+    }
+
     .option_text {
       font-family: var(--fonts);
       font-weight: 600;
@@ -615,6 +635,7 @@
       RESET_SENSOR_STATS: 'reset_sensor_stats',
       RESET_DOSE_STATS: 'reset_dose_stats',
       ALT_VALUE: 'alt_value',
+      SET_TANK_LEVEL: 'set_tank_level',
     });
 
     const _DeviceTypes = Object.freeze({
@@ -907,6 +928,7 @@
       div.appendChild(subdiv);
 
       if (type == _DeviceTypes.SWITCH || type == _DeviceTypes.CONTROLLER) add_clickEvent(div, id);
+      else if (type == _DeviceTypes.LEVEL_SENSOR) add_clickEvent(div, id);
       document.getElementById('wrapper').appendChild(div);
     }
 
@@ -961,12 +983,15 @@
       } catch (exception) { console.error("setTileState() :-" + exception); }
     }
 
-    function reduct(value) {
+    function reduct(value, precision=-1) {
       const str = String(value);
       const parts = str.split('.');
       const integerDigits = parts[0].length;
       let fractionalDigits = parts.length > 1 ? parts[1].length : 0;
       if (fractionalDigits === 0) return value;
+      
+      //let fractionalDigits = precision >= 0? precision : parts.length > 1 ? parts[1].length : 0;
+      //if (fractionalDigits === 0) return integerDigits;
 
       let total_digits = _aq_display_tile_size == "large" ? 5 : 3;
       if (integerDigits + fractionalDigits <= total_digits) return value;
@@ -1298,6 +1323,20 @@
       );
     }
 
+    function getUOMforSlider(id) {
+      if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.SET_TANK_LEVEL)) {
+        if (_devices?.devices?.[id]?.alt_value?.uom != null && _devices?.devices?.[id]?.alt_value?.total_volume != null) {
+          return ' '+_devices.devices[id]?.alt_value?.uom;
+        } else {
+          return '%';
+        }
+      } 
+      if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.TIMER)) {
+        return useMinutesForRuntime(id) ? ' runtime (minutes)' : ' runtime (seconds)';
+      }
+      return useMinutesForRuntime(id) ? ' runtime (minutes)' : ' runtime (seconds)';
+    }
+
     function SyncTileOptions() {
       const tile_options = document.getElementById('tile_options');
       let id = tile_options.getAttribute('device_id');
@@ -1305,7 +1344,8 @@
       const time_slider_output = document.getElementById('timer_slider_text_value');
 
       if (time_slider && time_slider_output) {
-        let tm_ext = useMinutesForRuntime(id) ? ' runtime (minutes)' : ' runtime (seconds)';
+        //let tm_ext = useMinutesForRuntime(id) ? ' runtime (minutes)' : ' runtime (seconds)';
+        let tm_ext = getUOMforSlider(id);
         time_slider_output.innerHTML = time_slider.value + tm_ext;
 
         // --- LOCK OUT LOGIC ---
@@ -1340,8 +1380,8 @@
       const device = _devices.devices[id];
 
       // 1. Get current slider value
-      let onTime = document.getElementById('timer_slider_range')?.value ?? 0;
-      if (useMinutesForRuntime(id)) onTime = onTime * 60;
+      let svalue = document.getElementById('timer_slider_range')?.value ?? 0;
+      if (useMinutesForRuntime(id)) svalue = svalue * 60;
 
       // 2. Get selected radio state
       const selectedRadio = document.querySelector(`input[name="state_toggle_${id}"]:checked`);
@@ -1351,10 +1391,16 @@
       // Send commands ONLY on close
       if (currentState != selectedState && device.type === _DeviceTypes.SWITCH) {
         // If user switched to ON and set a timer, send that
-        if (selectedState === 1 && onTime > 0) {
-          send_switch_timer(id, onTime);
+        if (selectedState === 1 && svalue > 0) {
+          send_switch_timer(id, svalue);
         } else {
           send_command(id, selectedState);
+        }
+      } else if (device.type === _DeviceTypes.LEVEL_SENSOR) {
+        if (getUOMforSlider(id) != '%') {
+          send_set_tank_level(id, false, svalue);
+        } else {
+          send_set_tank_level(id, true, svalue);
         }
       }
 
@@ -1406,6 +1452,7 @@
 `;
 
     function showTileOptions(show, id) {
+
       const tile_option = document.getElementById('tile_options');
       const scheduler_option = document.getElementById('scheduler_options');
 
@@ -1452,10 +1499,7 @@
         footer.insertAdjacentHTML('beforebegin', timerSlider);
         let tm_slider = document.getElementById("timer_slider_range");
         tm_slider.min = _config?.slider_range?.timer_slider_min || 0;
-        //tm_slider.max = _config?.slider_range?.timer_slider_max || 60;
         tm_slider.step = _config?.slider_range?.timer_slider_step || 1;
-        //tm_slider.max = _devices.devices[id]?.timer_max_runtime ?? _config?.slider_range?.timer_slider_max ?? 60;
-        //tm_slider.value = _devices.devices[id]?.timer_default_runtime ?? 0;
         const divisor = useMinutesForRuntime(id) ? 60 : 1;
         const device = _devices.devices[id];
 
@@ -1469,6 +1513,22 @@
 
       if (_devices.devices[id].attributes?.includes(_DeviceAttributes.DOSE_STATS)) {
         get_dosestats();
+      }
+
+      if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.SET_TANK_LEVEL)) {
+        footer.insertAdjacentHTML('beforebegin', timerSlider);
+        let tm_slider = document.getElementById("timer_slider_range");
+        if (getUOMforSlider(id) != '%') {
+          tm_slider.min = 0;
+          tm_slider.max = 3.5;
+          tm_slider.step = 0.1
+          tm_slider.value = _devices.devices[id]?.alt_value?.value ;
+        } else {
+          tm_slider.min = 0;
+          tm_slider.max = 100;
+          tm_slider.step = 1;
+          tm_slider.value = _devices.devices[id]?.value ;
+        }
       }
 
       SyncTileOptions();
@@ -1502,6 +1562,16 @@
           footer.insertAdjacentHTML('beforebegin', `<tr class="dynamic-option-row"><td colspan="2" style="font-size:0.8rem; font-weight: 400; padding: 0;">${msg}</td></tr>`);
         }
     */
+    function reset_doser_running_total(context) {
+      console.log("ID="+context.id);
+      id = context.id;
+      // Last valid check
+      if (_devices.devices[id]?.attributes?.includes(_DeviceAttributes.RESET_DOSE_STATS)) {
+        send_running_total_reset(id);
+      }
+      //document.getElementById("dose_running_total").innerHTML = _devices.devices[id]?.running_dose_ml;
+      document.getElementById("dose_running_total").innerHTML = 'Running total 0ml'; // Just fake it as
+    }
 
     function showDoseHistory(data) {
       const tile_option = document.getElementById('tile_options');
@@ -1510,6 +1580,12 @@
       const targetDeviceId = tile_option.getAttribute('device_id');
       const footer = document.getElementById('tile_options_table_footer');
       const filteredHistory = data.history.filter(item => item.pump_id === targetDeviceId);
+
+      if (_devices.devices[targetDeviceId]?.attributes?.includes(_DeviceAttributes.RESET_DOSE_STATS)) {
+        footer.insertAdjacentHTML('beforebegin', '<tr class="dynamic-option-row">\
+                                                    <td align="left"><div id="dose_running_total">Running total '+Math.round(_devices.devices[targetDeviceId]?.running_dose_ml, 0)+'ml</div></td>\
+                                                    <td align="right"><input type="button" value="Reset" id="'+targetDeviceId+'" class="options_button_small" onclick="reset_doser_running_total(this);"></td></tr>');
+      }
 
       // Header row
       footer.insertAdjacentHTML('beforebegin', '<tr class="dynamic-option-row"><td colspan="2" align="center"><b>Recent Dosing</b></td></tr>');
@@ -1982,6 +2058,12 @@
     }
 
     function send_switch_timer(id, value) { _socket_di.send(JSON.stringify({ uri: id + "/timer/set", value: value })); }
+    function send_running_total_reset(id) { _socket_di.send(JSON.stringify({ uri: id + "/reset_dose_stats", value: 1 })); }
+    function send_set_tank_level(id, usePercent, value) {
+      const type = usePercent ? 'percent' : 'remaining';
+      _socket_di.send(JSON.stringify({ uri: `${id}/level/${type}/set`, value: value }));
+    }
+
     function showVersion(source) { displayMessage("AquachemD : " + _devices.AquachemD, 5); }
 
     function loadScriptIfAvailable(url) {

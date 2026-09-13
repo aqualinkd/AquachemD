@@ -199,26 +199,28 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
           cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ENABLED)));  // Pumps have an ENABLED state as well
           cJSON_AddItemToArray(attributes, cJSON_CreateString("dose_stats"));
           cJSON_AddItemToArray(attributes, cJSON_CreateString("valve")); // For Homekit.
+          if (IS_RUNNING_DOSE_ENABLED(curr)) {
+            cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_stats"));
+            cJSON_AddNumberToObject(device, "running_dose_ml", curr->dose_stats.running_total_ml);
+          }
         }
         
         uint32_t remaining_sec = get_timer_left_sec(curr);
         cJSON_AddStringToObject(device, "timer_active", acd_state_to_str(remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF));
         cJSON_AddNumberToObject(device, "timer_duration", remaining_sec);
+        
         if (isMASKSET(curr->flags, PH_PUMP)) {
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.ph_default_dose_time);
           cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.ph_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("ph_pump"));
-          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_stats"));
         } else if (isMASKSET(curr->flags, ORP_PUMP)) {
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.orp_default_dose_time);
           cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.orp_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("orp_pump"));
-          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_stats"));
         } else if (isMASKSET(curr->flags, H2O_PUMP)) {
           cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.h2o_default_dose_time);
           cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.h2o_max_dose_time);
           cJSON_AddItemToArray(attributes, cJSON_CreateString("h2o_pump"));
-          cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_dose_stats"));
         } else if (curr->type == ACD_TYPE_GPIO_OUTPUT) {
           //cJSON_AddNumberToObject(device, "timer_default_runtime", _acdconfig_.switch_default_runtime);
           cJSON_AddNumberToObject(device, "timer_max_runtime", _acdconfig_.switch_max_runtime);
@@ -265,7 +267,9 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
           cJSON_AddStringToObject(alt, "id", buf);
           cJSON_AddNumberToObject(alt, "value", curr->data.tank.remaining_volume);  
           cJSON_AddStringToObject(alt, "uom", uom_to_display_str(curr->data.tank.uom));
+          cJSON_AddNumberToObject(alt, "total_volume", curr->data.tank.total_volume);  
           cJSON_AddItemToObject(device, "alt_value", alt);
+
 
           cJSON *attributes = cJSON_CreateArray();
           cJSON_AddItemToArray(attributes, cJSON_CreateString("alt_value"));
@@ -321,8 +325,12 @@ const char* get_devices_json(struct aquachemdata *acddata) {
           uint32_t remaining_sec = get_timer_left_sec(curr);
           cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "timer_active"), acd_state_to_str(remaining_sec > 0?ACD_LED_ON:ACD_LED_OFF));
           cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "timer_duration"), remaining_sec);
-          if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
+          //if (isMASKSET(curr->flags, PH_PUMP) || isMASKSET(curr->flags, ORP_PUMP) || isMASKSET(curr->flags, H2O_PUMP)) {
+          if (IS_PUMP(curr->type)) {
             cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "timer_default_runtime"), caculate_dose_time(acddata, curr) );
+            if (IS_RUNNING_DOSE_ENABLED(curr)) {
+              cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "running_dose_ml"), curr->dose_stats.running_total_ml);
+            }
           }
         } else if ( IS_INPUT(curr->type) && (isMASKSET(curr->flags,CALC_AVERAGE)) ) {
           cJSON *stats = cJSON_GetObjectItemCaseSensitive(item, "stats");
