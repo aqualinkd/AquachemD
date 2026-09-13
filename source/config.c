@@ -1004,6 +1004,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     acd_key_t *curr = _acdconfig_.keys;
     
     while (curr != NULL) {
+ 
         cJSON *block = cJSON_CreateObject();
         cJSON_AddStringToObject(block, "label", curr->label ? curr->label : "");
         cJSON_AddNumberToObject(block, "block_type_id", (double)curr->type);
@@ -1040,11 +1041,11 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
                 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "mqtt_condition_scope_global");
-                cJSON_AddStringToObject(f_item, "type", "boolean");
+                cJSON_AddStringToObject(f_item, "key", "mqtt_condition_scope");
+                cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
-                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_ACTION_BLOCK?true:false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
@@ -1082,7 +1083,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "gpio_condition_scope_global");
+                cJSON_AddStringToObject(f_item, "key", "gpio_condition_scope");
                 cJSON_AddStringToObject(f_item, "type", "boolean");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
@@ -1117,26 +1118,26 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 f_item = cJSON_CreateObject();
                 s_item = cJSON_CreateObject();
                 if (curr->type == ACD_TYPE_EZO_PH) {
-                    cJSON_AddStringToObject(f_item, "key", "ph_sensor_scope_global");
+                    cJSON_AddStringToObject(f_item, "key", "ph_sensor_scope");
                     cJSON_AddStringToObject(s_item, "key", "ph_sensor_statistics");
                 }
                 else if (curr->type == ACD_TYPE_EZO_ORP) {
-                    cJSON_AddStringToObject(f_item, "key", "orp_sensor_scope_global");
+                    cJSON_AddStringToObject(f_item, "key", "orp_sensor_scope");
                     cJSON_AddStringToObject(s_item, "key", "orp_sensor_statistics");
                 }
                 else if (curr->type == ACD_TYPE_EZO_PRS) {
-                    cJSON_AddStringToObject(f_item, "key", "prs_sensor_scope_global");
+                    cJSON_AddStringToObject(f_item, "key", "prs_sensor_scope");
                     cJSON_AddStringToObject(s_item, "key", "prs_sensor_statistics");
                 }
                 else {
-                    cJSON_AddStringToObject(f_item, "key", "temp_sensor_scope_global");
+                    cJSON_AddStringToObject(f_item, "key", "temp_sensor_scope");
                     cJSON_AddStringToObject(s_item, "key", "temp_sensor_statistics");
                 }
 
-                cJSON_AddStringToObject(f_item, "type", "boolean");
+                cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
-                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE));
+                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 cJSON_AddStringToObject(s_item, "type", "text");
@@ -1166,11 +1167,11 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "prs_sensor_scope_global");
-                cJSON_AddStringToObject(f_item, "type", "boolean");
+                cJSON_AddStringToObject(f_item, "key", "prs_sensor_scope");
+                cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
-                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
@@ -1209,11 +1210,11 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "temp_sensor_scope_global");
-                cJSON_AddStringToObject(f_item, "type", "boolean");
+                cJSON_AddStringToObject(f_item, "key", "temp_sensor_scope");
+                cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
-                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 s_item = cJSON_CreateObject();
@@ -1250,11 +1251,11 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "temp_sensor_scope_global");
-                cJSON_AddStringToObject(f_item, "type", "boolean");
+                cJSON_AddStringToObject(f_item, "key", "temp_sensor_scope");
+                cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
-                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 s_item = cJSON_CreateObject();
@@ -1344,11 +1345,11 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, t_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "gpio_doser_scope_global");
-                cJSON_AddStringToObject(f_item, "type", "boolean");
+                cJSON_AddStringToObject(f_item, "key", "gpio_doser_scope");
+                cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
-                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_ACTION_BLOCK?true:false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 break;
@@ -1491,9 +1492,12 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
         curr = curr->next;
     }
 
+
+
     // 3. MASTER DEFINITIONS FOR CREATING NEW BLOCKS
     cJSON *available_drivers = cJSON_AddArrayToObject(root, "available_drivers");
     cJSON *drv, *df_arr, *df_item;
+
 
     // Define: MQTT Condition Template
     drv = cJSON_CreateObject();
@@ -1501,20 +1505,20 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(drv, "driver_type", "mqtt_condition");
     cJSON_AddStringToObject(drv, "default_label", "New MQTT Condition");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
-    
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "mqtt_condition_topic");
     cJSON_AddStringToObject(df_item, "type", "text");
     cJSON_AddStringToObject(df_item, "value", "");
     cJSON_AddItemToArray(df_arr, df_item);
-    cJSON_AddItemToArray(available_drivers, drv);
+    //cJSON_AddItemToArray(available_drivers, drv);
 
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "mqtt_condition_value");
     cJSON_AddStringToObject(df_item, "type", "text");
     cJSON_AddStringToObject(df_item, "value", "");
     cJSON_AddItemToArray(df_arr, df_item);
-    cJSON_AddItemToArray(available_drivers, drv);
+    //cJSON_AddItemToArray(available_drivers, drv);
 /*
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "mqtt_condition_scope_global");
@@ -1524,19 +1528,24 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddItemToArray(df_arr, df_item);
     cJSON_AddItemToArray(available_drivers, drv);
 */
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "mqtt_condition_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
-    cJSON_AddStringToObject(df_item, "value", acd_scope_to_str(curr->scope));
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
-    cJSON_AddItemToArray(available_drivers, df_item);
+    cJSON_AddStringToObject(df_item, "value", "Global");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+    cJSON_AddItemToArray(df_arr, df_item);
+    //cJSON_AddItemToArray(available_drivers, drv);
 
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "mqtt_condition_met_delay");
     cJSON_AddStringToObject(df_item, "type", "number");
     cJSON_AddNumberToObject(df_item, "value", 0);
     cJSON_AddItemToArray(df_arr, df_item);
+
+    cJSON_AddItemToArray(available_drivers, drv);
+
 
     // Define: GPIO Condition Template
     drv = cJSON_CreateObject();
@@ -1580,9 +1589,9 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "gpio_condition_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
-    cJSON_AddStringToObject(df_item, "value", acd_scope_to_str(curr->scope));
+    cJSON_AddStringToObject(df_item, "value", "Global");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
-    cJSON_AddItemToArray(available_drivers, df_item);
+    cJSON_AddItemToArray(available_drivers, drv);
 
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "gpio_condition_met_delay");
@@ -1614,7 +1623,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "type", "number");
     cJSON_AddFloat(df_item, "value", 1.0);
     cJSON_AddItemToArray(df_arr, df_item);
-    cJSON_AddItemToArray(available_drivers, drv);
+    //cJSON_AddItemToArray(available_drivers, drv);
 
     /*
     df_item = cJSON_CreateObject();
@@ -1629,9 +1638,10 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "temp_sensor_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
-    cJSON_AddStringToObject(df_item, "value", acd_scope_to_str(curr->scope));
+    cJSON_AddStringToObject(df_item, "value", "None");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
-    cJSON_AddItemToArray(available_drivers, df_item);
+
+    cJSON_AddItemToArray(available_drivers, drv);
 
     // Define: MQTT Temp Sensor Template (Added)
     drv = cJSON_CreateObject();
@@ -1725,6 +1735,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddItemToArray(df_arr, df_item);
     cJSON_AddItemToArray(available_drivers, drv);
 
+
     // Define: GPIO Doser Template
     drv = cJSON_CreateObject();
     //cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_GPIO_PMP);
@@ -1802,11 +1813,12 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "gpio_doser_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
-    cJSON_AddStringToObject(df_item, "value", acd_scope_to_str(curr->scope));
+    cJSON_AddStringToObject(df_item, "value", "Global");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
     cJSON_AddItemToArray(df_arr, df_item);
 
     cJSON_AddItemToArray(available_drivers, drv);
+
 
     // Define: GPIO generic input / outputs Template
     drv = cJSON_CreateObject();
@@ -1851,6 +1863,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
 
     cJSON_AddItemToArray(available_drivers, drv);
 
+
     // Define: EZO ph
     drv = cJSON_CreateObject();
     cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_EZO_PH);
@@ -1869,7 +1882,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "ph_sensor_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
-    cJSON_AddStringToObject(df_item, "value", acd_scope_to_str(curr->scope));
+    cJSON_AddStringToObject(df_item, "value", "Global");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
     cJSON_AddItemToArray(df_arr, df_item);
 
@@ -1880,6 +1893,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddItemToArray(df_arr, df_item);
 
     cJSON_AddItemToArray(available_drivers, drv);
+
 
     // Define: EZO ORP
     drv = cJSON_CreateObject();
@@ -1899,7 +1913,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "orp_sensor_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
-    cJSON_AddStringToObject(df_item, "value", acd_scope_to_str(curr->scope));
+    cJSON_AddStringToObject(df_item, "value", "Global");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
     cJSON_AddItemToArray(df_arr, df_item);
 
@@ -1929,7 +1943,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "temp_sensor_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
-    cJSON_AddStringToObject(df_item, "value", acd_scope_to_str(curr->scope));
+    cJSON_AddStringToObject(df_item, "value", "Global");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
     cJSON_AddItemToArray(df_arr, df_item);
 
@@ -1959,7 +1973,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "prs_sensor_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
-    cJSON_AddStringToObject(df_item, "value", acd_scope_to_str(curr->scope));
+    cJSON_AddStringToObject(df_item, "value", "Global");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
     cJSON_AddItemToArray(df_arr, df_item);
 
@@ -1971,7 +1985,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
 
     cJSON_AddItemToArray(available_drivers, drv);
 
-    
+
     // Define: I2C PRS
     drv = cJSON_CreateObject();
     cJSON_AddNumberToObject(drv, "block_type_id", ACD_TYPE_I2C_PRS);
@@ -1997,7 +2011,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "prs_sensor_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
-    cJSON_AddStringToObject(df_item, "value", acd_scope_to_str(curr->scope));
+    cJSON_AddStringToObject(df_item, "value", "Global");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
     cJSON_AddItemToArray(df_arr, df_item);
 
@@ -2008,8 +2022,6 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddItemToArray(df_arr, df_item);
 
     cJSON_AddItemToArray(available_drivers, drv);
-
-
 
 
     // 3. RENDER TO MEMORY BUFFER

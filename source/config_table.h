@@ -251,7 +251,7 @@ CFG_ENTRY( "sysfs_sensor_uom",        keys,                   NULL,             
 
 #define CFG_O_GPIO_DIRECTION "[\"Input\",\"Output\"]"
 
-#define CFG_O_SCOPE "[\"Local\",\"Global\"]"
+#define CFG_O_SCOPE      "[\"Local\",\"Global\"]"
 #define CFG_O_SCOPE_FULL "[\"Allow\",\"Local\",\"Global\"]"
 
 

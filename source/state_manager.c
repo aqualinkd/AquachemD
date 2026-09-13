@@ -58,9 +58,16 @@ static const uint8_t transition_permission[KC_COUNT][5] = {
   [KC_PUMP_GLOBAL]   = { SCOPE_ALL, SCOPE_A,         SCOPE_A,         SCOPE_L|SCOPE_B, 0 },  // Allow dosing while GLOBAL
   [KC_PUMP_LOCAL]    = { SCOPE_ALL, SCOPE_A|SCOPE_L, SCOPE_A|SCOPE_L, SCOPE_B,         0 },  // Allow dosing while LOCAL & GLOBAL
   //[KC_OUTPUT_ALLOW]  = { SCOPE_ALL, SCOPE_ALL,       0,               0,               0 },
-  [KC_OUTPUT_ALLOW]  = { SCOPE_ALL, SCOPE_ALL,       0,               SCOPE_ALL,       0 },
-  [KC_OUTPUT_GLOBAL] = { SCOPE_ALL, SCOPE_A,         0,               SCOPE_L|SCOPE_B, 0 },  
-  [KC_OUTPUT_LOCAL]  = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               SCOPE_B,         0 },
+  
+  //[KC_OUTPUT_ALLOW]  = { SCOPE_ALL, SCOPE_ALL,       0,               SCOPE_ALL,       0 },
+  //[KC_OUTPUT_GLOBAL] = { SCOPE_ALL, SCOPE_A,         0,               SCOPE_L|SCOPE_B, 0 },  
+  //[KC_OUTPUT_LOCAL]  = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               SCOPE_B,         0 },
+
+  [KC_OUTPUT_ALLOW]  = { SCOPE_ALL, SCOPE_ALL,       0,               0,               0 },  // on/off only, ever -- ignores all interlocks
+  [KC_OUTPUT_GLOBAL] = { SCOPE_ALL, SCOPE_A,         0,               SCOPE_L|SCOPE_B, 0 },  // respects Limit and Block
+  [KC_OUTPUT_LOCAL]  = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               SCOPE_B,         0 },  // only respects a hard interlock
+
+
   [KC_CONDITION]     = { SCOPE_ALL, SCOPE_ALL,       0,               0,               SCOPE_ALL },
   //[KC_SENSOR_GLOBAL] = { SCOPE_ALL, SCOPE_ALL,       0,               SCOPE_B,         0 },  // Need to validate
   //[KC_SENSOR_LOCAL]  = { SCOPE_ALL, SCOPE_ALL,       SCOPE_ALL,       SCOPE_B,         0 },  // Need to validate
@@ -101,11 +108,27 @@ bool should_sensor_read(struct aquachemdata *acdata, acd_key_t *key) {
 // resting state (ENABLED or DISABLED) a device should sit in when it's not
 // actively ON. Never returns ON/OFF -- those are earned by running, or set
 // explicitly elsewhere (user request, tank-empty lockout).
+/*
 static acd_state_t resting_state_for_scope(key_category_t cat, acd_scope_t scope) {
   uint8_t mask = 1 << scope;
   if (transition_permission[cat][ACD_LED_ENABLED] & mask) return ACD_LED_ENABLED;
   return ACD_LED_DISABLED;
 }
+*/
+
+// Pump: three real resting states depending on scope.
+static acd_state_t pump_resting_state(key_category_t cat, acd_scope_t scope) {
+  uint8_t mask = 1 << scope;
+  return (transition_permission[cat][ACD_LED_ENABLED] & mask) ? ACD_LED_ENABLED : ACD_LED_DISABLED;
+}
+
+// Plain switch: no ENABLED state exists at all -- resting state is just
+// whichever of OFF/DISABLED matches current permission to run.
+static acd_state_t output_resting_state(key_category_t cat, acd_scope_t scope) {
+  uint8_t mask = 1 << scope;
+  return (transition_permission[cat][ACD_LED_ON] & mask) ? ACD_LED_OFF : ACD_LED_DISABLED;
+}
+
 
 /*
 static key_category_t classify_key(acd_key_t *key) {
@@ -442,6 +465,23 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
   clear_timer(acdata, key);
 }
 */
+
+void check_gpio_output_state(struct aquachemdata *acdata, acd_key_t *key) {
+  int current = relay_is_on(&key->data.gpio);
+
+  if (current >= 0 && current != key->ison) {
+    LOG(LOG_WARNING, "%s %s changed externally\n", key->type == ACD_TYPE_GPIO_PMP ? "Pump" : "GPIO Output", key->label);
+    key->ison = current;
+
+    acd_state_t off_target = IS_PUMP(key->type)
+      ? pump_resting_state(classify_key(key), acdata->keys->scope)
+      : output_resting_state(classify_key(key), acdata->keys->scope);
+
+    set_key_state(acdata, key, key->ison ? ACD_LED_ON : off_target);
+    LOG(LOG_NOTICE, "Output %s, GPIO %d is now %s/%s/%s", key->label, key->data.gpio.pin, (relay_is_on(&key->data.gpio) ? "ON" : "OFF"), acd_state_to_str(key->state), key->ison ? "ON" : "OFF");
+  }
+}
+/*
 void check_gpio_output_state(struct aquachemdata *acdata, acd_key_t *key) {
   
   int current = relay_is_on(&key->data.gpio);
@@ -456,6 +496,7 @@ void check_gpio_output_state(struct aquachemdata *acdata, acd_key_t *key) {
     LOG(LOG_NOTICE, "Output %s, GPIO %d is now %s/%s/%s",key->label,key->data.gpio.pin,(relay_is_on(&key->data.gpio)?"ON":"OFF"),acd_state_to_str(key->state),key->ison?"ON":"OFF");
   }
 }
+  */
 /*
 void check_pump_state(struct aquachemdata *acdata, acd_key_t *key) {
   int current = pump_is_on(&key->data.gpio);
@@ -707,15 +748,35 @@ void check_master(struct aquachemdata *acdata) {
   // Turn everything to disabled if master if off
   if ( get_master(acdata)->state == ACD_LED_OFF ) {
     for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
-      if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF) {
+      if (!IS_OUTPUT(curr->type) && !IS_INPUT(curr->type)) continue; // Conditions, Tank, Master itself -- nothing to do here
+
+      if (curr->state != ACD_LED_OFF) {
         if (IS_OUTPUT(curr->type) && curr->state == ACD_LED_ON) {
-          IS_PUMP(curr->type)?turn_pump_off(acdata, curr, ACD_LED_OFF):turn_gpio_switch_off(acdata, curr, ACD_LED_OFF);
+          IS_PUMP(curr->type) ? turn_pump_off(acdata, curr, ACD_LED_DISABLED) : turn_gpio_switch_off(acdata, curr, ACD_LED_DISABLED);
+          LOG(LOG_INFO, "State Manager - %s no longer permitted, turning off (-> %s)", curr->label, acd_state_to_str(ACD_LED_DISABLED));
+        }
+        set_key_state(acdata, curr, ACD_LED_DISABLED);
+      } else if (IS_OUTPUT(curr->type) && !IS_PUMP(curr->type) && curr->state == ACD_LED_OFF) {
+        // Outputs need to go from OFF to DISABLED, Pumps OFF mean something different since it supports ENABLED and need to be MANUALLY turned on.
+        set_key_state(acdata, curr, ACD_LED_DISABLED);
+      }
+    }
+    return;
+  }
+/*
+  if ( get_master(acdata)->state == ACD_LED_OFF ) {
+    for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
+      if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF) {
+      //if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF && classify_key(curr) != KC_OUTPUT_ALLOW) {
+        if (IS_OUTPUT(curr->type) && curr->state == ACD_LED_ON) {
+          IS_PUMP(curr->type)?turn_pump_off(acdata, curr, ACD_LED_DISABLED):turn_gpio_switch_off(acdata, curr, ACD_LED_DISABLED);
           LOG(LOG_INFO, "State Manager - %s no longer permitted, turning off (-> %s)", curr->label, acd_state_to_str(ACD_LED_OFF));
         }
         if (curr->scope != ACD_ACTION_ALLOW) {
           set_key_state(acdata, curr, ACD_LED_DISABLED);
         }
       } else if (IS_OUTPUT(curr->type) && !IS_PUMP(curr->type) && curr->state == ACD_LED_OFF) {
+      //} else if (IS_OUTPUT(curr->type) && !IS_PUMP(curr->type) && curr->state == ACD_LED_OFF && classify_key(curr) != KC_OUTPUT_ALLOW) {
         // This just leaves ACD_TYPE_GPIO_OUTPUT at the moment, but test above is accurate for future
         // Outputs need to go from OFF to DISABLED, Pumps OFF mean something different since it supports ENABLED and need to be MANUALLY turned on.
         set_key_state(acdata, curr, ACD_LED_DISABLED);
@@ -725,7 +786,7 @@ void check_master(struct aquachemdata *acdata) {
     }
     return;
   }
-
+*/
   // Check for any conditions that are not met.
   get_master(acdata)->scope = ACD_ACTION_ALLOW; // Reset to good, below will set to bad.
   for (acd_key_t *curr = get_master(acdata)->next; curr != NULL; curr = curr->next) {
@@ -762,8 +823,40 @@ void check_master(struct aquachemdata *acdata) {
         curr->label, acd_scope_to_str(curr->scope), acd_state_to_str(curr->state),
         acd_action_to_str(get_master(acdata)->scope), on_permitted ? "Yes" : "No");
 
+    if (IS_OUTPUT(curr->type))
+    {
+      //if (cat == KC_OUTPUT_ALLOW)
+      //  continue; // ignores all interlocks -- nothing to compute
+      if (cat == KC_OUTPUT_ALLOW) {
+        if (curr->state == ACD_LED_DISABLED) set_key_state(acdata, curr, ACD_LED_OFF);
+        continue;
+      }
+
+      bool is_pump = IS_PUMP(curr->type);
+
+      if (is_pump && curr->state == ACD_LED_OFF) continue; // sticky-off, manual/tank-only recovery
+
+      acd_state_t target = is_pump ? pump_resting_state(cat, acdata->keys->scope)
+                                   : output_resting_state(cat, acdata->keys->scope);
+
+      if (curr->state == ACD_LED_ON && !on_permitted) {
+        is_pump ? turn_pump_off(acdata, curr, target) : turn_gpio_switch_off(acdata, curr, target);
+        LOG(LOG_INFO, "State Manager - %s no longer permitted, turning off (-> %s)", curr->label, acd_state_to_str(target));
+      } else if (curr->state != ACD_LED_ON && curr->state != target) {
+        set_key_state(acdata, curr, target);
+      }
+    }
+    else if (IS_INPUT(curr->type))
+    {
+      if (on_permitted && curr->state != ACD_LED_ON)
+        set_key_state(acdata, curr, ACD_LED_ENABLED);
+      else if (!on_permitted)
+        set_key_state(acdata, curr, ACD_LED_DISABLED);
+    }
+#ifdef NO_COMPILE
     if (IS_OUTPUT(curr->type)) {
       //LOG(LOG_NOTICE, "Validating status of %s - classify_key=%d target state=%s\n",curr->label,cat,acd_state_to_str(resting_state_for_scope(cat, acdata->keys->scope)));
+      /*
       if (cat == KC_OUTPUT_LOCAL || cat == KC_OUTPUT_ALLOW || cat == KC_OUTPUT_GLOBAL){
         //continue; // no Enabled/Disabled concept -- scope severity never touches these
         //These are GPIO switched, manually set since transition table not working, as these only support DISABLE and not ENABLE so resting_state_for_scope() will always return ACD_LED_DISABLED 
@@ -771,9 +864,9 @@ void check_master(struct aquachemdata *acdata) {
         else if (!on_permitted && curr->state != ACD_LED_DISABLED) set_key_state(acdata, curr, ACD_LED_DISABLED);
         else if (on_permitted && curr->state == ACD_LED_DISABLED) set_key_state(acdata, curr, ACD_LED_OFF);
         continue;
-      }
+      }*/
+      if (cat == KC_OUTPUT_ALLOW) continue; // genuinely ignores all interlocks -- nothing to compute
 
-      //if ((IS_PUMP(curr->type) || cat == KC_OUTPUT_GLOBAL) && curr->state == ACD_LED_OFF) continue; // sticky-off, manual/tank-only recovery
       if (IS_PUMP(curr->type) && curr->state == ACD_LED_OFF) continue; // sticky-off, manual/tank-only recovery
 
       if (curr->state == ACD_LED_ON && !on_permitted) {
@@ -789,7 +882,9 @@ void check_master(struct aquachemdata *acdata) {
       if (on_permitted && curr->state != ACD_LED_ON) set_key_state(acdata, curr, ACD_LED_ENABLED);
       else if (!on_permitted) set_key_state(acdata, curr, ACD_LED_DISABLED);
     }
+  #endif
   }
+  
 }
 #else
 void check_master(struct aquachemdata *acdata) {
@@ -927,13 +1022,27 @@ bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t stat
       break;
 
     case ACD_TYPE_GPIO_OUTPUT:
+      // ENABLED was never a real state for a plain switch -- ON/OFF/DISABLED only.
+      if (state != ACD_LED_OFF && state != ACD_LED_ON && state != ACD_LED_DISABLED) {
+        goodState = false;
+      }
+      break;
+
+    case ACD_TYPE_GPIO_INPUT:
+      // Same shape as every other sensor type -- ON/ENABLED/DISABLED (no manual OFF).
+      if (state != ACD_LED_ON && state != ACD_LED_ENABLED && state != ACD_LED_DISABLED && state != ACD_LED_OFF) {
+        goodState = false;
+      }
+      break;
+/*
+    case ACD_TYPE_GPIO_OUTPUT:
     case ACD_TYPE_GPIO_INPUT:
     // Do need to validate scope here.
       if (state != ACD_LED_OFF && state != ACD_LED_ON && state != ACD_LED_ENABLED && state != ACD_LED_DISABLED) {
         goodState = false;
       }
       break;
-    
+  */  
     case ACD_TYPE_VIR_TANK: // Virtual device can;t change
     case ACD_TYPE_NONE:
       goodState = false;

@@ -66,13 +66,17 @@
 			"_____enabled_text":	"Enabled"
 		},
 		"PMP_1":	{
-			"display":	true
+			"display":	true,
+      "__on_icon": "hk/barrel.svg",
+      "__off_icon": "hk/barrel-outline.svg"
 		},
 		"PMP_2":	{
 			"display":	true
 		},
 		"PMP_3":	{
-			"display":	true
+			"display":	true,
+      "__on_icon": "hk/water-pump.svg",
+      "__off_icon": "hk/water-pump-off.svg"
 		},
 		"TEMP_1":	{
 			"display":	true,

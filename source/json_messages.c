@@ -231,7 +231,14 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
           cJSON_AddStringToObject(device, "uom", uom_to_display_str(curr->uom));
         }
         char buf[16];
-        cJSON_AddStringToObject(device, "type", "sensor");
+        if (curr->type == ACD_TYPE_GPIO_INPUT) {
+          cJSON_AddStringToObject(device, "type", "binary_sensor");
+          cJSON *attributes = cJSON_CreateArray();
+          cJSON_AddItemToArray(attributes, cJSON_CreateString("input_sensor"));
+          cJSON_AddItemToObject(device, "attributes", attributes);
+        } else {
+          cJSON_AddStringToObject(device, "type", "sensor");
+        }
         if (isMASKSET(curr->flags,CALC_AVERAGE) ) {
           // statistical_sensor
           cJSON *stats = cJSON_CreateObject();
