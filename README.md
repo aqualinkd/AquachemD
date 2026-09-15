@@ -271,19 +271,19 @@ gpio_doser_ml_per_second=2.18
 | `ph_sensor_type` | Driver or hardware sub-type (e.g., `ezo`) |
 | `ph_sensor_address` | Hexadecimal I2C bus address for the sensor |
 | `ph_sensor_interlock_scope` | Interlock scope for sensor execution control |
-| `ph_sensor_statistics` | Configuration parameters for sensor statistics tracking |
+| `ph_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours) <b>**See note</b>|
 | --- | --- |
 | `orp_sensor_label` | Label to identify the ORP sensor block |
 | `orp_sensor_type` | Driver or hardware sub-type (e.g., `ezo`) |
 | `orp_sensor_address` | Hexadecimal I2C bus address for the sensor |
 | `orp_sensor_interlock_scope` | Interlock scope for sensor execution control |
-| `orp_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours)|
+| `orp_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours)  <b>**See note</b>|
 | --- | --- |
 | `prs_sensor_label` | Label to identify the pressure sensor block |
 | `prs_sensor_type` | Driver or hardware sub-type (e.g., `ezo`, `pte7300`) |
 | `prs_sensor_address` | Hexadecimal I2C bus address for the sensor |
 | `prs_sensor_interlock_scope` | Interlock scope for sensor execution control |
-| `prs_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours)|
+| `prs_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours)  <b>**See note</b>|
 | `prs_sensor_min_value` | Minimum raw input value for I2C pressure conversion |
 | `prs_sensor_max_value` | Maximum raw input value for I2C pressure conversion |
 | --- | --- |
@@ -299,7 +299,7 @@ gpio_doser_ml_per_second=2.18
 | `temp_sensor_offset` | Fixed offset value added to raw temperature readings |
 | `temp_sensor_scale` | Scale multiplier applied to raw temperature readings |
 | `temp_sensor_interlock_scope` | Interlock scope for sensor execution control |
-| `temp_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours) |
+| `temp_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours)  <b>**See note</b> |
 | `temp_sensor_uom` | Unit of measurement string (e.g., `°C`, `°F`) |
 | --- | --- |
 | `gpio_doser_label` | Label to identify the GPIO doser block |
@@ -311,7 +311,7 @@ gpio_doser_ml_per_second=2.18
 | `gpio_doser_tank_total_volume` | Total maximum liquid capacity of the associated chemical tank |
 | `gpio_doser_tank_min_volume` | Minimum safe liquid threshold before dosing disabled |
 | `gpio_doser_tank_uom` | Unit of measurement string for tank capacity (e.g., `Gallons`, `Litres`) |
-| `gpio_doser_running_dose_max_ml` | Maximum volume allowed during a pre defined period (usually 1day) |
+| `gpio_doser_running_dose_max_ml` | Maximum volume allowed during a pre defined period (usually 1day) <b>**See note</b> |
 | `gpio_doser_interlock_scope` | Interlock scope for doser safety overrides |
 | --- | --- |
 | `gpio_input_label` | Label to identify the general GPIO input block |
@@ -330,6 +330,9 @@ gpio_doser_ml_per_second=2.18
 | `sysfs_sensor_scale` | Scale multiplier applied to raw sysfs reading |
 | `sysfs_sensor_regex` | Regex pattern used to extract numerical value from sysfs text |
 | `sysfs_sensor_uom` | Unit of measurement string displayed for readings |
+
+
+<b>**note</b> These options are totally dependant on when you want to reset them, please use the AquachemD scheduler to schedule the reset at the time of day/week/month you prefer.
 
 ## Related projects
 

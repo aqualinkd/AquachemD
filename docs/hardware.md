@@ -81,6 +81,8 @@ Ontop of the main components.
 - PSU for Acid Pump.
 - IPS Filter/Strainer for Flow Cell.  
     - Quickly realized that small particles that can bypass my sandfilter can cause the Flow Cell Level sensor to get stuck in the "on" position.
+- Box to put everything in.
+    - I heghley recomend a light colored metal box NOT plastic.  Plastic will simply retain heat from any devices, metal will actually act as a heat sync (even if something like a CPU is not touching it), keeping it close to ambient temp.  
 
 --------
 
