@@ -10,34 +10,11 @@
 # AquachemD — Flow Cell Design Notes
   
 
-## TLDR Final Design
-
-  Flow cell in vertical orientation build with 3/4 Clear PVC tubing.
-  
-```
-  ┌ ← 3/4" elbow → horizontal ball valve → 3/8" (or 1/2") outlet tube (slopes down to pre-pump return)
-  │
-  ├──── Union Coupling        (disconnect for maintenance without cutting pipe)
-  │
-  ├──── T  [Flow Switch]      (triggers only when cell fully flooded — safety interlock)
-  │
-  ├──── T  [ORP Probe]        (downstream of pH per Atlas Scientific recommendation)
-  │
-  ├──── T  [pH Probe]         (upstream of ORP per Atlas Scientific recommendation)
-  │
-  ├──── T  [PT-1000 Temp]     (first to submerge on fill, provides temp compensation data)
-  │
-  ├──── Union Coupling        (disconnect for maintenance without cutting pipe)
-  │
-  └ ← 3/4" elbow → horizontal ball valve → 3/8" (or 1/2") inlet tube (from post-filter tap)
-```
 ## Overview
 
-Four options were evaluated for mounting Atlas Scientific pH, ORP, and PT-1000
+Four options were evaluated for mounting pH, ORP, sensors and PT-1000
 temperature sensors to read pool water chemistry. This document summarises each
-option, the reasons Option 3 (DIY clear PVC flow cell) was selected, and the
-rationale for a vertical orientation.
-
+option.
 ---
 
 ## Option 1 — Inline in 2" Main PVC Pipe
@@ -60,7 +37,7 @@ inline fittings.
 - Sensor Damage Probes are exposed to the full force and debris of the pool's flow. High velocity (>10 ft/s) can significantly shorten their lifespan.
 ---
 
-## Option 2 — Commercial Flow Cell (IPS FC100G or Hayward CAX-20272)
+## Option 2 — Commercial Flow Cell (IPS FC100G, Hayward CAX-20272, Jandy Drudose flow cell)
 
 A purpose-built acrylic bypass chamber with pre-drilled sensor ports, plumbed
 as a sidestream off the main line.
@@ -72,6 +49,10 @@ as a sidestream off the main line.
 - Pre-positioned sensor ports with correct geometry
 - Clear acrylic provides visual confirmation of water flow
 - Integrated float switch port on most models
+- Most major manufactures use this flow cell under different names / part#
+- Pre-drilled ports and gland nuts are sized and positioned for IPS's own sensor ecosystem / sensors —
+  which happens identical to Atlas Scientific and many other manufacturer probes.
+
 
 **Cons**
 - Cost: $80–$150 depending on model
@@ -80,19 +61,36 @@ as a sidestream off the main line.
   temperature sensor without modification
 - The bottom drain/sample port is a poor candidate for a temperature sensor as
   it faces downward and partially exposes the sensor to air when the cell drains
-- Pre-drilled ports are sized and positioned for IPS's own sensor ecosystem —
-  adapting Atlas Scientific probes with 3/4" NPT threads requires additional
-  fittings
 - Less flexibility in orientation — commercial cells are designed for a specific
   mounting position
 
-**Why rejected:** The FC100G is fundamentally a two-sensor cell. Adding a third
-sensor (PT-1000 temperature) requires fighting the design. At $100+ it is hard
-to justify when the sensor port limitations remain.
 
 ---
 
-## Option 3 — DIY Flow Cell with Clear 3/4" PVC (Selected)
+## Option 3 — Inline "FLow Cell" (eg Jandy TruSense cell-only / Poolside Tech ATT-FLOW-CELL)
+
+A compact, purpose-built chamber plumbed directly into the main 2" return line (not a bypass — full system flow passes through it), with pre-sized NPT ports for pH/ORP probes and, on some models, an integrated acid-injection port in the same housing.
+
+**Pros**
+- Readings always reflect the water actually reaching the pool, with no bypass restrictor that could clog or throttle down and starve the sensors of flow
+- Simpler plumbing than a true bypass loop — one inline section with two unions, versus tapping two separate points into the main line at different pressures
+- The chamber's internal geometry is still wider than the pipe it interrupts, so it meaningfully reduces velocity and turbulence around the probe tips compared to threading sensors straight into standard pipe (Option 1) — just not as dramatically as a low-flow bypass cell
+- Purpose-sized ports mean clean installation without adapters, similar convenience to a commercial bypass cell
+- Some models combine the sensing chamber and the acid-dosing injection port in one component, reducing total fittings
+
+**Cons**
+- Still carries the full return-line flow, so it does essentially nothing to keep debris away from the probes; suspended particulates in the pool's normal flow pass directly across the sensor tips, same exposure as Option 1
+- Because it's genuinely in the main line, installation is more invasive than a bypass tap — it typically requires cutting a section of the return pipe and providing a straight run either side (Poolside specifies 12") rather than just tapping two ports into an existing pipe
+- Servicing generally means interrupting flow through the whole return line, not just isolating a bypass loop — a bypass design with valves on both taps can often be serviced with the main pump still running; this can't
+- Vendor lock-in similar to Option 2 — ports are sized for that manufacturer's own probes, not a generic threading standard
+- Pricing is comparable to or higher than a commercial bypass cell — the Poolside unit alone runs around $335, above the $80–150 range quoted for Option 2, before probes
+
+
+
+
+---
+
+## Option 4 — DIY Flow Cell with Clear 3/4" PVC
 
 A custom bypass manifold built from clear schedule 40 3/4" PVC T fittings in
 series, with 3/8" quick-connect flexible tubing tapped into the 2" main line
@@ -124,39 +122,13 @@ secondary pump.
 - Requires careful sizing of the 3/8" inlet restriction to balance flow rate
   through the cell
 
-**Why selected:** Maximum flexibility, correct thread sizing for Atlas Scientific
-probes without adapters, larger water volume for better readings, and
-significantly lower cost. The ability to add sensors without redesigning the
-cell is important for future expansion.
+---
 
 ---
 
-## Option 4 — Dedicated Sample Pump (Considered, Rejected)
+## DIY options Vertical vs Horizontal Orientation
 
-A small peristaltic or centrifugal pump draws water from a post-filter tap,
-circulates it through a sensor manifold, and returns it independently of the
-main pool pump.
-
-**Pros**
-- Completely independent of main pump — sensors work even during pump off cycles
-- Very controlled, low flow rate ideal for electrochemical sensors
-- Can be pulsed periodically rather than running continuously
-
-**Cons**
-- Adds a second pump to install, power, and maintain
-- Significantly more complex plumbing and wiring
-- Additional failure point — if the sample pump fails, no chemistry readings
-
-**Why rejected:** The EZO-PMP dosing pump in this project is reserved for acid
-dosing, not water sampling. Adding a second pump purely for sample circulation
-adds unnecessary complexity for a residential pool installation where the main
-pump runtime already provides adequate bypass flow.
-
----
-
-## Vertical vs Horizontal Orientation
-
-### Why Vertical (Bottom Inlet, Top Outlet) Was Chosen
+### Why Vertical (Bottom Inlet, Top Outlet)
 
 **Air purging — self-purging by geometry**
 

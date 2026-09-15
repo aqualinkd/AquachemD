@@ -120,6 +120,7 @@ AquachemD is built to run on a **Raspberry Pi** (official release binaries are c
 - **GPIO**, via `libgpiod`/`/dev/gpiochip0`, for relay-driven dosing pumps and physical interlock switches.
 - **1-Wire** for DS18B20 temperature probes, if you're not using an EZO temperature circuit.
 
+More information is in [`hardware.md`](/docs/hardware.md).
 If you're building or adapting the physical sensor housing, [`flow cell design.md`](/docs/flow%20cell%20design.md) documents a tested, low-turbulence PVC flow cell design (with a full parts rationale) for mounting pH, ORP, and temperature probes safely outside the main plumbing run.
 
 ## Installation
@@ -246,6 +247,89 @@ gpio_doser_ml_per_second=2.18
 | `gpio_switch_scope_global` | Same interlock-scope concept as everything else — see Safety interlocks above. |
 
 </details>
+
+
+
+## Complete details of all inputs / outputs
+
+| Option | Description |
+| --- | --- |
+| `mqtt_condition_label` | Label to identify the MQTT condition block |
+| `mqtt_condition_topic` | MQTT topic path to monitor for condition state |
+| `mqtt_condition_value` | Expected string/int value required to satisfy the condition |
+| `mqtt_condition_interlock_scope` | Interlock scope defining execution boundaries (e.g., `global` vs `local`) |
+| `mqtt_condition_met_delay` | Delay duration (in seconds) before marking condition as met |
+| --- | --- |
+| `gpio_condition_label` | Label to identify the GPIO condition block |
+| `gpio_condition_pin` | Target GPIO pin number to sample |
+| `gpio_condition_pin_mode` | Pin configuration mode ('pull-up' / 'pull-down') |
+| `gpio_condition_required_state` | Boolean pin state required to satisfy condition (`0`/`1`) |
+| `gpio_condition_interlock_scope` | Interlock scope defining execution boundaries for the GPIO condition |
+| `gpio_condition_met_delay` | Delay duration (in seconds) before marking condition as met |
+| --- | --- |
+| `ph_sensor_label` | Label to identify the pH sensor block |
+| `ph_sensor_type` | Driver or hardware sub-type (e.g., `ezo`) |
+| `ph_sensor_address` | Hexadecimal I2C bus address for the sensor |
+| `ph_sensor_interlock_scope` | Interlock scope for sensor execution control |
+| `ph_sensor_statistics` | Configuration parameters for sensor statistics tracking |
+| --- | --- |
+| `orp_sensor_label` | Label to identify the ORP sensor block |
+| `orp_sensor_type` | Driver or hardware sub-type (e.g., `ezo`) |
+| `orp_sensor_address` | Hexadecimal I2C bus address for the sensor |
+| `orp_sensor_interlock_scope` | Interlock scope for sensor execution control |
+| `orp_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours)|
+| --- | --- |
+| `prs_sensor_label` | Label to identify the pressure sensor block |
+| `prs_sensor_type` | Driver or hardware sub-type (e.g., `ezo`, `pte7300`) |
+| `prs_sensor_address` | Hexadecimal I2C bus address for the sensor |
+| `prs_sensor_interlock_scope` | Interlock scope for sensor execution control |
+| `prs_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours)|
+| `prs_sensor_min_value` | Minimum raw input value for I2C pressure conversion |
+| `prs_sensor_max_value` | Maximum raw input value for I2C pressure conversion |
+| --- | --- |
+| `mqtt_sensor_label` | Label to identify the MQTT sensor block |
+| `mqtt_sensor_topic` | MQTT topic path delivering numerical sensor values |
+| `mqtt_sensor_uom` | Unit of measurement string displayed for readings |
+| --- | --- |
+| `temp_sensor_label` | Label to identify the temperature sensor block |
+| `temp_sensor_type` | Driver or hardware sub-type (e.g., `ezo`, `d1w`, `mqtt`) |
+| `temp_sensor_address` | Hexadecimal I2C bus address for the sensor |
+| `temp_sensor_topic` | MQTT topic path (when using MQTT temperature sensor) |
+| `temp_sensor_path` | Linux 1-Wire sysfs device path (when using 1-Wire temperature sensor) |
+| `temp_sensor_offset` | Fixed offset value added to raw temperature readings |
+| `temp_sensor_scale` | Scale multiplier applied to raw temperature readings |
+| `temp_sensor_interlock_scope` | Interlock scope for sensor execution control |
+| `temp_sensor_statistics` | Configuration parameters for sensor statistics tracking (eg, 1 day, 1 week, 2 hours) |
+| `temp_sensor_uom` | Unit of measurement string (e.g., `°C`, `°F`) |
+| --- | --- |
+| `gpio_doser_label` | Label to identify the GPIO doser block |
+| `gpio_doser_type` | Controller or hardware driver type for the dosing pump |
+| `gpio_doser_pin` | Target GPIO pin controlling the dosing pump relay |
+| `gpio_doser_address` | Hexadecimal address (if using I2C relay expansion) |
+| `gpio_doser_pin_mode` | Pin configuration mode for the doser output pin |
+| `gpio_doser_ml_per_second` | Dosing pump flow rate calibration value (mL per second) |
+| `gpio_doser_tank_total_volume` | Total maximum liquid capacity of the associated chemical tank |
+| `gpio_doser_tank_min_volume` | Minimum safe liquid threshold before dosing disabled |
+| `gpio_doser_tank_uom` | Unit of measurement string for tank capacity (e.g., `Gallons`, `Litres`) |
+| `gpio_doser_running_dose_max_ml` | Maximum volume allowed during a pre defined period (usually 1day) |
+| `gpio_doser_interlock_scope` | Interlock scope for doser safety overrides |
+| --- | --- |
+| `gpio_input_label` | Label to identify the general GPIO input block |
+| `gpio_input_pin` | Target GPIO pin number to sample |
+| `gpio_input_pin_mode` | Pin configuration mode (e.g., pull-up / pull-down) |
+| `gpio_input_required_state` | Logical pin state required for active status |
+| --- | --- |
+| `gpio_output_label` | Label to identify the general GPIO output block |
+| `gpio_output_pin` | Target GPIO pin number to drive |
+| `gpio_output_pin_mode` | Pin output drive mode |
+| `gpio_output_interlock_scope` | Interlock scope for output execution boundaries |
+| --- | --- |
+| `sysfs_sensor_label` | Label to identify the SysFS sensor block |
+| `sysfs_sensor_path` | Absolute Linux filesystem path to sysfs attribute file |
+| `sysfs_sensor_offset` | Fixed offset added to raw sysfs reading |
+| `sysfs_sensor_scale` | Scale multiplier applied to raw sysfs reading |
+| `sysfs_sensor_regex` | Regex pattern used to extract numerical value from sysfs text |
+| `sysfs_sensor_uom` | Unit of measurement string displayed for readings |
 
 ## Related projects
 
