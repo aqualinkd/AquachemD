@@ -20,16 +20,16 @@ CFG_ENTRY( "main_label",             main_label,             "AquachemD",       
 
 CFG_ENTRY( "single_instance",        singleton,               true,                CFG_BOOL,    0,                  0,                CFG_O_BOOL )
 
-/* --- 1. GLOBAL SYSTEM & LOGGING --- */
+/* ---  GLOBAL SYSTEM & LOGGING --- */
 CFG_ENTRY( "listen_address",         listen_address,         "http://0.0.0.0:80",  CFG_STRING,  CFG_ADVANCED, 0,                NULL )
 CFG_ENTRY( "log_level",              log_level,              LOG_NOTICE,           CFG_TXT_INT, 0,                                  0,                CFG_O_log_level )
 CFG_ENTRY( "mg_log_level",           mg_log_level,           0,                    CFG_INT,     CFG_READONLY|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "log_sensor_readings",    log_sensor_readings,    false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
-/* --- 2. WEB & DIRECTORIES --- */
+/* ---  WEB & DIRECTORIES --- */
 CFG_ENTRY( "web_directory",          web_directory,          "/var/www/aquachemd", CFG_STRING,  CFG_READONLY|CFG_HIDE,      0,     NULL )
 //CFG_ENTRY( "web_config",             web_config,             "",                   CFG_STRING,  CFG_GRP_ADVANCED|CFG_READONLY|CFG_HIDE,      0,     NULL )
 
-/* --- 3. MQTT COMMUNICATION --- */
+/* ---  MQTT COMMUNICATION --- */
 CFG_ENTRY( "mqtt_server",            mqtt_server,            NULL,                 CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
 CFG_ENTRY( "mqtt_user",              mqtt_user,              NULL,                 CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
 CFG_ENTRY( "mqtt_passwd",            mqtt_passwd,            NULL,                 CFG_STRING,  CFG_ADVANCED|CFG_PASSWD_MASK,  0,                NULL )
@@ -54,17 +54,17 @@ CFG_ENTRY( "remote_instance_mqtt_topic", remote_instance_mqtt_topic,       NULL,
 CFG_ENTRY( "remote_instance_id_suffix",  remote_instance_id_suffix,        NULL,    CFG_STRING,  CFG_ADVANCED,                  0,                NULL )
 */
 
-/* --- 4. GPIO CONFIGURATION --- */
+/* ---  GPIO CONFIGURATION --- */
 CFG_ENTRY( "gpio_chip",              gpio_chip,              "/dev/gpiochip0",     CFG_STRING,  CFG_ADVANCED,                       0,                NULL )
 
-/* --- 5. POLLING & CONVERSION --- */
+/* --- POLLING & CONVERSION --- */
 CFG_ENTRY( "sensor_poll_time",       sensor_poll_time,       60,                   CFG_INT,     0,                                  0,                NULL )
 CFG_ENTRY( "mqtt_convert_to_degF",   convert_mqtt_temp,      false,                CFG_BOOL,    0,                                  0,                CFG_O_BOOL )
 
 CFG_ENTRY( "ph_reading_temp_min",    ph_reading_temp_min,    1,                    CFG_INT,     0,                                  0,                NULL )
 CFG_ENTRY( "ph_reading_temp_max",    ph_reading_temp_max,    60,                   CFG_INT,     0,                                  0,                NULL )
 
-/* --- 6. DOSING RANGES (Restored CFG_CUSTOM) --- */
+/* --- DOSING RANGES (Restored CFG_CUSTOM) --- */
 CFG_ENTRY( "ph_dose_range",          ph_steps,               NULL,                 CFG_CUSTOM,  CFG_MULTIPLE,                       0,                NULL )
 CFG_ENTRY( "ph_default_dose_time",   ph_default_dose_time,   20,                   CFG_INT,     0,                                  0,                NULL )
 CFG_ENTRY( "ph_max_dose_time",       ph_max_dose_time,      60,                   CFG_INT,     0,                                  0,                NULL )
@@ -83,7 +83,7 @@ CFG_ENTRY( "h2o_max_dose_time",      h2o_max_dose_time,     600,                
 CFG_ENTRY( "switch_max_runtime",     switch_max_runtime,    7200,                  CFG_INT,     0,                                  0,                NULL )
 
 
-/* --- 7. SECURITY / TLS (Conditional) --- */
+/* --- SECURITY / TLS (Conditional) --- */
 #if MG_TLS > 0
 CFG_ENTRY( "cert_dir",               cert_dir,               NULL,                 CFG_STRING,  CFG_GRP_ADVANCED,                   0,                NULL )
 #endif
@@ -100,7 +100,7 @@ CFG_ENTRY( "mqtt_condition_ID",            keys,             NULL,              
 CFG_ENTRY( "mqtt_condition_topic",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_condition_value",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 //CFG_ENTRY( "mqtt_condition_scope_global",  keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "mqtt_condition_interlock_scope",keys,             NULL,                CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "mqtt_condition_severity",keys,             NULL,                CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "mqtt_condition_met_delay",     keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 CFG_ENTRY( "gpio_condition_label",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -109,7 +109,7 @@ CFG_ENTRY( "gpio_condition_pin",           keys,             NULL,              
 CFG_ENTRY( "gpio_condition_pin_mode",      keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_required_state",keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 //CFG_ENTRY( "gpio_condition_scope_global",  keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-CFG_ENTRY( "gpio_condition_interlock_scope",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_condition_severity",         keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_condition_met_delay",     keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 

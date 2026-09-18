@@ -22,6 +22,7 @@
 void set_config_defaults();
 char* replace_or_append_suffix(const char *orig, const char *suffixes[], const char *append_text);
 void assign_missing_ids(struct aquachemdata *acdata);
+void validate_config(struct aquachemdata *acdata);
 
 #define SET_VAL_CFG_STRING(field, def)  _acdconfig_.field = def
 #define SET_VAL_CFG_INT(field, def)     _acdconfig_.field = def
@@ -396,9 +397,9 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                     if (_staging.value3 > 0) {
                       setMASK(_staging.flags, CALC_AVERAGE);
                     }
-                    //setMASK(_staging.flags, parse_statistics(value));
                 }
-                else if (KEY_ENDS_WITH_IC(param, "_interlock_scope")) {
+                else if (KEY_ENDS_WITH_IC(param, "_interlock_scope") ||
+                         KEY_ENDS_WITH_IC(param, "_severity") ) {
                     _staging.scope = parse_acd_scope(value);
                 }
                 else if (strncasecmp(param, "mqtt_sensor_topic", 17) == 0) {
@@ -426,17 +427,7 @@ bool setConfigValue(struct aquachemdata *acdata, char *param, char *value) {
                 }
                 else if (KEY_ENDS_WITH_IC(param, "_pin")) {  // All GPIO_XXX
                     _staging.pin = (int)strtoul(value, NULL, 10);
-                }/*
-                else if (strncasecmp(param, "gpio_doser_pin_mode", 19) == 0 ||
-                         strncasecmp(param, "gpio_input_pin_mode", 19) == 0 ||
-                         strncasecmp(param, "gpio_output_pin_mode", 20) == 0) {
-                    _staging.pin_mode = parse_gpio_active(value);
-                }*//*
-                else if (strncasecmp(param, "gpio_doser_pin", 14) == 0 ||
-                         strncasecmp(param, "gpio_input_pin", 14) == 0 ||
-                         strncasecmp(param, "gpio_output_pin", 14) == 0) {
-                    _staging.pin = (int)strtoul(value, NULL, 10);
-                }*/
+                }
                 else if (strncasecmp(param, "gpio_doser_tank_total_volume", 28) == 0) {
                     _staging.value2 = strtof(value, NULL);
                 }
@@ -554,11 +545,15 @@ void parse_config_file(struct aquachemdata *acdata) {
         action_staging();
         fclose(fp);
     } else {
+        LOG(LOG_ERR, "Error opening config file '%s'\n",_acdconfig_.config_file);
         exit(EXIT_FAILURE);
     }
     acdata->keys->next = _acdconfig_.keys;
+    // I know all of the below could be combined and be quicker startup
+    // But keeping them seperate for future enhacments and code readability.
     assign_missing_ids(acdata);
-    check_print_config(acdata);
+    validate_config(acdata);
+    print_config(acdata);
 }
 
 void free_config()
@@ -1073,10 +1068,10 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
                 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "mqtt_condition_interlock_scope");
+                cJSON_AddStringToObject(f_item, "key", "mqtt_condition_severity");
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE));
                 cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
@@ -1115,11 +1110,11 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "gpio_condition_interlock_scope");
-                cJSON_AddStringToObject(f_item, "type", "boolean");
+                cJSON_AddStringToObject(f_item, "key", "gpio_condition_severity");
+                cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
-                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_ACTION_BLOCK?true:false);
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE));
+                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
                 f_item = cJSON_CreateObject();
@@ -2120,7 +2115,7 @@ static const char *config_scope_detail_str(acd_key_t *key)
 
 #define MAX_PRINTLEN 25
 
-void check_print_config (struct aquachemdata *acdata)
+void print_config (struct aquachemdata *acdata)
 {
   int i;
   char name[MAX_PRINTLEN];
@@ -2131,8 +2126,6 @@ void check_print_config (struct aquachemdata *acdata)
 
   acdata->keys->next = _acdconfig_.keys; // Make sensors available in main data struct keys, first key is pre-set 
 
-  // make sure a valid poll time. ie >= 1
-  _acdconfig_.sensor_poll_time = (_acdconfig_.sensor_poll_time < 1) ? 1 : _acdconfig_.sensor_poll_time;
 
   // Anything that's not in the config table should be added as a special case here until it's added to the table. This is for handling things that need to be displayed in a special way or that aren't actually stored in the config struct but are still important to display.
   LOG(LOG_NOTICE, "%-*s = %s\n",MAX_PRINTLEN,"Configuration file", _acdconfig_.config_file);
@@ -2188,7 +2181,7 @@ void check_print_config (struct aquachemdata *acdata)
         }
      break;
       case CFG_CUSTOM:
-        //LOG(LOG_WARNING, "check_print_config() ADD SPECIAL CONFIG FOR '%s'\n",_cfgParams[i].name);
+        //LOG(LOG_WARNING, "print_config() ADD SPECIAL CONFIG FOR '%s'\n",_cfgParams[i].name);
       break;
     }
   }
@@ -2317,8 +2310,62 @@ void check_print_config (struct aquachemdata *acdata)
   }
 }
 
+// Ensures key->scope is always a real, usable value (ALLOW/LOCAL/GLOBAL) by the
+// time this returns -- never ACD_SCOPE_UNKNOWN. This is the single point where
+// an unrecognised or missing interlock scope gets resolved, so nothing
+// downstream (classify_key(), the permission table, any 1 << scope shift) ever
+// has to handle ACD_SCOPE_UNKNOWN itself. Must be called once for every key
+// after its scope has been parsed from config.
+//
+// Defaults differ by device type, and are chosen to fail closed:
+//   Conditions        -> GLOBAL. An interlock that silently gates nothing on
+//                         a typo is the single worst failure mode this system
+//                         has -- it looks configured but protects nothing.
+//   Pumps             -> LOCAL. Matches classify_key()'s existing fallback:
+//                         still respects a hard interlock, just not degraded
+//                         to the most restrictive dosing behaviour.
+//   Sensors/Inputs,
+//   Plain outputs      -> GLOBAL. Default to trusting/running less, not more,
+//                         when we don't know what was actually intended.
+//   Everything else
+//   (MASTER, VIR_TANK) -> no interlock concept -- left untouched.
+void validate_interlock(acd_key_t *key) {
+  if (!key) return;
+
+  if (key->scope == ACD_SCOPE_ALLOW || key->scope == ACD_SCOPE_LOCAL || key->scope == ACD_SCOPE_GLOBAL) {
+    return; // already a real value
+  }
+
+  acd_scope_t fallback;
+  if (IS_CONDITION(key->type)) {
+    fallback = ACD_SCOPE_GLOBAL;
+  } else if (IS_PUMP(key->type)) {
+    fallback = ACD_SCOPE_LOCAL;
+  } else if (IS_INPUT(key->type) || key->type == ACD_TYPE_GPIO_OUTPUT) {
+    fallback = ACD_SCOPE_GLOBAL;
+  } else {
+    return; // no interlock concept for this type -- nothing to validate
+  }
+
+  LOG(LOG_WARNING, "%s: interlock scope is missing or not valid, defaulting to %s\n",
+      key->label, acd_scope_to_str(fallback));
+  key->scope = fallback;
+}
 
 
+void validate_config(struct aquachemdata *acdata) {
+
+  // make sure a valid poll time. ie >= 1
+  _acdconfig_.sensor_poll_time = (_acdconfig_.sensor_poll_time < 1) ? 1 : _acdconfig_.sensor_poll_time;
+
+  // Any other main config checks........
+
+  // Check keys.
+  for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
+    validate_interlock(curr);
+    // any other checks need to happen in keys..........
+  } 
+}
 
 
 
@@ -2598,6 +2645,11 @@ void add_sensor_ezo(const acd_staging_t *st) {
     new_node->scope = st->scope;
     new_node->stats.tau_seconds = st->value3;
 
+    if (new_node->scope != ACD_SCOPE_GLOBAL && new_node->scope != ACD_SCOPE_LOCAL) {
+        LOG(LOG_WARNING, "Interlock scope for %s is not valid, using Global\n",new_node->label);
+        new_node->scope = ACD_SCOPE_GLOBAL;
+    }
+    
     if (st->flags != 0) {
       new_node->flags = st->flags;
       //new_node->stats.ID = malloc(strlen(new_node->ID)+ 5);

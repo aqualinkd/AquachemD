@@ -7,9 +7,17 @@
 
 ---
 
+[Web / App UI examples](#WebUI)
+
+[Homekit examples](#HomeKit)
+
+[HomeAssistant examples](#HomeAssistant)
+
+---
 
 
-## Quick Web UI overview
+# Quick Web UI overview
+<a id="WebUI"></a>
 
 Full details on all UI options coming soon, below are a few examples. Just about everything is fully customizable.
 
@@ -67,3 +75,32 @@ Full details on all UI options coming soon, below are a few examples. Just about
 <img src="images/AquachemD-sensor-limits.png" alt="Alt Text">
 <br><br>
 <img src="images/AquachemD-sensor-limits2.png" alt="Alt Text">
+
+----
+
+# Quick HomeKit overview
+<a id="HomeKit"></a>
+
+<img src="images/HK-Main.jpg" alt="Alt Text" width="600">
+<br><br>
+<img src="images/HK-Doser running.jpg" alt="Alt Text" width="250">
+<img src="images/HK-Doser time.jpg" alt="Alt Text" width="350">
+<br><br>
+<img src="images/HK-Lux.jpg" alt="Alt Text" width="350">
+<img src="images/HK-Contact.jpg" alt="Alt Text" width="350">
+<img src="images/HK-Temp.jpg" alt="Alt Text" width="350">
+
+----
+
+# Quick HomeAssistant examples
+<a id="HomeAssistant"></a>
+
+These are simply the default templates, obviously you can fully customize to how you prefer.
+
+<img src="images/HomeAssistant-Controls.png" alt="Alt Text" width="400">
+<img src="images/HomeAssistant-Sensors.png" alt="Alt Text" width="400">
+
+----
+
+## Below is an example using Sensor Readings / Manual readings & Pool Maths (calculations)
+<img src="images/HomeAssistant-Chemical.png" alt="Alt Text" width="600">

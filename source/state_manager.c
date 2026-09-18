@@ -55,24 +55,17 @@ typedef enum {
 static const uint8_t transition_permission[KC_COUNT][5] = {
   //                     OFF        ON               ENABLED          DISABLED         DELAY
   [KC_MASTER]        = { SCOPE_ALL, SCOPE_ALL,       SCOPE_L|SCOPE_B, 0,               0 },
+  [KC_CONDITION]     = { SCOPE_ALL, SCOPE_ALL,       0,               0,               SCOPE_ALL },
+
   [KC_PUMP_GLOBAL]   = { SCOPE_ALL, SCOPE_A,         SCOPE_A,         SCOPE_L|SCOPE_B, 0 },  // Allow dosing while GLOBAL
   [KC_PUMP_LOCAL]    = { SCOPE_ALL, SCOPE_A|SCOPE_L, SCOPE_A|SCOPE_L, SCOPE_B,         0 },  // Allow dosing while LOCAL & GLOBAL
-  //[KC_OUTPUT_ALLOW]  = { SCOPE_ALL, SCOPE_ALL,       0,               0,               0 },
-  
-  //[KC_OUTPUT_ALLOW]  = { SCOPE_ALL, SCOPE_ALL,       0,               SCOPE_ALL,       0 },
-  //[KC_OUTPUT_GLOBAL] = { SCOPE_ALL, SCOPE_A,         0,               SCOPE_L|SCOPE_B, 0 },  
-  //[KC_OUTPUT_LOCAL]  = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               SCOPE_B,         0 },
 
   [KC_OUTPUT_ALLOW]  = { SCOPE_ALL, SCOPE_ALL,       0,               0,               0 },  // on/off only, ever -- ignores all interlocks
   [KC_OUTPUT_GLOBAL] = { SCOPE_ALL, SCOPE_A,         0,               SCOPE_L|SCOPE_B, 0 },  // respects Limit and Block
   [KC_OUTPUT_LOCAL]  = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               SCOPE_B,         0 },  // only respects a hard interlock
 
-
-  [KC_CONDITION]     = { SCOPE_ALL, SCOPE_ALL,       0,               0,               SCOPE_ALL },
-  //[KC_SENSOR_GLOBAL] = { SCOPE_ALL, SCOPE_ALL,       0,               SCOPE_B,         0 },  // Need to validate
-  //[KC_SENSOR_LOCAL]  = { SCOPE_ALL, SCOPE_ALL,       SCOPE_ALL,       SCOPE_B,         0 },  // Need to validate
   [KC_SENSOR_ALLOW] =  { SCOPE_ALL, SCOPE_ALL,       0,               0,               0 },
-  [KC_SENSOR_GLOBAL] = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               SCOPE_B,         0 },
+  [KC_SENSOR_GLOBAL] = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               0,               0 },
   [KC_SENSOR_LOCAL]  = { SCOPE_ALL, SCOPE_ALL,       SCOPE_ALL,       SCOPE_B,         0 },
 };
 
@@ -520,7 +513,6 @@ bool state_change_request_extended(struct aquachemdata *acdata, acd_key_t *key, 
   return _state_change_request(acdata, key, state, value);
 }
 
-#ifdef USE_LOGIC_TABLE
 bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state, uint32_t value)
 {
   LOG(LOG_INFO, "Request to set %s to %s (current state: %s) with value %d (master scope %s, master state %s)", key->label, acd_state_to_str(state), acd_state_to_str(key->state), value, acd_scope_to_str(get_master(acdata)->scope), acd_state_to_str(get_master(acdata)->state));
@@ -603,145 +595,7 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
 
   return true;
 }
-#else
-bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state, uint32_t value)
-{
-  // Remember.
-  //  Master         off / on / enabled ----> Means a condition is not met.
-  //  sensors        on / disabled
-  //  conditions     on / off
-  //  output/doser   on / off / enabled / disabled ----> off, system will ignore on messages. (user turns off)
-  
-  //  gpio_input     on / off
-  //  gpio_output w/ scope local   on / off
-  //  gpio_output w/ scope global  on / off / enabled / disabled
-  //
-  // condition turned !met ( Update master to disabled and turn everything off/enabled.)
-  // last condition met ( Update master to on and turn everything to enabled, only if master is enabled)
-  //  master off (turn sensors to disabled)
 
-  LOG(LOG_DEBUG, "Request to set %s to %s (current state: %s) with value %d", key->label, acd_state_to_str(state), acd_state_to_str(key->state), value);
-
-  if (state == key->state) {
-    // If a timer is on, and value > 0 let it pass as we will reset the timer.
-    if (!isMASKSET(key->flags, TIMER_ACTIVE) || value <= 0) {
-      LOG(LOG_DEBUG, "%s is already %s, no state change needed", key->label, acd_state_to_str(state));
-      return true;
-    }
-  }
-
-  // If MQTT requested a change, we need to send back the new state regardless of if it changed ot not, so simply force that.
-  // We need to pass a value here to know who requested the change, MQTT / WebSocket / API
-  // Below is a hack for the moment
-  acdata->is_dirty = true;
-  key->is_dirty = true;
-
-
-  // Bunch of logic for different key states.
-  switch(key->type) {
-    case ACD_TYPE_MASTER:
-      if (key->state == ACD_LED_OFF && state == ACD_LED_ON) { //if we are off, use the on state as enabled.
-        ASSIGN_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
-        check_master(acdata); // Set things to enabled
-      } else if (key->state == ACD_LED_DISABLED && state == ACD_LED_ON) { // if disabled, can't turn on
-        LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
-        return false;
-      } else if (state == ACD_LED_OFF) { // Turn sensors off.
-        ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty);
-        check_master(acdata); // Set things to disabled
-      } else {
-        ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty);
-      }
-      break;
-    case ACD_TYPE_GPIO_PMP:
-    case ACD_TYPE_EZO_PMP:
-      // If we are in an off state, don't disable.  This is when pump is off and condition is not met, leave pump on off state.
-      if (key->state == ACD_LED_OFF && (state == ACD_LED_DISABLED )) {
-        LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
-        return false;
-      }
-
-      // Master is blocking any enable or on states
-      if (get_master(acdata)->scope != ACD_ACTION_ALLOW && (state == ACD_LED_ON || state == ACD_LED_ENABLED )) {
-        LOG(LOG_WARNING, "Master is in %s but with scope %s, can't turn %s to %s, setting to %s", acd_state_to_str(get_master(acdata)->state), acd_scope_to_str(get_master(acdata)->scope), key->label, acd_state_to_str(state), acd_state_to_str(ACD_LED_DISABLED));
-        // We can turn to disable though.
-        ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty);
-        if (state == ACD_LED_ON && _acdconfig_.log_zerorun_pump_events) {
-          log_pump_null_event(key, value);
-          //LOG_PUMP_EVENT(key, 0, 0, 0);
-          //post_dosing_event(key, 0, 0);
-        }
-        return false;
-      }
-
-      //if we are off, use the on state as enabled.
-      if (key->state == ACD_LED_OFF && (state == ACD_LED_ON || state == ACD_LED_ENABLED)) {
-        if (get_master(acdata)->state == ACD_LED_OFF) {
-          ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty); // Master is off, can only set to disabled.
-        } else if (get_master(acdata)->state == ACD_LED_ON) { // Master is on, we can set enabled
-          ASSIGN_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty, key->is_dirty);
-        } else {
-          ASSIGN_IF_CHANGED(key->state , ACD_LED_DISABLED, acdata->is_dirty, key->is_dirty); // Master is has ACD_ACTION_BLOCK | ACD_ACTION_LIMIT, can only set disabled.
-        }
-      } else if (state == ACD_LED_ON) {
-        if (key->state == ACD_LED_ENABLED ) {
-          turn_pump_on(acdata, key, value<=0?0:value);
-        } else if (isMASKSET(key->flags, TIMER_ACTIVE) && value > 0 && key->state == ACD_LED_ON) {
-          // We are resetting the timer.
-          turn_pump_on(acdata, key, value);
-        } else {
-          LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
-          if (state == ACD_LED_ON && _acdconfig_.log_zerorun_pump_events) {
-            log_pump_null_event(key, value);
-            //LOG_PUMP_EVENT(key, 0, 0, 0);
-            //post_dosing_event(key, 0, 0);
-          }
-          return false;
-        }
-      } else if (key->state == ACD_LED_ON && state == ACD_LED_OFF) {
-        turn_pump_off(acdata, key, ACD_LED_ENABLED);
-      } else if (key->state == ACD_LED_ENABLED && state == ACD_LED_OFF) {
-        ASSIGN_IF_CHANGED(key->state , ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
-       } else if (key->state == ACD_LED_DISABLED && state == ACD_LED_OFF) {
-        ASSIGN_IF_CHANGED(key->state , ACD_LED_OFF, acdata->is_dirty, key->is_dirty);
-      } else {
-        //SET_IF_CHANGED(key->state , state, acdata->is_dirty);
-        LOG(LOG_WARNING, "%s is %s, can't turn %s", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
-        return false;
-      }
-      break;
-    case ACD_TYPE_MQTT_COND:
-    case ACD_TYPE_GPIO_COND:
-      // The only time we "request" a state change on a condition is if it's from DELAY to ON.
-      if (state == ACD_LED_DELAY || isMASKSET(key->flags, DELAY_ACTIVE)) {
-        // Make sure the condition is still met.
-        set_cond_state(acdata, key, key->met?ACD_LED_ON:ACD_LED_OFF);
-      }
-      break;
-    case ACD_TYPE_GPIO_OUTPUT:
-      if (state == ACD_LED_ON) {
-        turn_gpio_switch_on(acdata, key, value<=0?0:value);
-      } else if (state == ACD_LED_OFF) {
-        turn_gpio_switch_off(acdata, key, ACD_LED_OFF);
-      } else {
-        LOG(LOG_WARNING, "%s is %s, setting to %s not supported", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
-        return false;
-      }
-      break;
-    default:
-      //SET_IF_CHANGED(key->state , state, acdata->is_dirty);
-      LOG(LOG_WARNING, "%s is %s, setting to %s not supported", key->label, acd_state_to_str(key->state), acd_state_to_str(state));
-      return false;
-      break;
-  }
-
-  LOG(LOG_DEBUG, "%s set to %s", key->label, acd_state_to_str(key->state));
-
-  return true;
-}
-#endif
-
-#ifdef USE_LOGIC_TABLE
 void check_master(struct aquachemdata *acdata) {
   acd_key_t *failed_condition = NULL;
   //acd_action_t action = ACD_ACTION_ALLOW;
@@ -764,30 +618,7 @@ void check_master(struct aquachemdata *acdata) {
     }
     return;
   }
-/*
-  if ( get_master(acdata)->state == ACD_LED_OFF ) {
-    for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
-      if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF) {
-      //if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF && classify_key(curr) != KC_OUTPUT_ALLOW) {
-        if (IS_OUTPUT(curr->type) && curr->state == ACD_LED_ON) {
-          IS_PUMP(curr->type)?turn_pump_off(acdata, curr, ACD_LED_DISABLED):turn_gpio_switch_off(acdata, curr, ACD_LED_DISABLED);
-          LOG(LOG_INFO, "State Manager - %s no longer permitted, turning off (-> %s)", curr->label, acd_state_to_str(ACD_LED_OFF));
-        }
-        if (curr->scope != ACD_ACTION_ALLOW) {
-          set_key_state(acdata, curr, ACD_LED_DISABLED);
-        }
-      } else if (IS_OUTPUT(curr->type) && !IS_PUMP(curr->type) && curr->state == ACD_LED_OFF) {
-      //} else if (IS_OUTPUT(curr->type) && !IS_PUMP(curr->type) && curr->state == ACD_LED_OFF && classify_key(curr) != KC_OUTPUT_ALLOW) {
-        // This just leaves ACD_TYPE_GPIO_OUTPUT at the moment, but test above is accurate for future
-        // Outputs need to go from OFF to DISABLED, Pumps OFF mean something different since it supports ENABLED and need to be MANUALLY turned on.
-        set_key_state(acdata, curr, ACD_LED_DISABLED);
-      } else {
-        //LOG(LOG_ERR, "State Manager - leave %s at %s\n",curr->label, acd_state_to_str(curr->state));
-      }
-    }
-    return;
-  }
-*/
+
   // Check for any conditions that are not met.
   get_master(acdata)->scope = ACD_ACTION_ALLOW; // Reset to good, below will set to bad.
   for (acd_key_t *curr = get_master(acdata)->next; curr != NULL; curr = curr->next) {
@@ -806,7 +637,6 @@ void check_master(struct aquachemdata *acdata) {
   }
 
   LOG(LOG_INFO, "State Manager - Master actions = %s",acd_scope_to_str(get_master(acdata)->scope) );
-
 
   // Condition-scanning loop that derives acdata->keys->scope: unchanged --
   // this computes the input the table needs, the table can't replace it.
@@ -854,123 +684,9 @@ void check_master(struct aquachemdata *acdata) {
       else if (!on_permitted)
         set_key_state(acdata, curr, ACD_LED_DISABLED);
     }
-#ifdef NO_COMPILE
-    if (IS_OUTPUT(curr->type)) {
-      //LOG(LOG_NOTICE, "Validating status of %s - classify_key=%d target state=%s\n",curr->label,cat,acd_state_to_str(resting_state_for_scope(cat, acdata->keys->scope)));
-      /*
-      if (cat == KC_OUTPUT_LOCAL || cat == KC_OUTPUT_ALLOW || cat == KC_OUTPUT_GLOBAL){
-        //continue; // no Enabled/Disabled concept -- scope severity never touches these
-        //These are GPIO switched, manually set since transition table not working, as these only support DISABLE and not ENABLE so resting_state_for_scope() will always return ACD_LED_DISABLED 
-        if (!on_permitted && curr->state == ACD_LED_ON){ turn_gpio_switch_off(acdata, curr, ACD_LED_DISABLED); LOG(LOG_INFO, "State Manager - %s no longer permitted, turning off (-> %s)", curr->label, acd_state_to_str(ACD_LED_DISABLED));}
-        else if (!on_permitted && curr->state != ACD_LED_DISABLED) set_key_state(acdata, curr, ACD_LED_DISABLED);
-        else if (on_permitted && curr->state == ACD_LED_DISABLED) set_key_state(acdata, curr, ACD_LED_OFF);
-        continue;
-      }*/
-      if (cat == KC_OUTPUT_ALLOW) continue; // genuinely ignores all interlocks -- nothing to compute
-
-      if (IS_PUMP(curr->type) && curr->state == ACD_LED_OFF) continue; // sticky-off, manual/tank-only recovery
-
-      if (curr->state == ACD_LED_ON && !on_permitted) {
-        acd_state_t target = resting_state_for_scope(cat, acdata->keys->scope);
-        if (IS_PUMP(curr->type)) turn_pump_off(acdata, curr, target);
-        else turn_gpio_switch_off(acdata, curr, target);
-        LOG(LOG_INFO, "State Manager - %s no longer permitted, turning off (-> %s)", curr->label, acd_state_to_str(target));
-      } else if (curr->state != ACD_LED_ON) {
-        acd_state_t target = resting_state_for_scope(cat, acdata->keys->scope);
-        if (curr->state != target) set_key_state(acdata, curr, target);
-      }
-    } else if (IS_INPUT(curr->type)) {
-      if (on_permitted && curr->state != ACD_LED_ON) set_key_state(acdata, curr, ACD_LED_ENABLED);
-      else if (!on_permitted) set_key_state(acdata, curr, ACD_LED_DISABLED);
-    }
-  #endif
   }
   
 }
-#else
-void check_master(struct aquachemdata *acdata) {
-  acd_key_t *failed_condition = NULL;
-  //acd_action_t action = ACD_ACTION_ALLOW;
-
-  // Turn everything to disabled if master if off
-  if ( get_master(acdata)->state == ACD_LED_OFF ) {
-    for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
-      //if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF /*&& curr->scope != ACD_SCOPE_LOCAL*/) {
-      if (!IS_CONDITION(curr->type) && curr->state != ACD_LED_OFF && curr->scope != ACD_SCOPE_LOCAL) {
-        set_key_state(acdata, curr, ACD_LED_DISABLED);
-        //LOG(LOG_ERR, "State Manager - set %s to disable\n",curr->label);
-      } else {
-        //LOG(LOG_ERR, "State Manager - leave %s at %s\n",curr->label, acd_state_to_str(curr->state));
-      }
-    }
-    return;
-  }
-
-  // Check for any conditions that are not met.
-  get_master(acdata)->scope = ACD_ACTION_ALLOW; // Reset to good, below will set to bad.
-  for (acd_key_t *curr = get_master(acdata)->next; curr != NULL; curr = curr->next) {
-    if (IS_CONDITION(curr->type)) {LOG(LOG_INFO, "State Manager - Condition %s, scope %s, %s",curr->label, acd_scope_to_str(curr->scope), curr->met?"Safe":"Not Safe");}
-    //if (IS_CONDITION(curr->type) && curr->met == false) {
-    if (IS_CONDITION(curr->type) && (curr->met == false || curr->state == ACD_LED_DELAY)) {
-      if (curr->scope == ACD_ACTION_BLOCK) {
-        failed_condition = curr;
-        get_master(acdata)->scope = ACD_ACTION_BLOCK;
-      } else if (curr->scope == ACD_ACTION_LIMIT && get_master(acdata)->scope != ACD_ACTION_BLOCK) {
-        // Don't set to limit if already block
-        get_master(acdata)->scope = ACD_ACTION_LIMIT; 
-      }
-      LOG(LOG_INFO,"Condition %s not met",curr->label);
-    }
-  }
-
-  LOG(LOG_INFO, "State Manager - Master actions = %s",acd_scope_to_str(get_master(acdata)->scope) );
-
-  // failed condition LOCAL scope blocks outputs but not inputs. Master set to limit.
-  // failed condition GLOBAL scope blocks everything inputs & outputs except input/sensor scope of local.
-  // sensor/input scope local = keep reading on failed global condition (ie MQTT external sensor, or maybe filter pressure)
-
-  // Set master status depening on any conditions that were not met.
-  if (failed_condition == NULL) {
-    //SET_IF_CHANGED(get_master(acdata)->state, ACD_LED_ON, acdata->is_dirty);
-    set_key_state(acdata, acdata->keys, ACD_LED_ON);
-  } else {
-    //SET_IF_CHANGED(acdata->keys->state, ACD_LED_ENABLED, acdata->is_dirty);
-    set_key_state(acdata, acdata->keys, ACD_LED_ENABLED);
-  }
-
-  for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
-    if (IS_OUTPUT(curr->type)) {
-      // turn off any outputs on any conditions that are not met
-      if ( (failed_condition != NULL || get_master(acdata)->scope == ACD_ACTION_LIMIT) && curr->state == ACD_LED_ON) {
-        turn_pump_off(acdata, curr, ACD_LED_ENABLED);
-        if (failed_condition != NULL)
-          LOG(LOG_INFO, "State Manager - Condition %s not safe!, %s is on turning off", failed_condition->label, curr->label);
-        else
-          LOG(LOG_INFO, "State Manager - Condition not safe!, %s is on turning off", curr->label);
-      }
-
-      // Set the outputs to disabled or enabled depending on condition(s)
-      if ((failed_condition != NULL || get_master(acdata)->scope == ACD_ACTION_LIMIT) && curr->state != ACD_LED_OFF /*&& curr->scope != ACD_SCOPE_LOCAL*/) {
-        set_key_state(acdata, curr, ACD_LED_DISABLED);
-      } else if (failed_condition == NULL && curr->state != ACD_LED_OFF && curr->state != ACD_LED_ON) {
-        set_key_state(acdata, curr, ACD_LED_ENABLED);
-      }
-    } else if (IS_INPUT(curr->type)) {
-      if (get_master(acdata)->scope == ACD_ACTION_ALLOW || get_master(acdata)->scope == ACD_ACTION_LIMIT) {
-        // wrapping the set_key_state with the IF so the device doesn;t flash to enabled then on, if was previously on
-        if (curr->state != ACD_LED_ON) {set_key_state(acdata, curr, ACD_LED_ENABLED);}
-      } else { // ACD_ACTION_BLOCK
-       if (curr->scope == ACD_SCOPE_GLOBAL) {
-          set_key_state(acdata, curr, ACD_LED_DISABLED);
-        } else {
-          // wrapping the set_key_state with the IF so the device doesn;t flash to enabled then on, if was previously on
-          if (curr->state != ACD_LED_ON) {set_key_state(acdata, curr, ACD_LED_ENABLED);}
-        }
-      } 
-    }
-  }
-}
-#endif
 
 bool set_key_state(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state)
 {

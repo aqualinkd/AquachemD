@@ -539,10 +539,8 @@ reload_configuration:
   {
     //acd_scope_t sensors_read_scope = ACD_SCOPE_GLOBAL;
     float temp_reading_for_ph = UNKNOWN;
-    char *master_temp_label;
-#ifndef USE_LOGIC_TABLE
-    bool all_conditions_met = true; // Should be able to get rid of this all together now, and just use acddata.keys->state 
-#endif
+    char *master_temp_label = NULL;
+
     int gpio_state = GPIO_ERROR;
 
     LOG(reading_log_level,"---- taking reading(s) ----\n");
@@ -576,9 +574,6 @@ reload_configuration:
             update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, curr->label);
             setMASK(curr->flags, CONDITION_NOTIFIED);
           }
-#ifndef USE_LOGIC_TABLE
-          all_conditions_met = false;
-#endif
         } else if (curr->met && isMASKSET(curr->flags, CONDITION_NOTIFIED)) {
           removeMASK(curr->flags, CONDITION_NOTIFIED);
           LOG(LOG_NOTICE,"Condition satisfied: %s\n", curr->label);
@@ -600,31 +595,12 @@ reload_configuration:
     //  Master state = ENABLED, scope = Global   // Condition set to Global failed (but can read local sensors)
     //  Master state = ON, scope = Local         // Condition set to local failed (is can read all sensors, but not dose)
     //LOG(LOG_ERR, "Master state = %s, scope = %s\n",acd_state_to_str(acddata.keys->state), acd_scope_to_str(acddata.keys->scope) );
-#ifndef USE_LOGIC_TABLE
-    if (all_conditions_met && acddata.keys->state != ACD_LED_OFF) {
-      sensors_read_scope = ACD_SCOPE_ALLOW;
-    //} else if (!all_conditions_met && acddata.keys->state == ACD_LED_ENABLED && acddata.keys->scope == ACD_SCOPE_GLOBAL) {
-    } else if (!all_conditions_met && acddata.keys->scope == ACD_SCOPE_GLOBAL && acddata.keys->state != ACD_LED_OFF) {
-      sensors_read_scope = ACD_SCOPE_LOCAL;
-    } else if (acddata.keys->scope == ACD_SCOPE_GLOBAL || acddata.keys->state == ACD_LED_OFF){
-      //LOG(LOG_DEBUG,"AquachemD sensor read scope global, skipping reading of sensors!\n");
-      LOG(reading_log_level, "Master state = %s, scope = %s, skipping reading of sensors!\n",acd_state_to_str(acddata.keys->state), acd_scope_to_str(acddata.keys->scope) );
-      goto next_wake; // Skip the rest of the loop and go straight to sleep if any condition is not met
-    }
-#endif
 
     for (acd_key_t *key = acddata.keys->next; key != NULL; key = key->next) {
  
-#ifdef USE_LOGIC_TABLE
       if (!should_sensor_read(&acddata, key)) {
         LOG(LOG_INFO,"Sensor %s set to not read, ignoring\n",key->label);
         continue;
-#else
-      if (sensors_read_scope == ACD_SCOPE_LOCAL && key->scope == ACD_SCOPE_GLOBAL) {
-        LOG(LOG_DEBUG,"AquachemD sensor read scope local, skipping reading of global sensor %s\n",key->label);
-        //LOG(LOG_INFO, "Master  %s state=%s, scope=%s. Skipping reading of sensors",acd_state_to_str(curr->state), curr->label, acd_scope_to_str(curr->scope));
-        continue;
-#endif
       } else if (isMASKSET(key->flags,  ACD_FLAG_FAULTED)) {
         LOG(LOG_DEBUG,"Sensor %s failed, skipping\n",key->label);
         continue;
@@ -698,7 +674,7 @@ reload_configuration:
               update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, buf);
               break;
             }
-            LOG(reading_log_level, "Using %s, %.2f for pH compensated reading", master_temp_label, temp_reading_for_ph);
+            LOG(reading_log_level, "Using %s, %.2f for pH compensated reading", master_temp_label?master_temp_label:"", temp_reading_for_ph);
             ph_reading = ph_get_reading_compensated(temp_reading_for_ph);
           } else {
             LOG(LOG_WARNING, "EZO pH Sensor '%s' skipped compensation because temp is unknown\n", key->label);

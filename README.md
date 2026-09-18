@@ -15,7 +15,7 @@ No subscriptions. No cloud dependency. No proprietary sensor lock-in. Just an op
 
 ## Quick Web UI overview
 
-Full details on UI are in [`Web UI.md`](/docs/UI.md)
+Full details on Interfaces (Web/App UI, HomeKit & HomeAssistant) are in [`Web UI.md`](/docs/UI.md)
 Web interface and mobile app interface are identical, phone / app layout will simply use different number or rows and columns, [`Web UI.md`](/docs/UI.md) has examples.
 <img src="docs/images/AquachemD.png" alt="Alt Text">
 <br><br>
@@ -81,6 +81,8 @@ The result: chemicals are never dispensed into stagnant water, which is exactly 
 Interlocks aren't limited to "is the filter pump on" — any equipment state you can get onto MQTT can gate a doser. A common example: if your acid injection point sits physically upstream of a pressure-side pool cleaner, dosing while that cleaner's booster pump is running can alter flow through the injection point in ways that make dosing unpredictable. Point an MQTT interlock at the booster pump's running state, and AquachemD simply won't dose while it's active — no different in principle from the filter-pump interlock, just watching a different piece of equipment.
 
 Conditions can also delay how long *sensors* are trusted after they're satisfied, not just how long dosers wait — useful for exactly the situation you'd expect: if your filter pump has been off overnight, the water sitting in the flow cell and pipework is stagnant and gives misleading pH/ORP readings the instant the pump kicks back on. Setting a delay (e.g. 60 seconds) on the filter-pump condition means AquachemD waits for genuinely fresh, circulating pool water before trusting those readings again, rather than reacting to a stale first reading.
+
+Interlocks aren't just limited to pool equipment, extreme example. You can limit acid dosing if people are detected in the pool. Implementation :- Camera pointed at the pool, when it detects people post MQTT message, have AquachemD interlock set to that message. This is very simply to implement and has been tested with UniFi protect (video), HomeAssistant (post MQTT message from video), AquachemD read message as interlock.
 
 ### Not just dosing — plain GPIO switches too
 Not every relay near your pool is a chemical doser. AquachemD also supports plain **GPIO switches** for anything else you want on/off control and HomeKit/Home Assistant visibility for — a booster pump, an auxiliary light, whatever's wired to a spare relay — using the same interlock and scope system as everything else, without forcing it to pretend to be a doser.
@@ -176,7 +178,7 @@ gpio_doser_label=Acid doser
 gpio_doser_type=pH
 gpio_doser_pin=19
 gpio_doser_pin_mode=Active High
-gpio_doser_required_state=on
+gpio_doser_interlock_scope=Global
 gpio_doser_ml_per_second=2.18
 ```
 
@@ -188,7 +190,7 @@ gpio_doser_ml_per_second=2.18
 | :--- | :--- |
 | `main_label` | Display name for the primary sampling/control group. |
 | `listen_address` | IP and port for the built-in web server. |
-| `log_level` | `notice`, `info`, or `debug`. |
+| `log_level` | `DEBUG`, `INFO`, `NOTICE`, `WARNING`, `ERROR` |
 | `sensor_poll_time` | How often (seconds) sensors are polled. |
 | `log_sensor_readings` | Log every sensor reading, not just changes. |
 
@@ -220,34 +222,10 @@ gpio_doser_ml_per_second=2.18
 #### Safety interlocks
 | Option | Description |
 | :--- | :--- |
-| `mqtt_condition_label/topic/value` | Require an external MQTT value (e.g. filter pump state) before dosing. |
-| `mqtt_condition_met_delay` | Seconds a condition must hold before it's considered satisfied. |
-| `gpio_condition_label/pin/pin_mode/required_state` | Same, for a physical GPIO interlock (flow switch, level sensor). |
-| `gpio_condition_met_delay` | Same delay concept as `mqtt_condition_met_delay`, for a GPIO interlock. |
-| `*_scope_global` (e.g. `mqtt_condition_scope_global`, `ph_sensor_scope_global`, `gpio_doser_scope_global`) | Controls how severely this condition/sensor/doser is affected by a failed interlock elsewhere — a Soft Limit (only outputs pause) versus a Hard Interlock (outputs stop *and* scoped sensors stop being polled). See the full explanation in source comments (`acd_types.h`) if you're tuning this — it's more nuanced than a plain on/off. |
-
-#### Sensors
-| Type | Config prefix | Notes |
-| :--- | :--- | :--- |
-| pH / ORP | `ph_sensor_*` / `orp_sensor_*` | Atlas Scientific EZO over I2C, address configurable. |
-| Temperature | `temp_sensor_*` | `type` can be `ezo`, `d1w` (One-Wire), or `mqtt` (external source). |
-| Pressure | `prs_sensor_*` / `i2c_prs_sensor_*` | For filter pressure monitoring. |
-| Generic MQTT | `mqtt_sensor_*` | Pull any external MQTT topic in as a sensor, with a configurable unit. |
-| Generic sysfs | `sysfs_sensor_*` | Regex-matched value from any Linux sysfs path. |
-
-#### Dosers
-| Option | Description |
-| :--- | :--- |
-| `ph_doser_*` / `orp_doser_*` / `gpio_doser_*` | Pin, pin mode, required active state, and pump flow rate (`ml_per_second`) for each pump. Tank tracking and the per-period cap are covered in the [Dosing](#dosing) table above. |
-
-#### Switches
-| Option | Description |
-| :--- | :--- |
-| `gpio_switch_label/pin/pin_mode/required_state` | A plain on/off GPIO output — same wiring options as a doser, but with no dosing logic, timer, or chemical role attached. Use this for equipment that just needs on/off control and HomeKit/Home Assistant visibility. |
-| `gpio_switch_scope_global` | Same interlock-scope concept as everything else — see Safety interlocks above. |
-
-</details>
-
+| `*_condition_severity` | (e.g. `mqtt_condition_severity`, `gpio_condition_severity`) How severe it is when this condition fails: `local` degrades the system to a soft limit (dosers pause, sensors keep reading); `global` degrades it to a hard interlock (dosers pause AND Global-scope sensors also stop). |
+| `*_sensor_interlock_scope` | (including `gpio_input_interlock_scope`) How exposed this sensor is to interlocks raised elsewhere: `local` keeps reading through everything, including a hard interlock — use for things you always want visible. `global` stops reading once ANY interlock is active (soft or hard). `allow` ignores interlocks entirely, identical to `local` for a sensor. |
+| `gpio_doser_interlock_scope` | How exposed this doser is to interlocks raised elsewhere: `local` only stops for a hard interlock, keeps dosing through a soft one. `global` stops for either. There is no `allow` for a doser — it must always respect at least a hard interlock. |
+| `gpio_output_interlock_scope` | How exposed this switch is to interlocks raised elsewhere: `local` only stops for a hard interlock, keeps running through a soft one. `global` stops for either. `allow` always ignores interlocak state. |
 
 
 ## Complete details of all inputs / outputs
@@ -257,14 +235,14 @@ gpio_doser_ml_per_second=2.18
 | `mqtt_condition_label` | Label to identify the MQTT condition block |
 | `mqtt_condition_topic` | MQTT topic path to monitor for condition state |
 | `mqtt_condition_value` | Expected string/int value required to satisfy the condition |
-| `mqtt_condition_interlock_scope` | Interlock scope defining execution boundaries (e.g., `global` vs `local`) |
+| `mqtt_condition_severity` | Severity failed condition that defines interlock scope for sensors (e.g., `global` vs `local`) |
 | `mqtt_condition_met_delay` | Delay duration (in seconds) before marking condition as met |
 | --- | --- |
 | `gpio_condition_label` | Label to identify the GPIO condition block |
 | `gpio_condition_pin` | Target GPIO pin number to sample |
-| `gpio_condition_pin_mode` | Pin configuration mode ('pull-up' / 'pull-down') |
+| `gpio_condition_pin_mode` | Pin configuration mode (`Active High` / `Active Low`) |
 | `gpio_condition_required_state` | Boolean pin state required to satisfy condition (`0`/`1`) |
-| `gpio_condition_interlock_scope` | Interlock scope defining execution boundaries for the GPIO condition |
+| `gpio_condition_severity` | Severity failed condition that defines interlock scope for sensors (e.g., `global` vs `local`) |
 | `gpio_condition_met_delay` | Delay duration (in seconds) before marking condition as met |
 | --- | --- |
 | `ph_sensor_label` | Label to identify the pH sensor block |
@@ -316,7 +294,7 @@ gpio_doser_ml_per_second=2.18
 | --- | --- |
 | `gpio_input_label` | Label to identify the general GPIO input block |
 | `gpio_input_pin` | Target GPIO pin number to sample |
-| `gpio_input_pin_mode` | Pin configuration mode (e.g., pull-up / pull-down) |
+| `gpio_input_pin_mode` | Pin configuration mode (`Active High` / `Active Low`) |
 | `gpio_input_required_state` | Logical pin state required for active status |
 | --- | --- |
 | `gpio_output_label` | Label to identify the general GPIO output block |
@@ -351,181 +329,3 @@ Found a bug, or something not covered here? Please open a [GitHub issue](https:/
 
 
 
-
-
-
-
-
-
-
-
-
-<!--
-
-
-# AquachemD  
-Linux daemon to read pH, ORP, Temperature sensors, control chem feeders & GPIO. Provides MQTT client. Compatible with most Home control systems including Apple HomeKit, Home Assistant, Samsung, Alexa, Google, etc.
-
-
-
-
-# AquaChemD: Autonomous Pool Chemistry Management System
-
-**AquaChemD** is an open-source, high-precision automated pool chemical dosing and monitoring controller designed to bridge the gap between expensive proprietary systems and DIY enthusiasts. It provides a professional-grade platform for monitoring pH, ORP (Oxidation-Reduction Potential), and Temperature with autonomous logic for balancing water chemistry[cite: 1].
-
-# Currently in development, (Any release before V1.0.0 is development)
-## ToDo before 1st release
-* Use averages for dosing.
-* MQTT Value Sensor time default to state vs value before MQTT message
-* Look at using SWG% to increase dose times.
-* Add sysfs sensors to mqtt discovery
----
-
-## 🚀 Project Overview
-The core mission of AquaChemD is to ensure pool water safety and clarity through precise chemical dispensing while providing total transparency and integration for the modern smart home[cite: 1]. 
-
-Built on a lightweight C core, the system runs on low-power Linux-based hardware (such as Raspberry Pi) and interfaces with industrial sensors via I2C and GPIO[cite: 1]. This ensures high reliability in harsh pool-equipment environments[cite: 1].
-
----
-
-## 🔌 Connectivity & Integration
-
-### 1. MQTT & Open API
-AquaChemD utilizes a comprehensive **MQTT API** for all telemetry and control[cite: 1]. 
-* **Universal Access:** Allows any third-party software to subscribe to live chemistry data or trigger manual dosing events[cite: 1].
-* **Local-First:** Avoids cloud dependencies, ensuring data remains private and responsive[cite: 1].
-* **Interlock Sync:** Listens to external equipment (like AqualinkD) to ensure dosing only occurs when the filter pump is running[cite: 1].
-
-### 2. Home Assistant (HA) Integration
-The system features native **MQTT Discovery**, automatically populating Home Assistant with high-utility entities[cite: 1]:
-* **Live Sensors:** pH, ORP, and Temperature with historical graphing (Long-Term Statistics)[cite: 1].
-* **Status Entities:** "OK/Problem" binary sensors for flow and safety interlocks[cite: 1].
-* **Dose Tracking:** Volumetric sensors tracking mL of Acid and Chlorine dispensed per day/week using `total_increasing` state classes[cite: 1].
-* **Control Selectors:** Mode switches (Off / On / Auto) for each pump[cite: 1].
-
-### 3. Apple HomeKit
-By leveraging the Home Assistant HomeKit Bridge, AquaChemD data is exposed to the Apple ecosystem[cite: 1]:
-* **Visibility:** View pool temperature and status directly in the **Apple Home App**[cite: 1].
-* **Siri Voice Control:** Ask "Siri, what is the pool pH?" or "Is the chlorine pump running?"
-* **Critical Alerts:** Receive iOS notifications for hardware alerts, such as "Acid Tank Low" or flow failures[cite: 1].
-
----
-
-## 🛡️ Safety & Logic
-Dosing is controlled by a multi-step threshold engine. The amount dispensed is calculated based on the deviation from the setpoint, preventing over-correction[cite: 1]:
-
-$$Dose = Duration_{seconds} \times FlowRate_{mL/s}$$
-
-**Critical Safety:** Multi-level hardware and software interlocks ensure that no chemical is dispensed if the water is not flowing, preventing the buildup of dangerous chlorine gas[cite: 1].
-
----
-
-## 🛠️ Technical Architecture
-* **Sensors:** Support for Atlas Scientific EZO circuits (pH, ORP, Temp) and One-Wire (DS18B20) probes[cite: 1].
-* **Actuators:** GPIO-driven relay control for peristaltic pumps[cite: 1].
-* **Interlocks:** Supports physical flow cell level sensors and software-based MQTT permissives[cite: 1].
-
-
-
-# 
-
-# AquaChemD Configuration Guide
-
-This document describes the configuration options for the **AquaChemD** pool chemistry controller.
-
-## 1. System & Web Settings
-| Option | Description |
-| :--- | :--- |
-| `main_label` | The display name for the primary sampling/control group (e.g., Sampling). |
-| `listen_address` | The IP and port for the internal web server (e.g., `http://0.0.0.0:88`). |
-| `log_level` | Controls logging verbosity. Options: `notice`, `info`, `debug`. |
-| `web_directory` | The local file system path where the web UI assets are stored. |
-
----
-
-## 2. MQTT Configuration
-Settings for connecting to your MQTT broker and Home Assistant discovery.
-
-| Option | Description |
-| :--- | :--- |
-| `mqtt_server` | The URI of the MQTT broker (e.g., `mqtt://homeassistantdev:1883`). |
-| `mqtt_user` | Username for MQTT authentication. |
-| `mqtt_passwd` | Password for MQTT authentication. |
-| `mqtt_aquachemd_topic` | The base topic for this device's data (default: `aquachemd`). |
-| `mqtt_aqualinkd_topic` | The base topic to listen for data from an AqualinkD instance. |
-| `mqtt_discovery_topic` | (Optional) The prefix for Home Assistant MQTT Discovery. |
-| `mqtt_discovery_use_mac` | If `YES`, appends the device MAC address to discovery IDs. |
-| `mqtt_convert_to_degF` | If `YES`, converts temperature readings from Celsius to Fahrenheit for MQTT. |
-| `mqtt_timed_update` | If `YES`, forces an MQTT update at regular intervals even if values haven't changed. |
-
----
-
-## 3. Global Sensor Logic
-| Option | Description |
-| :--- | :--- |
-| `gpio_chip` | The path to the GPIO character device (e.g., `/dev/gpiochip0`). |
-| `sensor_poll_time` | Frequency in seconds to poll the connected sensors. |
-| `temp_compensated_ph` | If `YES`, pH readings are automatically adjusted based on current water temperature. |
-
----
-
-## 4. Dosing Logic (Thresholds)
-AquaChemD uses a multi-step threshold system to determine pump runtimes based on chemical readings.
-
-### pH Dosing (Acid)
-*   **Default Time:** `ph_default_dose_time` (Seconds used as a fallback).
-*   **Range Logic:** `ph_dose_range=threshold:seconds`
-    *   *Example:* `8.0:20` means if pH is **>= 8.0**, run the pump for 20 seconds.
-    *   The system evaluates thresholds to find the highest matching bracket. A value of `0` stops dosing.
-
-### ORP Dosing (Chlorine)
-*   **Default Time:** `orp_default_dose_time`
-*   **Range Logic:** `orp_dose_range=threshold:seconds`
-    *   *Example:* `650:1500` means if ORP is **<= 650**, run for 1500 seconds.
-    *   The system evaluates thresholds in ascending order. A value of `0` (e.g., at 750) stops dosing.
-
----
-
-## 5. Safety & Interlock Conditions
-These conditions act as "permissives." If any condition is not met, dosing is disabled to prevent chemical damage or dangerous gas buildup.
-
-### MQTT Interlocks
-Used to monitor external states like a "Filter Pump" or "Salt Cell Flow."
-*   `mqtt_condition_label`: Display name for the safety check.
-*   `mqtt_condition_topic`: The MQTT topic to monitor.
-*   `mqtt_condition_value`: The required raw value to permit dosing.
-
-### GPIO Interlocks
-Used for local hardware safety sensors (e.g., physical Flow Switches or Tank Level Sensors).
-*   `gpio_condition_label`: Display name.
-*   `gpio_condition_pin`: Physical GPIO pin number.
-*   `gpio_condition_pin_mode`: `active_high` or `active_low`.
-*   `gpio_condition_required_state`: `on` or `off`.
-
----
-
-## 6. Sensor Definitions
-Define the probes attached to the system. **Note:** The `_label` must always be the first line of a sensor block.
-
-| Type | Required Keys | Description |
-| :--- | :--- | :--- |
-| **ezo** | `_address` | Atlas Scientific EZO circuit via I2C (e.g., `0x63`). |
-| **mqtt** | `_topic` | Pulls sensor data from an external MQTT topic (e.g., AqualinkD). |
-| **d1w** | `_path`, `_offset`, `_scale` | DS18B20 One-Wire temperature sensors via sysfs. |
-
----
-
-## 7. Doser (Pump) Definitions
-Configure the relay or GPIO pins driving the chemical delivery pumps.
-
-| Option | Description |
-| :--- | :--- |
-| `ph_doser_label` | Name of the acid pump. |
-| `orp_doser_label` | Name of the chlorine pump. |
-| `_type` | Hardware type, usually `gpio`. |
-| `_pin` | The GPIO pin number on the specified `gpio_chip`. |
-| `_pin_mode` | `active_low` (relay triggered by GND) or `active_high`. |
-| `_required_state` | State needed for the pump to be considered "Active." |
-| `_ml_per_second` | The flow rate of the pump used to calculate and report dose volume. |
-
-->

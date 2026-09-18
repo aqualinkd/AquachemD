@@ -150,11 +150,12 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
 {
   cJSON *device = cJSON_CreateObject();
 
-  cJSON_AddStringToObject(device, "id", acddata->keys->ID);
-  cJSON_AddStringToObject(device, "label", acddata->keys->label);
-  cJSON_AddStringToObject(device, "status", acd_state_to_str(acddata->keys->state));
-  cJSON_AddNumberToObject(device, "int_status", acddata->keys->state);
+  cJSON_AddStringToObject(device, "id", get_master(acddata)->ID);
+  cJSON_AddStringToObject(device, "label", get_master(acddata)->label);
+  cJSON_AddStringToObject(device, "status", acd_state_to_str(get_master(acddata)->state));
+  cJSON_AddNumberToObject(device, "int_status", get_master(acddata)->state);
   cJSON_AddStringToObject(device, "type", "switch");
+  cJSON_AddNumberToObject(device, "interlock", get_master(acddata)->scope);
 
   //cJSON_AddStringToObject(device, "type", "switch");
   cJSON *attributes = cJSON_CreateArray();
@@ -162,7 +163,7 @@ void populate_devices_json(struct aquachemdata *acddata, cJSON *devices)
   cJSON_AddItemToArray(attributes, cJSON_CreateString(acd_state_to_set_attrib(ACD_LED_ON)));
   cJSON_AddItemToArray(attributes, cJSON_CreateString("reset_sensor_stats"));
   cJSON_AddItemToObject(device, "attributes", attributes);
-  cJSON_AddItemToObject(devices, acddata->keys->ID, device);
+  cJSON_AddItemToObject(devices, get_master(acddata)->ID, device);
 
   for (acd_key_t *curr = acddata->keys->next; curr != NULL; curr = curr->next) { 
     device = cJSON_CreateObject();
@@ -294,10 +295,11 @@ const char* get_devices_json(struct aquachemdata *acddata) {
   } else {
     cJSON *item = NULL;
 
-    item = cJSON_GetObjectItemCaseSensitive(devices_map, acddata->keys->ID);
-    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), acddata->keys->value);
-    cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(acddata->keys->state));
-    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), acddata->keys->state);
+    item = cJSON_GetObjectItemCaseSensitive(devices_map, get_master(acddata)->ID);
+    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "value"), get_master(acddata)->value);
+    cJSON_SetValuestring(cJSON_GetObjectItemCaseSensitive(item, "status"), acd_state_to_str(get_master(acddata)->state));
+    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "int_status"), get_master(acddata)->state);
+    cJSON_SetNumberValue(cJSON_GetObjectItemCaseSensitive(item, "interlock"), get_master(acddata)->scope);
 
     for (acd_key_t *curr = acddata->keys->next; curr != NULL; curr = curr->next) { 
       item = cJSON_GetObjectItemCaseSensitive(devices_map, curr->ID);

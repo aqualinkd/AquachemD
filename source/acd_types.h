@@ -11,12 +11,6 @@
 #include "i2c.h"
 #include "uom.h"
 
-/*
-typedef enum {
-  ACD_DAY,
-  ACD_WEEK
-} acd_period_t;   // Just used for metrics at the moment.
-*/
 
 #define ACD_MASTER_ID "AquachemD"
 
@@ -147,136 +141,252 @@ typedef enum {
     ACD_LED_DELAY // Condition has a delay before turning on.
 } acd_state_t;
 
-// acd_scope_t is reused by two different kinds of nodes, and means something
-// slightly different on each. It is set by the various "*_scope_global" config
-// options (e.g. mqtt_condition_scope_global, gpio_condition_scope_global,
-// ph_sensor_scope_global, orp_sensor_scope_global, prs_sensor_scope_global,
-// temp_sensor_scope_global). All of these options are simple true/false, and
-// map true -> ACD_SCOPE_GLOBAL, false -> ACD_SCOPE_LOCAL. ACD_SCOPE_ALLOW is
-// never set by config; it only ever appears on the master key.
+
+
+// ============================================================================
+//                    SCOPE, SEVERITY, AND STATE PERMISSIONS
+// ============================================================================
 //
-// On a CONDITION (mqtt_condition / gpio_condition, an interlock like
-// "Filter Pump Running" or "Flow Switch"), scope controls how severely a
-// failed/unmet condition affects the whole system:
-//   scope_global = false (LOCAL)  -> Soft Limit.
-//       Failing this condition disables/stops the dosing pumps (outputs)
-//       only. All sensors keep sampling and reporting normally.
-//       e.g. "tank running low -> pause dosing, but keep monitoring".
-//   scope_global = true  (GLOBAL) -> Hard Interlock.
-//       Failing this condition forces the whole system into BLOCK: any
-//       running dosing pump is shut off immediately, all outputs are
-//       disabled, AND any sensor that is itself scope_global=true also
-//       stops being polled. Sensors marked scope_global=false keep
-//       reading even through a hard interlock.
-//       e.g. "no flow -> don't dose, and don't bother reading the
-//       flow-dependent probes either".
-// The master's scope is always the worst (highest) of all its conditions'
-// scopes - a single GLOBAL condition failing overrides any LOCAL ones.
+// TWO VOCABULARIES, ONE ENUM
+// --------------------------
+// acd_scope_t values are used for two different things. They share an
+// underlying enum (and the ACD_ACTION_* aliases below), but they answer
+// different questions, and conflating them is the single easiest way to
+// misread this system:
 //
-// On a SENSOR (ph/orp/prs/temp/etc.), scope only matters once some
-// condition has already put the master into a degraded state:
-//   scope_global = false (LOCAL)  -> This sensor keeps reporting values
-//       no matter what, even during a hard (GLOBAL) interlock shutdown.
-//       Useful for e.g. an externally-fed MQTT reading you still want
-//       visible in Home Assistant while dosing is halted.
-//   scope_global = true  (GLOBAL) -> This sensor is paused/disabled
-//       whenever a GLOBAL condition trips the master into BLOCK.
-// Sensor scope has no effect while the master is ALLOW or LIMIT - all
-// sensors read normally in those states regardless of their own scope.
-
-
-
-/*
- * =====================================================================================
- *                               STATE PERMISSIVENESS MATRIX
- * =====================================================================================
- *
-
- *
- * =====================================================================================
- *
- * CONDITIONS
- *  Failed Condition with SCOPE_LOCAL  = Set Master to Soft Limit (Block outputs, carry on reading sensors) 
- *  Failed Condition with SCOPE_GLOBAL = Set Master to Hard Limit (Block output and sensors)
- *
- * LEGEND:
- *   [ALL] = State valid under ALL Master Actions (ALLOW, LIMIT, BLOCK)
- *   [ A ] = Valid ONLY when Master Scope == ACD_ACTION_ALLOW
- *   [ L ] = Valid ONLY when Master Scope == ACD_ACTION_LIMIT
- *   [ B ] = Valid ONLY when Master Scope == ACD_ACTION_BLOCK
- *
- * +----------------------+-------+-------+---------+----------+-------+
- * | KEY TYPE             | OFF   | ON    | ENABLED | DISABLED | DELAY |
- * +----------------------+-------+-------+---------+----------+-------+
- * | GPIO_PMP / EZO_PMP   | ALL   |   A   |    A    |   L/B    |   -   |
- * | GPIO_OUTPUT (GLOBAL) | ALL   |   A   |    -    |   L/B    |   -   |
- * | GPIO_OUTPUT (LOCAL)  | ALL   |  ALL  |    -    |    -     |   -   |
- * +----------------------+-------+-------+---------+----------+-------+
- *
- * SENSORS
- * Scope Local  — always reads, regardless of system state.
- * Scope Global — reads normally under Allow or Limit; stops reading only when the system is Blocked.
- *
- * MASTER
- * Master OFF   - Display OFF    - Manual, system-wide off. Overrides everything.
- * Master ALLOW - Display ON     - No condition failed. Outputs and sensors both run normally.
- * Master LIMIT - Display ON     - A Local-scope condition failed. Outputs pause; sensors keep reading.
- * Master BLOCK - Display ENABLE - A Global-scope condition failed (or Master is OFF). Outputs pause;
- *                                 Global-scoped sensors also pause. Local-scoped sensors keep reading.
- *              
- * STATE TO DISPLAY
- * +---------------------------+----------+----------+----------+----------+
- * | Master's acd_state_t is   | OFF      | ON       | ON       | ENABLED  |
- * | Scope / system severity   |    -     | ALLOW    | LIMIT    | BLOCK    |
- * +---------------------------+----------+----------+----------+----------+
- * | GPIO_PMP / EZO_PMP (ON)   | DISABLED | ON       |    -     |    -     |
- * | GPIO_PMP / EZO_PMP (OFF)  | DISABLED | ENABLED  | DISABLED | DISABLED |
- * | GPIO_OUTPUT (LOCAL) (ON)  | DISABLED | ON       |    ON    |   ON     |
- * | GPIO_OUTPUT (LOCAL) (OFF) | DISABLED | OFF      |    OFF   |   OFF    |
- * | GPIO_OUTPUT (GLOBAL) (ON) | DISABLED | ON       |    ON    | DISABLED |
- * | GPIO_OUTPUT (GLOBAL) (OFF)| DISABLED | OFF      |    OFF   | DISABLED |
- * |                           |          |          |          |          |
- * | SENSOR (LOCAL)            | DISABLED | reading  | reading  | reading  |
- * | SENSOR (GLOBAL)           | DISABLED | reading  | reading  | DISABLED |
- * | GPIO_INPUT                | reading  | reading  | reading  | reading  |
- * | EXTERNAL SENSOR (mqtt)    | reading  | reading  | reading  | reading  |
- * +---------------------------+----------+----------+----------+----------+
- * 
- * ENABLED state = why pumps have ENABLED.
- *   OFF      = Pump off / Put in off state by user or system due to tank level - 
-                           Can't be turned to ON until manually set to enabled (or tank filled). -
-                           ie no automation work
- *   ENABLED  = Pump off / Ready to go to ON state by automation or user.
- *   DISABLED = Pump off / Pump can't be turned on until condition/interlock is met -
-                           Or Master turned on.
- *   ON       = Pump is on.
- *
- * =====================================================================================
- *                             ACTION SCOPE QUICK-REFERENCE
- * =====================================================================================
- *
- *  ACD_ACTION_ALLOW (0) | All conditions met.
- *                       | - Outputs: Allowed ON / ENABLED
- *                       | - Sensors: Full active polling
- *  -----------------------------------------------------------------------------------
- *  ACD_ACTION_LIMIT (1) | Local condition failed (ACD_SCOPE_LOCAL).
- *                       | - Outputs: Forced DISABLED / OFF (Pumps blocked)
- *                       | - Sensors: Full active polling continues
- *  -----------------------------------------------------------------------------------
- *  ACD_ACTION_BLOCK (2) | Global condition failed (ACD_SCOPE_GLOBAL) or Master OFF.
- *                       | - Outputs: Forced DISABLED / OFF
- *                       | - Global Sensors: Forced DISABLED
- *                       | - Local Sensors: Remain ENABLED / Polling
- * =====================================================================================
- */
+//   DEVICE SCOPE     - configured per device via "<device>_interlock_scope".
+//                      Answers: "how much does THIS device care about
+//                      interlocks?"  Values: None / Local / Global.
+//
+//   MASTER SEVERITY  - computed, lives on the master key (acdata->keys->scope).
+//                      Answers: "how bad is the system's current state?"
+//                      Values: Allow / Limit / Block.
+//
+// Always say "Allow/Limit/Block" for severity and "None/Local/Global" for a
+// device's own scope. Both print through different helpers for this reason:
+// acd_action_to_str() for severity, acd_scope_to_str() for device scope.
+//
+//
+// HOW MASTER SEVERITY IS DERIVED
+// ------------------------------
+// Severity is the worst (highest) scope among all currently-unmet conditions:
+//   No condition failed                 -> ALLOW
+//   A Local-scope condition failed      -> LIMIT   (soft limit)
+//   A Global-scope condition failed     -> BLOCK   (hard interlock)
+// A single failed Global condition overrides any number of failed Local ones.
+// Master OFF is handled separately -- see MASTER OFF below.
+//
+//
+// ============================================================================
+//                    CONDITIONS -- WHAT SETS THE INTERLOCK
+// ============================================================================
+//
+// A condition is an input whose only job is to answer one yes/no question:
+// "is it currently safe to run?" Conditions are the sole source of master
+// severity. Nothing else raises or lowers it. Two types exist:
+//
+//   ACD_TYPE_MQTT_COND  - watches an external MQTT topic.
+//       mqtt_condition_label            display name
+//       mqtt_condition_topic            topic to subscribe to
+//       mqtt_condition_value            payload that means "safe"
+//       mqtt_condition_met_delay        seconds to wait before trusting it
+//       mqtt_condition_interlock_scope  none / local / global
+//     met = (received payload matches mqtt_condition_value).
+//     Typical use: AqualinkD publishing filter-pump state.
+//
+//   ACD_TYPE_GPIO_COND  - watches a physical pin.
+//       gpio_condition_label            display name
+//       gpio_condition_pin              pin to read
+//       gpio_condition_pin_mode         Active High / Active Low
+//       gpio_condition_required_state   logical level that means "safe"
+//       gpio_condition_met_delay        seconds to wait before trusting it
+//       gpio_condition_interlock_scope  none / local / global
+//     met = (gpio_read() == required). pin_mode handles electrical polarity
+//     first, so required_state is always expressed in logical terms.
+//     Typical use: flow switch, flow-cell level switch.
+//
+// Both resolve to the same thing: key->met, a plain bool.
+//
+//
+// HOW met GETS UPDATED
+// --------------------
+//   GPIO  - primarily by the libgpiod event callback in gpio_monitor.c, with
+//           a second comparison each poll cycle in aquachemd.c as a backstop.
+//           Both compare the live reading against key->met, so they detect
+//           the transition in BOTH directions (met->unmet and unmet->met).
+//   MQTT  - by action_mqtt_condition_message() whenever a message lands on
+//           the configured topic. No polling: an MQTT condition only updates
+//           when the publisher sends something, so a publisher that goes
+//           silent leaves the last known value in place indefinitely.
+//
+//
+// THE MET-DELAY
+// -------------
+// When a condition becomes met, it does NOT immediately count as safe. It
+// enters ACD_LED_DELAY (flag DELAY_ACTIVE) and starts a timer for
+// <type>_condition_met_delay seconds. Only when that timer expires does
+// set_cond_state() re-check key->met and promote it to ACD_LED_ON.
+//
+// While a condition sits in DELAY it is treated as NOT met for the purpose of
+// computing severity. This is deliberate: it is what keeps probes from being
+// trusted on water that has been sitting stagnant in the flow cell while the
+// pump was off. Going unmet is immediate -- the delay only ever applies to
+// becoming safe again, never to becoming unsafe.
+//
+//
+// DERIVING MASTER SEVERITY
+// ------------------------
+// Every pass through check_master(), severity is recomputed from scratch:
+//
+//   1. master->scope = ALLOW
+//   2. For each condition where (met == false || state == ACD_LED_DELAY):
+//        - condition scope Global -> master->scope = BLOCK  (and records it
+//                                     as failed_condition)
+//        - condition scope Local  -> master->scope = LIMIT, unless BLOCK has
+//                                     already been set by another condition
+//   3. Worst wins. One failed Global condition outranks any number of failed
+//      Local ones, regardless of order in the list.
+//
+// Master's own STATE is set separately, and only from failed_condition:
+//   failed_condition == NULL -> master state ON
+//   failed_condition != NULL -> master state ENABLED
+// Because failed_condition is only ever assigned by a Global-scope failure, a
+// Local-only failure leaves master state at ON while severity is LIMIT. Read
+// severity (master->scope), not master state, to know how degraded the system
+// currently is.
+//
+//
+// CONDITION SCOPE "NONE"
+// ----------------------
+// The severity loop only tests for Global and Local. A condition configured
+// with scope None therefore never affects severity at all -- it is evaluated,
+// logged and published, but it gates nothing. That makes it usable as a
+// monitor-only indicator, but it also means a mistyped scope silently produces
+// a condition that looks configured and does nothing. Note that
+// ACD_SCOPE_UNKNOWN currently aliases to ACD_SCOPE_ALLOW, so a scope value the
+// parser does not recognise lands here.
+//
+//
+// CONDITIONS ARE NEVER GATED THEMSELVES
+// -------------------------------------
+// KC_CONDITION permits OFF / ON / DELAY at every severity, and never permits
+// ENABLED or DISABLED. Conditions must keep evaluating no matter how degraded
+// the system is -- they are the only thing that can clear a BLOCK. The
+// master-OFF sweep skips them for the same reason.
+// ============================================================================
+//
+//
+//
+//
+//
+// WHAT EACH DEVICE SCOPE MEANS
+// ----------------------------
+//   None   - ignores interlock conditions entirely. Never disabled by
+//            severity. (Still obeys Master OFF -- see below.)
+//   Local  - only respects a hard interlock. Keeps running through LIMIT,
+//            stops at BLOCK.
+//   Global - respects every interlock. Stops at LIMIT and at BLOCK.
+//
+// Note the asymmetry between outputs and sensors:
+//   - For an OUTPUT, "stops" means it is prevented from running.
+//   - For a SENSOR, "stops" means it is no longer polled/trusted, because its
+//     reading would be meaningless (e.g. probes sitting in stagnant water).
+//
+//
+// PERMISSION MATRIX
+// -----------------
+// This mirrors transition_permission[] in state_manager.c exactly. That array
+// is the single source of truth at runtime; this table exists so the intent is
+// readable. If one changes, change both.
+//
+//   [A]   = permitted only when severity is ALLOW
+//   [A/L] = permitted when severity is ALLOW or LIMIT
+//   [L/B] = permitted when severity is LIMIT or BLOCK
+//   [ALL] = permitted at every severity
+//   [ - ] = never a valid state for this category
+//
+// +----------------------+-------+-------+---------+----------+-------+
+// | CATEGORY             | OFF   | ON    | ENABLED | DISABLED | DELAY |
+// +----------------------+-------+-------+---------+----------+-------+
+// | MASTER               | ALL   | ALL   |   L/B   |    -     |   -   |
+// | PUMP   (Global)      | ALL   |   A   |    A    |   L/B    |   -   |
+// | PUMP   (Local)       | ALL   |  A/L  |   A/L   |    B     |   -   |
+// | OUTPUT (None)        | ALL   |  ALL  |    -    |    -     |   -   |
+// | OUTPUT (Global)      | ALL   |   A   |    -    |   L/B    |   -   |
+// | OUTPUT (Local)       | ALL   |  A/L  |    -    |    B     |   -   |
+// | CONDITION            | ALL   |  ALL  |    -    |    -     |  ALL  |
+// | SENSOR (None)        | ALL   |  ALL  |    -    |    -     |   -   |
+// | SENSOR (Global)      | ALL   |  A/L  |    -    |    -     |   -   |
+// | SENSOR (Local)       | ALL   |  ALL  |   ALL   |    B     |   -   |
+// +----------------------+-------+-------+---------+----------+-------+
+//
+// Note there is no PUMP (None) row: a doser must never be exempt from safety
+// interlocks. classify_key() deliberately maps a pump with scope None to the
+// Local category rather than granting it an exemption.
+//
+//
+// WHAT THE STATES MEAN
+// --------------------
+//   ON       - physically running / actively being polled.
+//   OFF      - not running. For a PUMP this is sticky: set by the user, or by
+//              the tank-empty lockout, and NEVER cleared automatically. It
+//              requires an explicit re-enable (or a tank refill). For an
+//              OUTPUT, OFF carries no such weight -- it is simply "not on",
+//              and the system moves it to/from DISABLED freely as severity
+//              changes.
+//   ENABLED  - armed and waiting: not running now, but automation may start it.
+//              Only meaningful for pumps (and sensors, meaning "polling").
+//              Plain outputs have no ENABLED state -- nothing automates them.
+//   DISABLED - blocked by severity. Clears itself automatically once severity
+//              improves. Contrast with a pump's OFF, which does not.
+//   DELAY    - conditions only: the condition is satisfied but still inside
+//              its configured met-delay window, so it is not yet trusted.
+//
+//
+// MASTER OFF
+// ----------
+// Master OFF is a manual, whole-system shutdown and is handled before any
+// severity logic runs. Its exact reach is configurable:
+//
+//   Mode A (default) - every output and sensor is forced to DISABLED,
+//                      regardless of its own scope. "The master switch means
+//                      everything, no exceptions." Scope-None devices are
+//                      included, and are restored to OFF when master returns.
+//
+//   Mode B           - Master OFF is treated as an interlock at BLOCK
+//                      severity, so the normal table above applies. Local
+//                      sensors keep reading; scope-None devices are untouched.
+//
+//
+// WHO APPLIES THIS TABLE
+// ----------------------
+// Two consumers, deliberately different:
+//
+//   _state_change_request()  - external requests (API / MQTT / timers). Asks
+//                              is_transition_permitted(); may reject. Sensors
+//                              and inputs are rejected outright here: their
+//                              state is derived from physical reality, never
+//                              requested.
+//
+//   check_master()           - internal reconciliation, run every cycle. Never
+//                              rejects anything; it computes the state each
+//                              device should now be in and applies it via
+//                              set_key_state().
+//
+// Keys with no permission row at all -- VIR_TANK, NONE -- are returned as
+// KC_COUNT by classify_key() and must be skipped by both consumers before any
+// array indexing. transition_permission[KC_COUNT] is out of bounds.
+// ============================================================================
 
 
 typedef enum {
-    ACD_SCOPE_ALLOW  = 0, // Default / No restriction (ONLY FOR MASTER)
-    ACD_SCOPE_LOCAL  = 1, // Acts as a Soft Limit for specific outputs
-    ACD_SCOPE_GLOBAL = 2  // Acts as a Hard Interlock for the whole system
+    ACD_SCOPE_UNKNOWN = -1,
+    ACD_SCOPE_ALLOW  = 0, // Device: ignores interlocks. Master: no condition failed.
+    ACD_SCOPE_LOCAL  = 1, // Device: respects hard interlocks only. Master: soft limit.
+    ACD_SCOPE_GLOBAL = 2  // Device: respects all interlocks. Master: hard interlock.
 } acd_scope_t;
-#define ACD_SCOPE_UNKNOWN ACD_SCOPE_ALLOW //default to ALLOW if unknown, so that we don't block dosing due to a config error.
+
+//#define ACD_SCOPE_UNKNOWN ACD_SCOPE_ALLOW //default to ALLOW if unknown, so that we don't block dosing due to a config error.
 
 // Inverse the names for conditions to make code easier to read.
 #define ACD_ACTION_ALLOW  ACD_SCOPE_ALLOW
