@@ -46,6 +46,7 @@ Web interface and mobile app interface are identical, phone / app layout will si
 - **It talks to what you already have.** MQTT with Home Assistant auto-discovery out of the box, a built-in web dashboard, and — if you're running [AqualinkD](https://github.com/aqualinkd/aqualinkd) for pool automation — dosing that's automatically synchronized with your filter pump schedule.
 - **It's built for real pool hardware**, not a hobbyist proof of concept: industrial Atlas Scientific EZO sensor circuits, GPIO-driven relay pumps, and hardware/software safety interlocks that stop dosing the moment something looks wrong.
 - **It's honest about safety.** Dosing acid and chlorine into water that isn't flowing is a genuine hazard — not just an inconvenience. AquachemD is built around interlocks first, dosing logic second.
+- **A better dosing strategy**, [Real-world tuning notes](docs/dosing_strategy.md) walk through how one setup landed on its numbers — including a comparison against how Pentair, Jandy & IPS controllers approach the same problem, and why a tuned table can outperform their generic formulas.
 
 ## What it actually does
 
@@ -70,6 +71,8 @@ A separate **water-topup doser** (`h2o`) is supported alongside pH and ORP dosin
 Each dosing channel can also independently choose whether to react to the **live sensor reading or a rolling average**, on a user-defined reset period. This matters because pH and ORP don't behave the same way: pH is comparatively stable, so dosing off the live reading gives the fastest correction, while ORP can swing significantly over the course of a day — dosing straight off a live ORP spike risks over-correcting, so averaging it over a period (e.g. hourly or daily) gives a steadier basis for the dose calculation. Both channels support either mode; which one suits your pool is your call.
 
 As a backstop against a sensor going haywire, each doser also has a **user-set maximum total volume per period** (e.g. 500 mL a day). If that cap is hit, AquachemD logs a warning and simply skips further dosing on that channel until the period resets — it doesn't disable the doser or require you to intervene, since the cap is there to survive a temporarily bad reading, not to demand a manual reset every time it's touched.
+
+Curious how to actually tune this for your own pool? [Real-world tuning notes](docs/dosing_strategy.md) walk through how one setup landed on its numbers — including a comparison against how Pentair and IPS controllers approach the same problem, and why a tuned table can outperform their generic formulas.
 
 ### Won't dose unless it's actually safe to
 This is the part that matters most. Dosing is gated behind **interlock conditions** that must *all* be satisfied before a pump is allowed to run:
