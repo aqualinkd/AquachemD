@@ -18,7 +18,7 @@ No subscriptions. No cloud dependency. No proprietary sensor lock-in. Just an op
 - [Flow-cell design — Evaluates physical flow-cell design(s), DIY and pre-made](/docs/flow%20cell%20design.md)
 - [API — HTTP/MQTT integration](/docs/API.md)
 - [Getting started](/docs/getting%20started.md)
-- [`Web UI / Homekit & HomeAssistant UI examples`](/docs/UI.md)
+- [Web UI / Homekit & HomeAssistant UI examples](/docs/UI.md)
 
 ## Quick Web UI overview
 
