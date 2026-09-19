@@ -541,7 +541,7 @@ struct pump_stats *_find_pump_stats(struct pump_stats stats[], int *count, const
 }
 
 
-#define MAX_HISTORY_EVENTS 150  // Tune this to fit in 16384
+#define MAX_HISTORY_EVENTS 350  // Tune this to fit in 16384
 
 
 /**
@@ -712,8 +712,7 @@ bool get_pump_summaries_json(int days, bool detailed, char *buffer, size_t buf_s
 
   sd_journal_close(j);
 
-  LOG(LOG_DEBUG, "since_usec=%llu now_sec=%ld days=%d\n",
-    (unsigned long long)since_usec, (long)tv.tv_sec, days);
+  LOG(LOG_DEBUG, "since_usec=%llu now_sec=%ld days=%d\n", (unsigned long long)since_usec, (long)tv.tv_sec, days);
 
   LOG(LOG_INFO, "Processed %d pump events from logs", ring_count);
   // 5. Drain ring buffer into history array in chronological order

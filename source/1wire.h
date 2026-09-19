@@ -55,7 +55,7 @@ typedef struct {
 
 // Scan /sys/bus/w1/devices and print all detected 1-wire devices.
 // Shows device ID, family, and current temperature for DS18B20 sensors.
-void w1_detect();
+void w1_detect(bool usesyslog);
 
 // Find all DS18B20 sensors on the bus.
 // sensors[]:  caller-supplied array to fill

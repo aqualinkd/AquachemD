@@ -431,6 +431,13 @@ uriAtype action_URI(const char *URI, int uri_length, float value, bool convertTe
     return uCalibrate;
   } else if (strncmp(ri1, "instantreading", 9) == 0) {
     return uInstantReading;
+  } else if (strncmp(ri1, "scan", 4) == 0 || strncmp(ri1, "deepscan", 8) == 0) {
+    bool is_deep = (strncmp(ri1, "deepscan", 8) == 0);
+    //gpio_detect(is_deep, true);
+    //w1_detect(true);
+    //ezo_i2cdetect(true);
+    scan_sensors(true, is_deep);
+    return uActioned;
     /*
   } else if (strncmp(ri1, "reset_stats", 11) == 0) {
     if ( reset_sensors_average_by_duration(_aquachemd_data, ri2) ) {
@@ -609,7 +616,8 @@ void action_websocket_request(struct mg_connection *nc, struct mg_ws_message *wm
   char *msg = NULL;
   //char message[2048];
   //char message[8192];
-  char message[32768];
+  //char message[32768]; // 32 * 1024 = 32KiB
+  char message[65536]; // 64 * 1024 - 64KiB
 
   log_mg_str(LOG_DEBUG, "WS: Websocket message", wm->data);
 

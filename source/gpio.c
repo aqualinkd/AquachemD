@@ -15,17 +15,18 @@
 
 // Iterate /dev/gpiochip* entries — libgpiod v2 removed chip iterators
 // so we scan the directory ourselves
-void gpio_detect(bool deepscan)
+void gpio_detect(bool deepscan, bool usesyslog)
 {
   struct dirent *entry;
   DIR *dev = opendir("/dev");
   if (!dev)
   {
-    fprintf(stderr, "gpio_detect: cannot open /dev\n");
+    DIAG_LOG(usesyslog, "gpio_detect: cannot open /dev\n");
     return;
   }
 
-  printf("\nDetected GPIO chips:\n");
+  //DIAG_LOG(usesyslog, "=============================================\n");
+  DIAG_LOG(usesyslog, "Detected GPIO chips:\n");
 
   while ((entry = readdir(dev)) != NULL)
   {
@@ -43,7 +44,7 @@ void gpio_detect(bool deepscan)
 
     unsigned int num_lines = gpiod_chip_info_get_num_lines(info);
 
-    printf("  %-16s  label: %-30s  lines: %u\n",
+    DIAG_LOG(usesyslog, "  %-16s  label: %-30s  lines: %u\n",
       chip_path,
       gpiod_chip_info_get_label(info),
       num_lines);
@@ -60,7 +61,7 @@ void gpio_detect(bool deepscan)
         int         used     = gpiod_line_info_is_used(linfo);
         enum gpiod_line_direction dir = gpiod_line_info_get_direction(linfo);
 
-        printf("    line %3u: %-20s %-20s [%s]%s\n",
+        DIAG_LOG(usesyslog, "    line %3u: %-20s %-20s [%s]%s\n",
           i,
           name     ? name     : "unnamed",
           consumer ? consumer : "unused",
@@ -69,7 +70,7 @@ void gpio_detect(bool deepscan)
 
         gpiod_line_info_free(linfo);
       }
-      printf("\n");
+      DIAG_LOG(usesyslog, "-\n");
     }
 
     gpiod_chip_info_free(info);
@@ -77,7 +78,7 @@ void gpio_detect(bool deepscan)
   }
 
   closedir(dev);
-  printf("\n");
+  //DIAG_LOG(usesyslog, "---------------------------------------------\n");
 }
 
 // ─── Line management ─────────────────────────────────────────────────────────

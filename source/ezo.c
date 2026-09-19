@@ -8,9 +8,13 @@
 #include <sys/ioctl.h>
 #include <time.h>
 
+#include <linux/i2c.h>
+#include <linux/i2c-dev.h>
+
 #include "ezo.h"
 #include "utils.h"
-#include "i2c.h"
+//#include "i2c.h"
+
 
 // ─── Real implementation ──────────────────────────────────────────────────────
 // All code in this block is compiled only when DUMMY_SENSORS is NOT defined.
@@ -101,7 +105,7 @@ static const ezo_addr_map_t ezo_known_devices[] = {
   { 0,    NULL    }
 };
 
-static const char *ezo_name_from_addr(int addr)
+const char *ezo_name_from_addr(int addr)
 {
   for (int i = 0; ezo_known_devices[i].name != NULL; i++)
     if (ezo_known_devices[i].addr == addr)
@@ -109,7 +113,7 @@ static const char *ezo_name_from_addr(int addr)
   return NULL;
 }
 
-static const char *ezo_query_device_type(int addr)
+const char *ezo_query_device_type(int addr)
 {
   static char type_buf[16];
 
@@ -140,6 +144,10 @@ static const char *ezo_query_device_type(int addr)
   type_buf[len] = '\0';
   return type_buf;
 }
+
+/*
+This will probe EZO devices well, but potentially break generic i2c sensors forcing them to need a reset.
+*/
 
 void ezo_i2cdetect()
 {
@@ -184,16 +192,14 @@ void ezo_i2cdetect()
     const char *queried = ezo_query_device_type(addr);
 
     if (queried)
-      printf("  0x%02x  confirmed: %-6s  (default addr for: %s)\n",
-        addr, queried, known ? known : "unknown");
+      printf("  0x%02x  confirmed: %-6s  (default addr for: %s)\n", addr, queried, known ? known : "unknown");
     else if (known)
-      printf("  0x%02x  likely:    %-6s  (by default address, unconfirmed)\n",
-        addr, known);
-    else {
+      printf("  0x%02x  likely:    %-6s  (by default address, unconfirmed)\n", addr, known);
+    else {/*
       const char *known = i2c_name_from_addr(addr);
       if (known)
         printf("  0x%02x  likely: %s (by default address, unconfirmed)\n", addr, known);
-      else
+      else*/
         printf("  0x%02x  unknown device\n", addr);
     }
   }
@@ -554,6 +560,21 @@ int ezo_bus_available()
   return 1;   // always available in dummy mode
 }
 
+void ezo_i2cdetect(bool usesyslog)
+{
+  DIAG_LOG(usesyslog, "\n");
+  DIAG_LOG(usesyslog, "[DUMMY] Simulated I2C bus scan on %s\n\n", I2C_BUS);
+  DIAG_LOG(usesyslog, "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
+  DIAG_LOG(usesyslog, "60:              62 63          67 68               \n\n");
+  DIAG_LOG(usesyslog, "-\n");
+  DIAG_LOG(usesyslog, "Detected devices:\n");
+  DIAG_LOG(usesyslog, "  0x62  confirmed: ORP    (default addr for: ORP)\n");
+  DIAG_LOG(usesyslog, "  0x63  confirmed: pH     (default addr for: pH)\n");
+  DIAG_LOG(usesyslog, "  0x67  confirmed: PUMP   (default addr for: PUMP)\n");
+  DIAG_LOG(usesyslog, "  0x68  confirmed: RTD    (default addr for: RTD)\n");
+  DIAG_LOG(usesyslog, "---------------------------------------------\n");
+}
+/*
 void ezo_i2cdetect()
 {
   printf("\n[DUMMY] Simulated I2C bus scan on %s\n\n", I2C_BUS);
@@ -566,6 +587,7 @@ void ezo_i2cdetect()
   printf("  0x68  confirmed: RTD    (default addr for: RTD)\n");
   printf("\n");
 }
+*/
 
 void simulate_read_time()
 {

@@ -1707,6 +1707,10 @@ function startWebsockets() {
     send_command(msg);
   }
 
+  function run_scan(contex, deep) {
+    send_command({ uri: deep ? "deepscan" : "scan" });
+  }
+
   function isNewerVersion(version1, version2) {
     try {
       let [major1, minor1, patch1] = version1.split('.').map(Number => parseInt(Number, 10));
@@ -2344,6 +2348,20 @@ function renderConfigTable() {
           <div id="calibration_overlay" class="area-restricted">
             Calibration Disabled<br>Turn off AquachemD to enable
           </div>
+        </div>
+
+        <button class="collapsible">Scan</button>
+        <div class="content" id="scan">
+          <table border='0'>
+            <tr>
+              <td align="center">
+                <input id="editconfig" type="button" onclick="run_scan(this, false);" value="Scan"></input>
+              </td>
+              <td align="center">
+                <input id="webconfig" type="button" onclick="run_scan(this, true);" value="Deep Scan"></input>
+              </td>
+            </tr>
+          </table>
         </div>
 
         <button class="collapsible">Config</button>

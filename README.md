@@ -193,6 +193,7 @@ gpio_doser_ml_per_second=2.18
 | `log_level` | `DEBUG`, `INFO`, `NOTICE`, `WARNING`, `ERROR` |
 | `sensor_poll_time` | How often (seconds) sensors are polled. |
 | `log_sensor_readings` | Log every sensor reading, not just changes. |
+| `master_off_as_interlock_global` | When you turn off Master, turn everything off or just global interlock. see Safety interlocks below |
 
 #### MQTT & Home Assistant
 | Option | Description |
@@ -223,10 +224,9 @@ gpio_doser_ml_per_second=2.18
 | Option | Description |
 | :--- | :--- |
 | `*_condition_severity` | (e.g. `mqtt_condition_severity`, `gpio_condition_severity`) How severe it is when this condition fails: `local` degrades the system to a soft limit (dosers pause, sensors keep reading); `global` degrades it to a hard interlock (dosers pause AND Global-scope sensors also stop). |
-| `*_sensor_interlock_scope` | (including `gpio_input_interlock_scope`) How exposed this sensor is to interlocks raised elsewhere: `local` keeps reading through everything, including a hard interlock — use for things you always want visible. `global` stops reading once ANY interlock is active (soft or hard). `allow` ignores interlocks entirely, identical to `local` for a sensor. |
+| `*_sensor_interlock_scope` | (including `gpio_input_interlock_scope`) How exposed this sensor is to interlocks raised elsewhere: `local` always read, regardless of severity — use for anything you always want visible, even through a hard interlock. `global` reads through a soft interlock but stops at a hard one. |
 | `gpio_doser_interlock_scope` | How exposed this doser is to interlocks raised elsewhere: `local` only stops for a hard interlock, keeps dosing through a soft one. `global` stops for either. There is no `allow` for a doser — it must always respect at least a hard interlock. |
-| `gpio_output_interlock_scope` | How exposed this switch is to interlocks raised elsewhere: `local` only stops for a hard interlock, keeps running through a soft one. `global` stops for either. `allow` always ignores interlocak state. |
-
+| `gpio_output_interlock_scope` | How exposed this switch is to interlocks raised elsewhere: `local` only stops for a hard interlock, keeps running through a soft one. `global` stops for either. `allow` always ignores interlock state. |
 
 ## Complete details of all inputs / outputs
 

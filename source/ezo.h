@@ -109,7 +109,10 @@ typedef struct {
 
 // ─── Bus utilities ────────────────────────────────────────────────────────────
 int  ezo_bus_available();
-void ezo_i2cdetect();
+//void ezo_i2cdetect();
+
+const char *ezo_query_device_type(int addr);
+const char *ezo_name_from_addr(int addr);
 
 // ─── Generic EZO helpers (use when adding new sensor types) ──────────────────
 int ezo_get_info(int address, char *info, int len);

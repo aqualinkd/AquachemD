@@ -33,17 +33,18 @@ void populate_paths(w1_sensor_t *s)
 
 // ─── Discovery ────────────────────────────────────────────────────────────────
 
-void w1_detect()
+void w1_detect(bool usesyslog)
 {
   DIR *dir = opendir(W1_BASE_PATH);
   if (!dir)
   {
-    fprintf(stderr, "w1_detect: cannot open %s — is 1-wire enabled?\n", W1_BASE_PATH);
-    fprintf(stderr, "  Check /boot/firmware/config.txt contains: dtoverlay=w1-gpio\n");
+    DIAG_LOG(usesyslog, "w1_detect: cannot open %s — is 1-wire enabled?\n", W1_BASE_PATH);
+    DIAG_LOG(usesyslog, "  Check /boot/firmware/config.txt contains: dtoverlay=w1-gpio\n");
     return;
   }
 
-  printf("\nScanning 1-wire bus at %s...\n\n", W1_BASE_PATH);
+  //DIAG_LOG(usesyslog, "=============================================\n");
+  DIAG_LOG(usesyslog,"\nScanning 1-wire bus at %s...\n\n", W1_BASE_PATH);
 
   int count = 0;
   struct dirent *entry;
@@ -68,7 +69,7 @@ void w1_detect()
     else if (strncmp(entry->d_name, "3b-", 3) == 0) family = "DS1825  (temperature)";
     else if (strncmp(entry->d_name, "42-", 3) == 0) family = "DS28EA00 (temperature)";
 
-    printf("  %s   [%s]\n", entry->d_name, family);
+    DIAG_LOG(usesyslog,"  %s   [%s]\n", entry->d_name, family);
 
     // For temperature sensors, try to read and display current value
     if (strncmp(entry->d_name, "28-", 3) == 0 ||
@@ -81,18 +82,18 @@ void w1_detect()
 
       w1_reading_t r = w1_read(&s);
       if (r.status == W1_SUCCESS)
-        printf("    current reading: %.3f °C  (%.3f °F)\n", r.value, temp_c_to_f(r.value));
+        DIAG_LOG(usesyslog,"    current reading: %.3f °C  (%.3f °F)\n", r.value, temp_c_to_f(r.value));
       else
-        printf("    current reading: error (%s)\n", w1_strerror(r.status));
+        DIAG_LOG(usesyslog,"    current reading: error (%s)\n", w1_strerror(r.status));
     }
   }
 
   closedir(dir);
 
   if (count == 0)
-    printf("  No 1-wire devices found.\n");
+   DIAG_LOG(usesyslog,"  No 1-wire devices found.\n");
 
-  printf("\n");
+  //DIAG_LOG(usesyslog,"---------------------------------------------\n");
 }
 
 int w1_find_ds18b20(w1_sensor_t *sensors, int max)

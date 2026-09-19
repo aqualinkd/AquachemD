@@ -34,7 +34,7 @@
 #define I2C_SUCCESS       0
 #define I2C_ERROR        -1   // open/ioctl/transfer failure (bus-level)
 #define I2C_NOT_FOUND    -2   // device didn't ACK its address
-#define I2C_TIMEOUT      -3   // conversion not ready in time
+#define I2C_TIME_OUT      -3   // conversion not ready in time  // I2C_TIMEOUT exists in linux i2c-dev.h
 #define I2C_CRC_ERROR    -4   // CRC-protected transfer failed (reserved — PTE7300 CRC mode, etc.)
 #define I2C_PENDING      -5   // conversion still running / data stale, try again shortly
 #define I2C_UNSUPPORTED  -6   // valid call, but not supported by this sensor family
@@ -65,7 +65,8 @@ int i2c_probe_address(const char *bus_path, int address);
 
 // Scan the bus and print any devices that ACK, alongside any known-device
 // name match from the internal table (see i2c_known_devices in i2c.c).
-void i2c_generic_detect(const char *bus_path);
+//void i2c_generic_detect(const char *bus_path);
+void i2c_detect(bool deepscan, bool usesyslog); 
 
 
 const char *i2c_name_from_addr(int addr);

@@ -38,5 +38,6 @@ typedef struct {
 // API
 bool sysfs_init_sensor(sysfs_sensor_t *cfg);
 sysfs_reading_t sysfs_read_sensor(sysfs_sensor_t *cfg);
+void sysfs_detect(bool usesyslog);
 
 #endif // SYSFS_H

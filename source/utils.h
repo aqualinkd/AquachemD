@@ -19,6 +19,12 @@ void LOG_TANK_LEVEL(acd_key_t *key);
 bool READ_LAST_TANK_LEVEL_EVENT(acd_key_t *key);
 void LOG_STARTUP_EVENT();
 
+#define DIAG_LOG(usesyslog, fmt, ...) \
+  do { \
+    if (usesyslog) LOG(LOG_NOTICE, fmt, ##__VA_ARGS__); \
+    else            printf(fmt, ##__VA_ARGS__); \
+  } while (0)
+
 bool is_running_under_systemd();
 void init_logging_backend();
 

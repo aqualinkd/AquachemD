@@ -11,8 +11,7 @@
 
 #include "i2c.h"
 #include "utils.h"
-
-
+#include "ezo.h"
 
 const char* i2c_get_driver_name(i2c_sensor_type_t type)
 {
@@ -48,6 +47,7 @@ const char* i2c_get_driver_name(i2c_sensor_type_t type)
 // flip this to 0.
 #define PTE7300_LITTLE_ENDIAN 1
 
+int pte7300_validate_status(unsigned short raw_status);
 
 // ─── Generic transport ────────────────────────────────────────────────────────
 
@@ -157,9 +157,199 @@ const char *i2c_name_from_addr(int addr)
   for (int i = 0; i2c_known_devices[i].name != NULL; i++)
     if (i2c_known_devices[i].addr == addr)
       return i2c_known_devices[i].name;
+
+  // See if it's an ezo device
+  return ezo_name_from_addr(addr);
+}
+
+int pte7300_safe_read_reg(const char *bus_path, unsigned char addr, unsigned char reg, unsigned char *buf, size_t len)
+{
+    struct i2c_msg msgs[2];
+    struct i2c_rdwr_ioctl_data packets;
+
+    int fd = open(bus_path, O_RDWR);
+    if (fd < 0) return I2C_ERROR;
+
+    // Msg 1: Write register pointer (no STOP condition after)
+    msgs[0].addr  = addr;
+    msgs[0].flags = 0; // Write flag
+    msgs[0].len   = 1;
+    msgs[0].buf   = &reg;
+
+    // Msg 2: Read payload immediately using Repeated START
+    msgs[1].addr  = addr;
+    msgs[1].flags = I2C_M_RD;
+    msgs[1].len   = len;
+    msgs[1].buf   = buf;
+
+    packets.msgs  = msgs;
+    packets.nmsgs = 2;
+
+    if (ioctl(fd, I2C_RDWR, &packets) < 0) {
+      close(fd);
+      return -1; // Transaction failed
+    }
+
+    close(fd);
+    return 0; // Success
+}
+
+const char *i2c_query_device_type(int addr)
+{
+  // 1. Try PTE7300 probe: Read 2 bytes from STATUS register (0x36)
+  unsigned char pte_buf[2];
+  if (pte7300_safe_read_reg(I2C_BUS, addr, PTE7300_REG_STATUS, pte_buf, 2) == I2C_SUCCESS) {
+    unsigned short status_reg;
+#if PTE7300_LITTLE_ENDIAN
+    status_reg = (unsigned short)(pte_buf[0] | (pte_buf[1] << 8));
+#else
+    status_reg = (unsigned short)((pte_buf[0] << 8) | pte_buf[1]);
+#endif
+    if (pte7300_validate_status(status_reg) == I2C_SUCCESS) {
+      return "PTE7300";
+    }
+  }
+
+  // 2. Try Honeywell HSC/SSC probe: Registerless 4-byte read
+  unsigned char hsc_buf[4];
+  if (i2c_read_bytes(I2C_BUS, addr, hsc_buf, 4) == I2C_SUCCESS) {
+    unsigned char status_bits = hsc_buf[0] & HSC_STATUS_MASK; // 0xC0 mask
+    if (status_bits == HSC_STATUS_NORMAL || status_bits == HSC_STATUS_STALE) {
+      return "HSC/SSC";
+    }
+  }
+
   return NULL;
 }
 
+/* Helper mimicking linux i2cdetect probing logic */
+static bool i2c_probe_address_safe(int fd, int addr)
+{
+  if (ioctl(fd, I2C_SLAVE, addr) < 0) {
+    return false;
+  }
+
+  union i2c_smbus_data data;
+
+  /* Linux i2cdetect uses SMBus Quick for 0x30-0x37 & 0x50-0x77, 
+     and SMBus Read Byte for 0x08-0x2F & 0x38-0x4F */
+  if ((addr >= 0x30 && addr <= 0x37) || (addr >= 0x50 && addr <= 0x77)) {
+    // SMBus Quick Write
+    struct i2c_smbus_ioctl_data args = {
+      .read_write = I2C_SMBUS_WRITE,
+      .command = 0,
+      .size = I2C_SMBUS_QUICK,
+      .data = NULL
+    };
+    return (ioctl(fd, I2C_SMBUS, &args) >= 0);
+  } else {
+    // SMBus Read Byte
+    struct i2c_smbus_ioctl_data args = {
+      .read_write = I2C_SMBUS_READ,
+      .command = 0,
+      .size = I2C_SMBUS_BYTE,
+      .data = &data
+    };
+    return (ioctl(fd, I2C_SMBUS, &args) >= 0);
+  }
+}
+
+/* Helper to check if address belongs to standard EZO default range */
+static bool is_potential_ezo_address(int addr)
+{
+  /* Standard EZO default range: 0x61 (DO), 0x62 (ORP), 0x63 (pH), 
+     0x64 (EC), 0x65 (Hum), 0x66 (RTD), 0x67 (Pump), 0x68 (PRS), etc. */
+  return (addr >= 0x61 && addr <= 0x6B);
+}
+
+void i2c_detect(bool deepscan, bool usesyslog)
+{
+  int fd = open(I2C_BUS, O_RDWR);
+  if (fd < 0) { perror("open i2c"); return; }
+
+  /*
+  unsigned long funcs;
+  if (ioctl(fd, I2C_FUNCS, &funcs) >= 0) {
+    DIAG_LOG(usesyslog, "SMBus Quick supported: %s\n", (funcs & I2C_FUNC_SMBUS_QUICK) ? "yes" : "no");
+  }*/
+
+  //DIAG_LOG(usesyslog, "=============================================\n");
+  DIAG_LOG(usesyslog, "\nScanning I2C bus %s...\n\n", I2C_BUS);
+  DIAG_LOG(usesyslog, "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
+
+  int detected[128] = {0};
+  int count = 0;
+
+  for (int row = 0; row < 8; row++)
+  {
+    char line[64];
+    int len = snprintf(line, sizeof(line), "%02x: ", row * 16);
+
+    for (int col = 0; col < 16; col++)
+    {
+      int addr = row * 16 + col;
+      if (addr < 0x08 || addr > 0x77) {
+        len += snprintf(line + len, sizeof(line) - len, "   ");
+        continue;
+      }
+
+      if (!i2c_probe_address_safe(fd, addr)) {
+        len += snprintf(line + len, sizeof(line) - len, "-- ");
+      } else {
+        len += snprintf(line + len, sizeof(line) - len, "%02x ", addr);
+        detected[count++] = addr;
+      }
+    }
+    DIAG_LOG(usesyslog, "%s\n", line);
+  }
+  close(fd);
+
+  if (count == 0) { DIAG_LOG(usesyslog, "\nNo devices found.\n"); return; }
+
+  DIAG_LOG(usesyslog, "\nDetected devices:\n");
+  for (int i = 0; i < count; i++)
+  {
+    int addr = detected[i];
+    const char *known   = i2c_name_from_addr(addr);
+    const char *queried = NULL;
+
+    /* SAFETY FIX: Only query active device details if address matches EZO ranges 
+       to avoid corrupting third-party sensors/RTCs/expanders */
+    if (deepscan) {
+      if (is_potential_ezo_address(addr)) {
+        usleep(10000); // 10ms bus recovery pause before active query
+        queried = ezo_query_device_type(addr);
+      } else {
+        usleep(10000); // 10ms bus recovery pause
+        queried = i2c_query_device_type(addr);
+      }
+    }
+
+    if (queried) {
+      DIAG_LOG(usesyslog, "  0x%02x  confirmed: %-6s  (default addr for: %s)\n", addr, queried, known ? known : "unknown");
+    } else if (known) {
+      DIAG_LOG(usesyslog, "  0x%02x  likely:    %-6s  (by default address, unconfirmed)\n", addr, known);
+    } else {
+      DIAG_LOG(usesyslog, "  0x%02x  unknown device\n", addr);
+    }
+
+    /*
+    if (queried) {
+      DIAG_LOG(usesyslog, "  0x%02x  confirmed: %-6s  (default addr for: %s)\n", addr, queried, known ? known : "unknown");
+    } else if (known) {
+      DIAG_LOG(usesyslog, "  0x%02x  likely:    %-6s  (by default address, unconfirmed)\n", addr, known);
+    } else {
+      const char *known2 = i2c_name_from_addr(addr);
+      if (known2)
+        DIAG_LOG(usesyslog, "  0x%02x  likely:    %s (by default address, unconfirmed)\n", addr, known2);
+      else
+        DIAG_LOG(usesyslog, "  0x%02x  unknown device\n", addr);
+    }*/
+  }
+  //DIAG_LOG(usesyslog, "---------------------------------------------\n");
+}
+
+/*
 void i2c_generic_detect(const char *bus_path)
 {
   int fd = open(bus_path, O_RDWR);
@@ -207,7 +397,7 @@ void i2c_generic_detect(const char *bus_path)
   }
   printf("\n");
 }
-
+*/
 // ─── Shared scaling helper ─────────────────────────────────────────────────
 // Linear map from raw counts to engineering units — used by every sensor
 // family below (PTE7300's ±16000 span, HSC/SSC's transfer function span,
@@ -612,6 +802,27 @@ int i2c_sensor_reset(i2c_sensor_t *s)
 
 int i2c_bus_available(const char *bus_path) { (void)bus_path; return 1; }
 
+void i2c_detect(bool deepscan, bool usesyslog)
+{
+  DIAG_LOG(usesyslog, "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
+  DIAG_LOG(usesyslog, "00:                         -- -- -- -- -- -- -- --\n");
+  DIAG_LOG(usesyslog, "10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --\n");
+  DIAG_LOG(usesyslog, "20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --\n");
+  DIAG_LOG(usesyslog, "30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --\n");
+  DIAG_LOG(usesyslog, "40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --\n");
+  DIAG_LOG(usesyslog, "50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --\n");
+  DIAG_LOG(usesyslog, "60: -- -- 62 63 -- -- 66 67 -- -- -- -- 6c 6d -- --\n");
+  DIAG_LOG(usesyslog, "70: -- -- -- -- -- -- -- --\n");
+  DIAG_LOG(usesyslog, "\n");
+  DIAG_LOG(usesyslog, "Detected devices:\n");
+  DIAG_LOG(usesyslog, "  0x62  likely:    ORP     (by default address, unconfirmed)\n");
+  DIAG_LOG(usesyslog, "  0x63  likely:    pH      (by default address, unconfirmed)\n");
+  DIAG_LOG(usesyslog, "  0x66  likely:    RTD     (by default address, unconfirmed)\n");
+  DIAG_LOG(usesyslog, "  0x67  likely:    PUMP    (by default address, unconfirmed)\n");
+  DIAG_LOG(usesyslog, "  0x6c  likely:    PTE7300 pressure (non-CRC)  (by default address, unconfirmed)\n");
+  DIAG_LOG(usesyslog, "  0x6d  likely:    PTE7300 pressure (CRC)  (by default address, unconfirmed)\n");
+}
+
 void i2c_generic_detect(const char *bus_path)
 {
   (void)bus_path;
@@ -702,12 +913,18 @@ i2c_reading_t i2c_sensor_get_reading(i2c_sensor_t *s)
   // Plausible clean pool filter pressure, same idea as prs_get_reading() in
   // ezo.c's dummy block — centered around 15 psi (or the unit's midpoint if
   // your span isn't psi-ish) with a little drift, clamped to the configured span.
-  float mid   = (s->min_value + s->max_value) / 2.0f;
-  float value = (s->max_value - s->min_value > 5.0f) ? 15.0f + dummy_drift(1.0f) : mid + dummy_drift((s->max_value - s->min_value) * 0.02f);
-  if (value < s->min_value) value = s->min_value;
-  if (value > s->max_value) value = s->max_value;
+  //float mid   = (s->min_value + s->max_value) / 2.0f;
+  //float value = (s->max_value - s->min_value > 5.0f) ? 15.0f + dummy_drift(1.0f) : mid + dummy_drift((s->max_value - s->min_value) * 0.02f);
+  //if (value < s->min_value) value = s->min_value;
+  //if (value > s->max_value) value = s->max_value;
 
-  return (i2c_reading_t){ value, 25.0f + dummy_drift(1.0f), I2C_SUCCESS };
+  // Center at 15.0 PSI with ±13.0 PSI drift gives range [2.0, 28.0] PSI
+  float target_psi = 15.0f + dummy_drift(13.0f);
+
+  // Convert PSI back to bar for the primary value field
+  float value_bar = target_psi / 14.5037738f;
+
+  return (i2c_reading_t){ value_bar, 25.0f + dummy_drift(1.0f), I2C_SUCCESS };
 }
 
 int i2c_sensor_sleep(i2c_sensor_t *s)

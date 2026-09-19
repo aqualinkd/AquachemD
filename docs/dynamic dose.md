@@ -1,3 +1,10 @@
+
+
+# Not for use, don't bother reading
+
+
+
+
 # ==========================================
 # AQUACHEMD GLOBAL SETTINGS
 # ==========================================

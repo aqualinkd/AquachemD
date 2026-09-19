@@ -262,6 +262,55 @@ double elapsed_ms(const struct timespec *start_time) {
     return (delta_sec * 1000.0) + (delta_nsec / 1000000.0);
 }
 
+void printHelp()
+{
+  printf("%s %s\n", AQUACHEMD_SHORT_NAME, AQUACHEMD_VERSION);
+  
+  printf("\t-h         (this message)\n");
+  printf("\t---- Normal Runmode ----\n");
+  printf("\t-c <file>  (Configuration file)\n");
+  printf("\t-v         (Debug logging)\n");
+  printf("\t---- Scan mode ----\n");
+  printf("\tscan       (Scan system for devices & chips)\n");
+  printf("\tdeepscan   (Scan system for devices & chips & scan GPIO chips in detail)\n");
+  printf("\t---- Calibration mode ----\n");
+  printf("\tcalibrate  (calibrate help)\n");
+  printf("\tcalibrate ph  <low|mid|high>\n");
+  printf("\tcalibrate orp <mv_value>\n");
+  printf("\tcalibrate rtd <°C_value>\n");
+  printf("\tcalibrate prs <psi_value>\n");
+}
+
+
+void scan_sensors(bool activeSystem, bool deepScan) 
+{
+  DIAG_LOG(activeSystem, "==============================================================\n");
+  DIAG_LOG(activeSystem,"                   **** Started Scan **** \n");
+
+#ifdef WITH_GPIOD
+  DIAG_LOG(activeSystem, "==============================================================\n");
+  gpio_detect(deepScan, activeSystem);
+#endif
+  
+DIAG_LOG(activeSystem, "==============================================================\n");
+  w1_detect(activeSystem);
+  
+  DIAG_LOG(activeSystem, "==============================================================\n");
+  i2c_detect(deepScan, activeSystem);
+  
+  DIAG_LOG(activeSystem, "==============================================================\n");
+  sysfs_detect(activeSystem);
+
+  DIAG_LOG(activeSystem,"---------------------------------------------------------------\n");
+
+  if (deepScan && activeSystem) {
+    DIAG_LOG(activeSystem,"                    **** WARNING  **** \n");
+    DIAG_LOG(activeSystem,"DeepScan can make some I2C sensors inoperable, you may need \n");
+    DIAG_LOG(activeSystem,"to restart AquachemD to reset them\n");
+    DIAG_LOG(activeSystem,"---------------------------------------------------------------\n");
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 int main(int argc, char *argv[])
@@ -288,15 +337,19 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+
   // ── Scan mode ───────────────────────────────────────────────────────────────
   if (argc >= 2 && (strcasecmp(argv[1], "scan") == 0 || strcasecmp(argv[1], "deepscan") == 0))
   {
+    /*
 #ifdef WITH_GPIOD
     int deep = strcasecmp(argv[1], "deepscan") == 0;
-    gpio_detect(deep);
+    gpio_detect(deep, false);
 #endif
-    w1_detect();
-    ezo_i2cdetect();
+    w1_detect(true);
+    ezo_i2cdetect(false);*/
+    int deep = strcasecmp(argv[1], "deepscan") == 0;
+    scan_sensors(false, deep);
     return 0;
   }
 
@@ -378,8 +431,7 @@ int main(int argc, char *argv[])
   {
     if (strcmp(argv[i], "-h") == 0)
     {
-      //printHelp();
-      printf("ADD HELP\n");
+      printHelp();
       return 0;
     }
     //if (strcmp(argv[i], "-d") == 0)
@@ -518,7 +570,11 @@ reload_configuration:
   validate_pumps_against_tanks(&acddata);
 
   // If we don't have any conditions to test, set master to ON.
-  if (!acddata.haveConditions){acddata.keys->state = ACD_LED_ON;}
+  if (!acddata.haveConditions){
+    //set_key_state(&acddata, acddata.keys, ACD_LED_ON);
+    state_change_request(&acddata, acddata.keys, ACD_LED_ON);
+    //acddata.keys->state = ACD_LED_ON;
+  }
 
   start_gpio_monitor(&acddata);
 
@@ -562,11 +618,6 @@ reload_configuration:
           } else if (gpio_state == GPIO_ERROR) {
             LOG(LOG_ERR, "Reading %s GPIO pin %d\n",curr->label,curr->data.gpio.pin);
           }
-          /*
-          if (sensor_is_met(&curr->data.gpio) >= 0 && !curr->met) {
-            ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
-            set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
-          }*/
         }
         if (!curr->met) {
           if ( !isMASKSET(curr->flags, CONDITION_NOTIFIED)) {
@@ -578,16 +629,6 @@ reload_configuration:
           removeMASK(curr->flags, CONDITION_NOTIFIED);
           LOG(LOG_NOTICE,"Condition satisfied: %s\n", curr->label);
         }
-      // ALL BELOW needs to be moved down to main loop, once we have new validation in place
-      /*
-      } else if (curr->type == ACD_TYPE_GPIO_INPUT) {
-        gpio_state = sensor_is_met(&curr->data.gpio);
-        if (gpio_state != GPIO_ERROR && gpio_state != curr->met) {
-          ASSIGN_IF_CHANGED(curr->met, !curr->met, acddata.is_dirty, curr->is_dirty);
-          set_key_state(&acddata, curr, curr->met?ACD_LED_ON:ACD_LED_OFF);
-        } else if (gpio_state == GPIO_ERROR) LOG(LOG_ERR, "Reading %s GPIO pin %d\n",curr->label,curr->data.gpio.pin);  
-      } else if (curr->type == ACD_TYPE_GPIO_PMP || curr->type == ACD_TYPE_GPIO_OUTPUT) {
-        check_gpio_output_state(&acddata, curr); */
       }
     }
     
@@ -600,6 +641,7 @@ reload_configuration:
  
       if (!should_sensor_read(&acddata, key)) {
         LOG(LOG_INFO,"Sensor %s set to not read, ignoring\n",key->label);
+        LOG(reading_log_level,"Sensor %s set to not read, ignoring! (Master=%s Sensor=%s)\n",key->label,acd_action_to_str(acddata.keys->scope),acd_scope_to_str(key->scope));
         continue;
       } else if (isMASKSET(key->flags,  ACD_FLAG_FAULTED)) {
         LOG(LOG_DEBUG,"Sensor %s failed, skipping\n",key->label);
@@ -629,13 +671,11 @@ reload_configuration:
               master_temp_label = key->label;
             }
             ASSIGN_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty, key->is_dirty);
-            //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
             update_sensor_average(key);
           } else {
-            LOG(LOG_WARNING, "D1w Temp Sensor '%s' read failed (status %d)\n", key->label, temp_reading.status);
-            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+            LOG(LOG_WARNING, "D1w Temp Sensor '%s' read failed (status %d)\n", key->label, temp_reading.status);            
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
             sensor_read_error(&acddata, key);
           }
@@ -649,13 +689,12 @@ reload_configuration:
               master_temp_label = key->label;
             }
             ASSIGN_IF_CHANGED(key->value, temp_reading.value, acddata.is_dirty, key->is_dirty);
-            //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
             update_sensor_average(key);
           } else {
             LOG(LOG_WARNING, "EZO Temp Sensor '%s' read failed (status %d)\n", key->label, temp_reading.status);
-            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+            
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
             sensor_read_error(&acddata, key);
           }
@@ -669,7 +708,6 @@ reload_configuration:
               char buf[128];
               sprintf(buf, "Water temperature %.2f°C too %s for Ph reading", temp_reading_for_ph, temp_reading_for_ph < _acdconfig_.ph_reading_temp_min?"cold":"hot");
               LOG(LOG_WARNING, "%s\n", buf);
-              //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
               set_key_state(&acddata, key, ACD_LED_OFF);
               update_display_message(&acddata, ACD_MSG_CONDITION_FAILED, buf);
               break;
@@ -678,7 +716,6 @@ reload_configuration:
             ph_reading = ph_get_reading_compensated(temp_reading_for_ph);
           } else {
             LOG(LOG_WARNING, "EZO pH Sensor '%s' skipped compensation because temp is unknown\n", key->label);
-            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_OFF);
             break;
           }
@@ -686,13 +723,11 @@ reload_configuration:
           if (ph_reading.status == EZO_SUCCESS) {
             LOG(reading_log_level,"EZO pH Sensor %s : %.2f\n", key->label, ph_reading.value);
             ASSIGN_IF_CHANGED(key->value, ph_reading.value, acddata.is_dirty, key->is_dirty);
-            //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
             update_sensor_average(key);
           } else {
             LOG(LOG_WARNING, "EZO pH Sensor '%s' read failed (status %d)\n", key->label, ph_reading.status);
-            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
             sensor_read_error(&acddata, key);
           }
@@ -702,13 +737,11 @@ reload_configuration:
           if (orp_reading.status == EZO_SUCCESS) {
             LOG(reading_log_level,"EZO ORP Sensor %s : %.2f mV\n", key->label, orp_reading.value);
             ASSIGN_IF_CHANGED(key->value, orp_reading.value, acddata.is_dirty, key->is_dirty);
-            //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
             update_sensor_average(key);
           } else {
-            LOG(LOG_WARNING, "EZO ORP Sensor '%s' read failed (status %d)\n", key->label, orp_reading.status);
-            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+            LOG(LOG_WARNING, "EZO ORP Sensor '%s' read failed (status %d)\n", key->label, orp_reading.status);           
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
             sensor_read_error(&acddata, key);
           }
@@ -718,13 +751,11 @@ reload_configuration:
           if (prs_reading.status == EZO_SUCCESS) {
             LOG(reading_log_level,"EZO PRS Sensor %s : %.2f mV\n", key->label, prs_reading.value);
             ASSIGN_IF_CHANGED(key->value, prs_reading.value, acddata.is_dirty, key->is_dirty);
-            //SET_IF_CHANGED(key->state, ACD_LED_ON, acddata.is_dirty);
             set_key_state(&acddata, key, ACD_LED_ON);
             key->err_cnt=0;
             update_sensor_average(key);
           } else {
-            LOG(LOG_WARNING, "EZO PRS Sensor '%s' read failed (status %d)\n", key->label, prs_reading.status);
-            //SET_IF_CHANGED(key->state, ACD_LED_OFF, acddata.is_dirty);
+            LOG(LOG_WARNING, "EZO PRS Sensor '%s' read failed (status %d)\n", key->label, prs_reading.status);            
             update_display_message(&acddata, ACD_MSG_SENSOR_READ_FAILED, key->label);
             sensor_read_error(&acddata, key);
           }
@@ -821,22 +852,6 @@ next_wake:
 
     // Advance the target wake time for the next iteration
     next_wake.tv_sec += _acdconfig_.sensor_poll_time;
-
-    /*
-    // Advance the target wake time by one interval
-    next_wake.tv_sec += _acdconfig_.sensor_poll_time;
-
-    // check for drift
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    
-    // If we fell behind (loop took longer than poll_seconds), reset the base to 'now' 
-    if (now.tv_sec >= next_wake.tv_sec) {
-      next_wake = now; // Reset base to current time
-    }
-    // Sleep until the next wake time
-    clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_wake, NULL);
-    */
   }
 
 

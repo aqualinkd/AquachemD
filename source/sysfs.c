@@ -50,6 +50,9 @@ float apply_math(float val, float factor) {
 #include <stdlib.h>
 #include <string.h>
 #include <regex.h>
+#include <stdbool.h>
+#include <string.h>
+#include <fnmatch.h>
 
 #include "sysfs.h"
 #include "utils.h"
@@ -133,4 +136,170 @@ sysfs_reading_t sysfs_read_sensor(sysfs_sensor_t *cfg) {
         result.raw, cfg->path, result.value);
 
     return result;
+}
+
+
+/********************************
+ * 
+ *   Scanning tools
+ * 
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+#include <dirent.h>
+#include <fnmatch.h>
+#include <limits.h>
+
+// Helper to read strings safely from sysfs
+static int read_sysfs_string(const char *path, char *out_buf, size_t max_len)
+{
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    if (fgets(out_buf, max_len, f) != NULL) {
+        out_buf[strcspn(out_buf, "\r\n")] = 0;
+        fclose(f);
+        return 0;
+    }
+    fclose(f);
+    return -1;
+}
+
+// Helper to read integer values from sysfs
+static int read_sysfs_long(const char *path, long *out_val)
+{
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    if (fscanf(f, "%ld", out_val) == 1) {
+        fclose(f);
+        return 0;
+    }
+    fclose(f);
+    return -1;
+}
+
+// 1. Scan HWMON (Temperature & Voltage/ADC like ADS1115)
+void scan_sysfs_hwmon(bool usesyslog)
+{
+    DIR *dir = opendir("/sys/class/hwmon");
+    if (!dir) return;
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strncmp(entry->d_name, "hwmon", 5) != 0) continue;
+
+        // Base directory buffer sized to 512 bytes
+        char hwmon_dir[512];
+        snprintf(hwmon_dir, sizeof(hwmon_dir), "/sys/class/hwmon/%s", entry->d_name);
+
+        char chip_name[64] = "unknown";
+        char name_path[PATH_MAX];
+        snprintf(name_path, sizeof(name_path), "%s/name", hwmon_dir);
+        read_sysfs_string(name_path, chip_name, sizeof(chip_name));
+
+        DIR *hdir = opendir(hwmon_dir);
+        if (!hdir) continue;
+
+        struct dirent *hentry;
+        while ((hentry = readdir(hdir)) != NULL) {
+            bool is_temp = (fnmatch("temp*_input", hentry->d_name, 0) == 0);
+            bool is_volt = (fnmatch("in*_input", hentry->d_name, 0) == 0);
+
+            if (is_temp || is_volt) {
+                char attr_path[PATH_MAX];
+                snprintf(attr_path, sizeof(attr_path), "%s/%s", hwmon_dir, hentry->d_name);
+
+                long val = 0;
+                if (read_sysfs_long(attr_path, &val) == 0) {
+                    if (is_temp) {
+                        DIAG_LOG(usesyslog, "  [hwmon] %-15s %-12s : %.2f °C - (%s)\n",
+                                 chip_name, hentry->d_name, val / 1000.0f, attr_path);
+                    } else { // Voltage / ADC channel
+                        DIAG_LOG(usesyslog, "  [hwmon] %-15s %-12s : %ld mV - (%s)\n",
+                                 chip_name, hentry->d_name, val, attr_path);
+                    }
+                }
+            }
+        }
+        closedir(hdir);
+    }
+    closedir(dir);
+}
+
+// 2. Scan Thermal Zones (SoC/CPU internal thermal sensors)
+void scan_sysfs_thermal(bool usesyslog)
+{
+    DIR *dir = opendir("/sys/class/thermal");
+    if (!dir) return;
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strncmp(entry->d_name, "thermal_zone", 12) != 0) continue;
+
+        char temp_path[PATH_MAX], type_path[PATH_MAX], zone_type[64] = "thermal";
+        snprintf(temp_path, sizeof(temp_path), "/sys/class/thermal/%s/temp", entry->d_name);
+        snprintf(type_path, sizeof(type_path), "/sys/class/thermal/%s/type", entry->d_name);
+
+        long val_mC = 0;
+        if (read_sysfs_long(temp_path, &val_mC) == 0) {
+            read_sysfs_string(type_path, zone_type, sizeof(zone_type));
+            DIAG_LOG(usesyslog, "  [thermal] %-13s (%-14s) : %.2f °C - (%s)\n",
+                     entry->d_name, zone_type, val_mC / 1000.0f, temp_path);
+        }
+    }
+    closedir(dir);
+}
+
+// 3. Scan IIO Devices (Industrial I/O ADCs/Sensors)
+void scan_sysfs_iio(bool usesyslog)
+{
+    DIR *dir = opendir("/sys/bus/iio/devices");
+    if (!dir) return;
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strncmp(entry->d_name, "iio:device", 10) != 0) continue;
+
+        // Base directory buffer sized to 512 bytes
+        char device_dir[512];
+        snprintf(device_dir, sizeof(device_dir), "/sys/bus/iio/devices/%s", entry->d_name);
+
+        char chip_name[64] = "unknown";
+        char name_path[PATH_MAX];
+        snprintf(name_path, sizeof(name_path), "%s/name", device_dir);
+        read_sysfs_string(name_path, chip_name, sizeof(chip_name));
+
+        DIR *idir = opendir(device_dir);
+        if (!idir) continue;
+
+        struct dirent *ientry;
+        while ((ientry = readdir(idir)) != NULL) {
+            if (fnmatch("in_voltage*_raw", ientry->d_name, 0) == 0 ||
+                fnmatch("in_voltage*_input", ientry->d_name, 0) == 0) {
+                char attr_path[PATH_MAX];
+                snprintf(attr_path, sizeof(attr_path), "%s/%s", device_dir, ientry->d_name);
+
+                long val = 0;
+                if (read_sysfs_long(attr_path, &val) == 0) {
+                    DIAG_LOG(usesyslog, "  [iio] %-17s %-18s : %ld (raw) - (%s)\n",
+                             chip_name, ientry->d_name, val, attr_path);
+                }
+            }
+        }
+        closedir(idir);
+    }
+    closedir(dir);
+}
+
+// Top-level sysfs scanner entry point
+void sysfs_detect(bool usesyslog)
+{
+    //DIAG_LOG(usesyslog, "=============================================\n");
+    DIAG_LOG(usesyslog, "\nScanning sysfs sensors...\n\n");
+    scan_sysfs_hwmon(usesyslog);
+    scan_sysfs_thermal(usesyslog);
+    scan_sysfs_iio(usesyslog);
+    //DIAG_LOG(usesyslog, "---------------------------------------------\n");
 }

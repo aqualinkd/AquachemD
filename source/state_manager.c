@@ -64,9 +64,18 @@ static const uint8_t transition_permission[KC_COUNT][5] = {
   [KC_OUTPUT_GLOBAL] = { SCOPE_ALL, SCOPE_A,         0,               SCOPE_L|SCOPE_B, 0 },  // respects Limit and Block
   [KC_OUTPUT_LOCAL]  = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               SCOPE_B,         0 },  // only respects a hard interlock
 
-  [KC_SENSOR_ALLOW] =  { SCOPE_ALL, SCOPE_ALL,       0,               0,               0 },
-  [KC_SENSOR_GLOBAL] = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               0,               0 },
-  [KC_SENSOR_LOCAL]  = { SCOPE_ALL, SCOPE_ALL,       SCOPE_ALL,       SCOPE_B,         0 },
+  //[KC_SENSOR_ALLOW] =  { SCOPE_ALL, SCOPE_ALL,       0,               0,               0 },
+  //[KC_SENSOR_GLOBAL] = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               0,               0 },
+  //[KC_SENSOR_LOCAL]  = { SCOPE_ALL, SCOPE_ALL,       SCOPE_ALL,       SCOPE_B,         0 },
+
+  [KC_SENSOR_ALLOW]  = { SCOPE_ALL, SCOPE_ALL,       0,                 0,              0 },  // ignores scope entirely
+  [KC_SENSOR_LOCAL]  = { SCOPE_ALL, SCOPE_ALL,       0,                 0,              0 },  // always reads, unaffected by anything
+  [KC_SENSOR_GLOBAL] = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,                 SCOPE_B,        0 },  // stops only at the hard interlock
+
+  //[KC_SENSOR_ALLOW]  = { SCOPE_ALL, SCOPE_ALL,       0,               0,               0 }, // ignores everything
+  //[KC_SENSOR_GLOBAL] = { SCOPE_ALL, SCOPE_A,         0,               SCOPE_L|SCOPE_B, 0 }, // respects everything, matches pump/output "Global"
+  //[KC_SENSOR_LOCAL]  = { SCOPE_ALL, SCOPE_A|SCOPE_L, 0,               0,               0 }, // respects hard interlock only, matches pump/output "Local"
+  
 };
 
 static key_category_t classify_key(acd_key_t *key) {
@@ -92,8 +101,14 @@ static bool is_transition_permitted(struct aquachemdata *acdata, acd_key_t *key,
 // just "what should this sensor's read-state be right now given its scope and
 // the current master scope." Shares the same table data as the pump/output
 // permission checks, so the two can't silently drift apart from each other.
+/*
 bool should_sensor_read(struct aquachemdata *acdata, acd_key_t *key) {
   key_category_t cat = (key->scope == ACD_SCOPE_GLOBAL) ? KC_SENSOR_GLOBAL : KC_SENSOR_LOCAL;
+  return (transition_permission[cat][ACD_LED_ON] & (1 << get_master(acdata)->scope)) != 0;
+}*/
+bool should_sensor_read(struct aquachemdata *acdata, acd_key_t *key) {
+  key_category_t cat = classify_key(key);
+  if (cat == KC_COUNT) return false;
   return (transition_permission[cat][ACD_LED_ON] & (1 << get_master(acdata)->scope)) != 0;
 }
 
@@ -438,26 +453,7 @@ void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key, acd_state_t desi
     set_pump_off_due_to_tank_empty(acdata, key);
   }
 }
-/*
-void turn_pump_off(struct aquachemdata *acdata, acd_key_t *key) {
 
-  time_t start = get_timer_started_at(key);
-
-  if (key->type == ACD_TYPE_GPIO_PMP) {
-    relay_off(&key->data.gpio);
-    key->ison = pump_is_on(&key->data.gpio);
-  } else {
-    LOG(LOG_ERR, "Add Code in state_manage.c - turn_pump_off()");
-  }
-
-  if (start != NULL) {
-
-  }
-
-  SET_IF_CHANGED(key->state , ACD_LED_ENABLED, acdata->is_dirty);
-  clear_timer(acdata, key);
-}
-*/
 
 void check_gpio_output_state(struct aquachemdata *acdata, acd_key_t *key) {
   int current = relay_is_on(&key->data.gpio);
@@ -474,33 +470,7 @@ void check_gpio_output_state(struct aquachemdata *acdata, acd_key_t *key) {
     LOG(LOG_NOTICE, "Output %s, GPIO %d is now %s/%s/%s", key->label, key->data.gpio.pin, (relay_is_on(&key->data.gpio) ? "ON" : "OFF"), acd_state_to_str(key->state), key->ison ? "ON" : "OFF");
   }
 }
-/*
-void check_gpio_output_state(struct aquachemdata *acdata, acd_key_t *key) {
-  
-  int current = relay_is_on(&key->data.gpio);
 
-  //LOG(LOG_NOTICE, "Checking Output %s, currently %d, state is %d\n",key->label, current, key->ison);
-
-  if (current >= 0 && current != key->ison) {
-    LOG(LOG_WARNING, "%s %s changed externally\n",key->type==ACD_TYPE_GPIO_PMP?"Pump":"GPIO Output", key->label);
-    key->ison = current;
-    //set_key_state(acdata, key, key->ison ? ACD_LED_ON : ACD_LED_ENABLED);
-    set_key_state(acdata, key, key->ison ? ACD_LED_ON : resting_state_for_scope(classify_key(key), acdata->keys->scope));
-    LOG(LOG_NOTICE, "Output %s, GPIO %d is now %s/%s/%s",key->label,key->data.gpio.pin,(relay_is_on(&key->data.gpio)?"ON":"OFF"),acd_state_to_str(key->state),key->ison?"ON":"OFF");
-  }
-}
-  */
-/*
-void check_pump_state(struct aquachemdata *acdata, acd_key_t *key) {
-  int current = pump_is_on(&key->data.gpio);
-  if (current >= 0 && current != key->ison) {
-    LOG(LOG_WARNING, "Pump %s changed externally\n", key->label);
-    key->ison = current;
-    set_key_state(acdata, key, key->ison ? ACD_LED_ON : ACD_LED_ENABLED);
-    LOG(LOG_NOTICE, "Output %s, GPIO %d is now %s/%s/%s",key->label,key->data.gpio.pin,(pump_is_on(&key->data.gpio)?"ON":"OFF"),acd_state_to_str(key->state),key->ison?"ON":"OFF");
-  }
-}
-*/
 bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state, uint32_t value);
 
 bool state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_state_t state)
@@ -542,7 +512,11 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
       }
       ASSIGN_IF_CHANGED(key->state , state, acdata->is_dirty, key->is_dirty);
       check_master(acdata); // Set things to disabled
-      if (state == ACD_LED_ON) aquachemd_force_sensor_poll();
+      if (state == ACD_LED_ON) { 
+        aquachemd_force_sensor_poll();
+      } else if (state == ACD_LED_OFF && _acdconfig_.master_off_as_interlock) {
+        //get_master(acdata)->scope = ACD_ACTION_BLOCK; 
+      } 
       break;
 
     case ACD_TYPE_GPIO_PMP:
@@ -596,10 +570,13 @@ bool _state_change_request(struct aquachemdata *acdata, acd_key_t *key, acd_stat
   return true;
 }
 
+#define USE_MASTER_OFF_INTERLOCK
+
 void check_master(struct aquachemdata *acdata) {
   acd_key_t *failed_condition = NULL;
   //acd_action_t action = ACD_ACTION_ALLOW;
 
+#ifndef USE_MASTER_OFF_INTERLOCK
   // Turn everything to disabled if master if off
   if ( get_master(acdata)->state == ACD_LED_OFF ) {
     for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
@@ -619,6 +596,30 @@ void check_master(struct aquachemdata *acdata) {
     return;
   }
 
+#else
+  bool master_manually_off = (get_master(acdata)->state == ACD_LED_OFF);
+
+  if (master_manually_off && !_acdconfig_.master_off_as_interlock) {
+    // Mode A: same as above, unchanged
+    for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
+      if (!IS_OUTPUT(curr->type) && !IS_INPUT(curr->type)) continue;
+      if (curr->state != ACD_LED_OFF) {
+        if (IS_OUTPUT(curr->type) && curr->state == ACD_LED_ON) {
+          IS_PUMP(curr->type) ? turn_pump_off(acdata, curr, ACD_LED_DISABLED) : turn_gpio_switch_off(acdata, curr, ACD_LED_DISABLED);
+          LOG(LOG_INFO, "State Manager - %s no longer permitted, turning off (-> %s)", curr->label, acd_state_to_str(ACD_LED_DISABLED));
+        }
+        set_key_state(acdata, curr, ACD_LED_DISABLED);
+      } else if (IS_OUTPUT(curr->type) && !IS_PUMP(curr->type) && curr->state == ACD_LED_OFF) {
+        set_key_state(acdata, curr, ACD_LED_DISABLED);
+      }
+    }
+    return;
+  }
+  // Mode B (or master genuinely ON): fall through to the shared tail below.
+  // Deliberately NOT setting scope/state here anymore -- the shared block
+  // computes both, now taking master_manually_off into account directly.
+#endif
+
   // Check for any conditions that are not met.
   get_master(acdata)->scope = ACD_ACTION_ALLOW; // Reset to good, below will set to bad.
   for (acd_key_t *curr = get_master(acdata)->next; curr != NULL; curr = curr->next) {
@@ -635,13 +636,36 @@ void check_master(struct aquachemdata *acdata) {
       LOG(LOG_INFO,"Condition %s not met",curr->label);
     }
   }
+  
+#ifdef USE_MASTER_OFF_INTERLOCK
+  if (master_manually_off) {
+    // Manual off is at least as severe as any condition -- never let a
+    // condition-derived ALLOW/LIMIT downgrade it back below BLOCK.
+    get_master(acdata)->scope = ACD_ACTION_BLOCK;
+  }
+#endif
 
   LOG(LOG_INFO, "State Manager - Master actions = %s",acd_scope_to_str(get_master(acdata)->scope) );
 
   // Condition-scanning loop that derives acdata->keys->scope: unchanged --
   // this computes the input the table needs, the table can't replace it.
 
-  set_key_state(acdata, acdata->keys, failed_condition == NULL ? ACD_LED_ON : ACD_LED_ENABLED);
+  //set_key_state(acdata, acdata->keys, failed_condition == NULL ? ACD_LED_ON : ACD_LED_ENABLED);
+  
+  acd_state_t master_state;
+#ifdef USE_MASTER_OFF_INTERLOCK
+  if (master_manually_off) {
+    master_state = ACD_LED_OFF;
+  } else if (failed_condition != NULL) {
+    master_state = ACD_LED_ENABLED;
+  } else {
+    master_state = ACD_LED_ON;
+  }
+#else
+  master_state = (failed_condition == NULL) ? ACD_LED_ON : ACD_LED_ENABLED;
+#endif
+
+  set_key_state(acdata, acdata->keys, master_state);
 
   for (acd_key_t *curr = acdata->keys->next; curr != NULL; curr = curr->next) {
     key_category_t cat = classify_key(curr);

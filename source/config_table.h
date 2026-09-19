@@ -15,7 +15,7 @@
 
 CFG_ENTRY( "main_label",             main_label,             "AquachemD",          CFG_STRING,  0,                  0,                NULL )
 
-//CFG_ENTRY( "master_off_as_interlock_glocal", master_off_interlock_glocal, false,   CFG_BOOL,    0,                  0,                NULL )
+CFG_ENTRY( "master_off_as_interlock_global", master_off_as_interlock, true,    CFG_BOOL,    0,                  0,                CFG_O_BOOL )
 
 
 CFG_ENTRY( "single_instance",        singleton,               true,                CFG_BOOL,    0,                  0,                CFG_O_BOOL )
@@ -185,7 +185,7 @@ CFG_ENTRY( "gpio_input_ID",             keys,             NULL,                 
 CFG_ENTRY( "gpio_input_pin",            keys,             NULL,                 CFG_INT,     CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_input_pin_mode",       keys,             NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_input_required_state", keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-//CFG_ENTRY( "gpio_input_interlock_scope",keys,             NULL,                 CFG_BOOL,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "gpio_input_interlock_scope",keys,             NULL,                 CFG_STRING,    CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 CFG_ENTRY( "gpio_output_label",          keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "gpio_output_ID",             keys,                   NULL,                 CFG_STRING,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
@@ -199,7 +199,7 @@ CFG_ENTRY( "sysfs_sensor_path",       keys,                   NULL,             
 CFG_ENTRY( "sysfs_sensor_offset",     keys,                   NULL,                 CFG_FLOAT,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "sysfs_sensor_scale",      keys,                   NULL,                 CFG_FLOAT,  CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "sysfs_sensor_regex",      keys,                   NULL,                 CFG_STRING, CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
-//CFG_ENTRY( "sysfs_sensor_scope_global",keys,                  NULL,                 CFG_BOOL,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
+CFG_ENTRY( "sysfs_sensor_interlock_scope",keys,               NULL,                 CFG_STRING,   CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 CFG_ENTRY( "sysfs_sensor_uom",        keys,                   NULL,                 CFG_STRING, CFG_MULTIPLE|CFG_HIDE,              0,                NULL )
 
 

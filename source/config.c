@@ -23,6 +23,7 @@ void set_config_defaults();
 char* replace_or_append_suffix(const char *orig, const char *suffixes[], const char *append_text);
 void assign_missing_ids(struct aquachemdata *acdata);
 void validate_config(struct aquachemdata *acdata);
+static inline bool key_ends_with_ic_impl(const char *str, const char *suffix, size_t suf_len);
 
 #define SET_VAL_CFG_STRING(field, def)  _acdconfig_.field = def
 #define SET_VAL_CFG_INT(field, def)     _acdconfig_.field = def
@@ -34,45 +35,15 @@ void validate_config(struct aquachemdata *acdata);
 // Define the initialization macro to do nothing
 #define SET_VAL_CFG_CUSTOM(field, def)  /* Handled by specialized logic */
 
-/*
-#define SET_VAL_CFG_STRING(field, def)  do { char *__v = (char *)(def); memcpy(&(_acdconfig_.field), &__v, sizeof(__v)); } while(0)
-#define SET_VAL_CFG_INT(field, def)     do { int __v = (int)(def); memcpy(&(_acdconfig_.field), &__v, sizeof(__v)); } while(0)
-#define SET_VAL_CFG_BOOL(field, def)    do { bool __v = (bool)(def); memcpy(&(_acdconfig_.field), &__v, sizeof(__v)); } while(0)
-#define SET_VAL_CFG_FLOAT(field, def)   do { float __v = (float)(def); memcpy(&(_acdconfig_.field), &__v, sizeof(__v)); } while(0)
-#define SET_VAL_CFG_HEX(field, def)     do { unsigned char __v = (unsigned char)(def); memcpy(&(_acdconfig_.field), &__v, sizeof(__v)); } while(0)
-#define SET_VAL_CFG_BITMASK(field, def) do { uint16_t __v = (uint16_t)(def); memcpy(&(_acdconfig_.field), &__v, sizeof(__v)); } while(0)
-#define SET_VAL_CFG_TXT_INT(field, def) do { int __v = (int)(def); memcpy(&(_acdconfig_.field), &__v, sizeof(__v)); } while(0)
-#define SET_VAL_CFG_CUSTOM(field, def)  // Bypassed for custom range step arrays 
-*/
-/*
-* Below is better but needs -Wstrict-aliasing turned off to stop compiller warnings
-*/
-/* 
-#define SET_VAL_CFG_STRING(field, def)  (*(char **)&(_acdconfig_.field) = (char *)(def))
-#define SET_VAL_CFG_INT(field, def)     (*(int *)&(_acdconfig_.field) = (int)(def))
-#define SET_VAL_CFG_BOOL(field, def)    (*(bool *)&(_acdconfig_.field) = (bool)(def))
-#define SET_VAL_CFG_FLOAT(field, def)   (*(float *)&(_acdconfig_.field) = (float)(def))
-#define SET_VAL_CFG_HEX(field, def)     (*(unsigned char *)&(_acdconfig_.field) = (unsigned char)(def))
-#define SET_VAL_CFG_BITMASK(field, def) (*(uint16_t *)&(_acdconfig_.field) = (uint16_t)(def))
-#define SET_VAL_CFG_TXT_INT(field, def) (*(int *)&(_acdconfig_.field) = (int)(def))
-#define SET_VAL_CFG_CUSTOM(field, def)  // Bypassed for custom range step arrays 
-*/
 
 
 #define STARTS_WITH_IC(str, prefix) \
     (strncasecmp((str), (prefix), sizeof(prefix) - 1) == 0)
 
-/*
-#define ENDS_WITH_IC(str, suffix) \
-    (strlen(str) >= sizeof(suffix) - 1 && \
-     strcasecmp((str) + strlen(str) - (sizeof(suffix) - 1), (suffix)) == 0)
+#define KEY_ENDS_WITH_IC(str, suffix) \
+    key_ends_with_ic_impl((str), (suffix), sizeof(suffix) - 1)
 
-bool ENDS_WITH_IC(char *str, char *suffix)
-{
-  printf ("*** TEST %s ENDS %s | str=%ld suffix=%ld, casecmp(%s)....",str,suffix,strlen(str),strlen(suffix),(str) + strlen(str) - (sizeof(suffix) - 1) );
-  return (strlen(str) >= sizeof(suffix) - 1 && \
-     strcasecmp((str) + strlen(str) - (strlen(suffix) - 1), (suffix)) == 0);
-}*/
+
 
 static inline bool key_ends_with_ic_impl(const char *str, const char *suffix, size_t suf_len) {
     if (!str || !suffix) return false;
@@ -87,8 +58,6 @@ static inline bool key_ends_with_ic_impl(const char *str, const char *suffix, si
     return strncasecmp(str + key_len - suf_len, suffix, suf_len) == 0;
 }
 
-#define KEY_ENDS_WITH_IC(str, suffix) \
-    key_ends_with_ic_impl((str), (suffix), sizeof(suffix) - 1)
 
 // Helper to stop cJSON to handle a float correctly.
 static void cJSON_AddFloat(cJSON *object, const char *name, float value) {
@@ -131,14 +100,7 @@ void add_sensor_d1w(const acd_staging_t *st);
 void add_sensor_mqtt(const acd_staging_t *st);
 void add_sensor_sysfs(const acd_staging_t *st);
 void add_sensor_i2c(const acd_staging_t *st);
-/*
-void add_condition_mqtt(const char *label, const char *topic, const char *value, bool is_global);
-void add_condition_gpio(const char *label, int pin, gpio_active_t pin_mode, gpio_req_t pin_state, bool is_global);
-void add_output_gpio(const char *label, acd_type_t type, int pin, gpio_active_t pin_mode, gpio_req_t pin_state, float ml_ps, uint32_t flags);
-void add_sensor_ezo(const char *label, acd_type_t type, unsigned char address, bool is_global);
-void add_sensor_d1w(const char *label, acd_type_t type, const char *path, float offset, float scale, bool is_global);
-void add_sensor_mqtt(const char *label, acd_type_t type, const char *topic, bool is_global);
-*/ 
+
 
 void init_cfg_parameters() {
     LOG(LOG_DEBUG, "Initializing config with %d entries", CFG_PARAM_COUNT);
@@ -178,8 +140,8 @@ void clear_staging() {
     _staging.value4 = 0;
     _staging.pending_type = ACD_TYPE_NONE;
     _staging.flags = 0;
-    //_staging.is_global = true;
-    _staging.scope = ACD_SCOPE_GLOBAL;
+    //_staging.scope = ACD_SCOPE_GLOBAL;
+    _staging.scope = ACD_SCOPE_UNKNOWN;
     _staging.uom = UOM_NONE;
     _staging.uom2 = UOM_NONE;
 }
@@ -235,40 +197,7 @@ void action_staging() {
     clear_staging();
 }
 
-/*
-void action_staging() {
-    if (!_staging.label) return;
 
-    switch (_staging.pending_type) {
-        case ACD_TYPE_EZO_PH:
-        case ACD_TYPE_EZO_ORP:
-        case ACD_TYPE_EZO_TEMP:
-        case ACD_TYPE_EZO_PMP:
-        case ACD_TYPE_EZO_PRS:
-            add_sensor_ezo(_staging.label, _staging.pending_type, _staging.address, _staging.is_global);
-            break;
-        case ACD_TYPE_MQTT_TEMP:
-            add_sensor_mqtt(_staging.label, _staging.pending_type, _staging.topic_path, _staging.is_global);
-            break;
-        case ACD_TYPE_D1W_TEMP:
-            add_sensor_d1w(_staging.label, _staging.pending_type, _staging.topic_path, _staging.value, _staging.value2, _staging.is_global);
-            break;
-        case ACD_TYPE_GPIO_PMP:
-            add_output_gpio(_staging.label, _staging.pending_type, _staging.pin, _staging.pin_mode, _staging.pin_state, _staging.value, _staging.flags);
-            break;
-        case ACD_TYPE_MQTT_COND:
-            add_condition_mqtt(_staging.label, _staging.topic_path, _staging.char_value, _staging.is_global);
-            break;
-        case ACD_TYPE_GPIO_COND:
-            add_condition_gpio(_staging.label, _staging.pin, _staging.pin_mode, _staging.pin_state, _staging.is_global);
-            break;
-        default:
-            LOG(LOG_ERR, "Didn't create config entry for %s", _staging.label);
-            break;
-    }
-    clear_staging();
-}
-*/
 
 bool parse_dose_range(runtime_range_t *steps, uint8_t *count, const char *value, bool sort_descending) {
     if (*count >= MAX_DOSING_RANGES) return false;
@@ -1197,7 +1126,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "key", "prs_sensor_interlock_scope");
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE));
                 cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
@@ -1240,7 +1169,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "key", "temp_sensor_interlock_scope");
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE));
                 cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
@@ -1281,7 +1210,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "key", "temp_sensor_interlock_scope");
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE));
                 cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
@@ -1375,7 +1304,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "key", "gpio_doser_interlock_scope");
                 cJSON_AddStringToObject(f_item, "type", "select");
                 cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE));
                 cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
                 cJSON_AddItemToArray(block_fields, f_item);
 
@@ -1434,6 +1363,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddStringToObject(f_item, "value", gpio_req_to_str(curr->data.gpio.required));
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_ONOFF));
                 cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "gpio_input_interlock_scope");
+                cJSON_AddStringToObject(f_item, "type", "select");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE));
+                cJSON_AddItemToArray(block_fields, f_item);
                 
                 break;
             
@@ -1475,6 +1412,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_UOM_LIST));
                 cJSON_AddStringToObject(f_item, "value", uom_to_fullstr(curr->uom));
                 cJSON_AddItemToArray(block_fields, f_item);
+
+                f_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(f_item, "key", "sysfs_sensor_interlock_scope");
+                cJSON_AddStringToObject(f_item, "type", "select");
+                cJSON_AddBoolToObject(f_item, "readonly", false);
+                cJSON_AddStringToObject(f_item, "value", acd_scope_to_str(curr->scope));
+                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_SCOPE));
+                cJSON_AddItemToArray(block_fields, f_item);
                 break;
 
             case ACD_TYPE_MQTT_VALUE:
@@ -1494,14 +1439,6 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
                 cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_UOM_LIST));
                 cJSON_AddStringToObject(f_item, "value", uom_to_fullstr(curr->uom));
                 cJSON_AddItemToArray(block_fields, f_item);
-                /*
-                f_item = cJSON_CreateObject();
-                cJSON_AddStringToObject(f_item, "key", "mqtt_sensor_scope_global");
-                cJSON_AddStringToObject(f_item, "type", "boolean");
-                cJSON_AddBoolToObject(f_item, "readonly", false);
-                cJSON_AddItemToObject(f_item, "options", cJSON_Parse(CFG_O_BOOL));
-                cJSON_AddBoolToObject(f_item, "value", curr->scope==ACD_SCOPE_GLOBAL?true:false);
-                cJSON_AddItemToArray(block_fields, f_item);*/
                 break;
 
             
@@ -1544,23 +1481,13 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "type", "text");
     cJSON_AddStringToObject(df_item, "value", "");
     cJSON_AddItemToArray(df_arr, df_item);
-    //cJSON_AddItemToArray(available_drivers, drv);
-/*
-    df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "mqtt_condition_scope_global");
-    cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "Yes");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
-    cJSON_AddItemToArray(df_arr, df_item);
-    cJSON_AddItemToArray(available_drivers, drv);
-*/
 
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "mqtt_condition_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
     cJSON_AddStringToObject(df_item, "value", "Global");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
     cJSON_AddItemToArray(df_arr, df_item);
     //cJSON_AddItemToArray(available_drivers, drv);
 
@@ -1590,7 +1517,6 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "gpio_condition_pin_mode");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddStringToObject(df_item, "value", "Active High");
-    //cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"Active High\",\"Active Low\"]"));
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ACTIVE));
     cJSON_AddItemToArray(df_arr, df_item);
 
@@ -1598,19 +1524,10 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "gpio_condition_required_state");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddStringToObject(df_item, "value", "off");
-    //cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"on\",\"off\"]"));
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ONOFF));
     cJSON_AddItemToArray(df_arr, df_item);
     cJSON_AddItemToArray(available_drivers, drv);
-/*
-    df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "gpio_condition_scope_global");
-    cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "Yes");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
-    cJSON_AddItemToArray(df_arr, df_item);
-    cJSON_AddItemToArray(available_drivers, drv);
-*/
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "gpio_condition_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
@@ -1651,21 +1568,12 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddItemToArray(df_arr, df_item);
     //cJSON_AddItemToArray(available_drivers, drv);
 
-    /*
-    df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "temp_sensor_scope_global");
-    cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "No");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
-    cJSON_AddItemToArray(df_arr, df_item);
-    cJSON_AddItemToArray(available_drivers, drv);
-    */
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "temp_sensor_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
     cJSON_AddBoolToObject(df_item, "readonly", false);
     cJSON_AddStringToObject(df_item, "value", "None");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
 
     cJSON_AddItemToArray(available_drivers, drv);
 
@@ -1682,15 +1590,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "value", "");
     cJSON_AddItemToArray(df_arr, df_item);
     cJSON_AddItemToArray(available_drivers, drv);
-/*
-    df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "temp_sensor_scope_global");
-    cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "No");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
-    cJSON_AddItemToArray(df_arr, df_item);
-    cJSON_AddItemToArray(available_drivers, drv);
-*/
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "temp_sensor_uom");
     cJSON_AddStringToObject(df_item, "type", "select");
@@ -1761,6 +1661,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddItemToArray(df_arr, df_item);
     cJSON_AddItemToArray(available_drivers, drv);
 
+    df_item = cJSON_CreateObject();
+    cJSON_AddStringToObject(df_item, "key", "sysfs_sensor_interlock_scope");
+    cJSON_AddStringToObject(df_item, "type", "select");
+    cJSON_AddBoolToObject(df_item, "readonly", false);
+    cJSON_AddStringToObject(df_item, "value", "Local");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
+    cJSON_AddItemToArray(df_arr, df_item);
+
 
     // Define: GPIO Doser Template
     drv = cJSON_CreateObject();
@@ -1791,15 +1699,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     //cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"Active High\",\"Active Low\"]"));
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ACTIVE));
     cJSON_AddItemToArray(df_arr, df_item);
-/*
-    df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "gpio_doser_required_state");
-    cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "on");
-    //cJSON_AddItemToObject(df_item, "options", cJSON_Parse("[\"on\",\"off\"]"));
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ONOFF));
-    cJSON_AddItemToArray(df_arr, df_item);
-*/
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "gpio_doser_ml_per_second");
     cJSON_AddStringToObject(df_item, "type", "number");
@@ -1827,14 +1727,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "key", "gpio_doser_tank_min_volume");
     cJSON_AddStringToObject(df_item, "type", "number");
     cJSON_AddItemToArray(df_arr, df_item);
-/*
-    df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "gpio_doser_scope_global");
-    cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "Yes");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
-    cJSON_AddItemToArray(df_arr, df_item);
-*/
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "gpio_doser_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
@@ -1908,14 +1801,14 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(df_item, "value", "on");
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_ONOFF));
     cJSON_AddItemToArray(df_arr, df_item);
-/*
+
     df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "gpio_interlock_scope");
+    cJSON_AddStringToObject(df_item, "key", "gpio_input_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "Allow");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE_FULL));
+    cJSON_AddStringToObject(df_item, "value", "Global");
+    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_SCOPE));
     cJSON_AddItemToArray(df_arr, df_item);
-*/
+
     cJSON_AddItemToArray(available_drivers, drv);
 
 
@@ -1925,14 +1818,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(drv, "driver_type", "ezo");
     cJSON_AddStringToObject(drv, "default_label", "New EZO pH sensor");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
-/*
-    df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "ph_sensor_scope_global");
-    cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "Yes");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
-    cJSON_AddItemToArray(df_arr, df_item);
-*/
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "ph_sensor_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
@@ -1956,14 +1842,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(drv, "driver_type", "ezo");
     cJSON_AddStringToObject(drv, "default_label", "New EZO ORP sensor");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
-/*
-    df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "orp_sensor_scope_global");
-    cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "Yes");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
-    cJSON_AddItemToArray(df_arr, df_item);
-*/
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "orp_sensor_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
@@ -1986,14 +1865,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(drv, "driver_type", "ezo");
     cJSON_AddStringToObject(drv, "default_label", "New EZO Temp sensor");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
-/*
-    df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "temp_sensor_scope_global");
-    cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "Yes");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
-    cJSON_AddItemToArray(df_arr, df_item);
-*/
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "temp_sensor_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
@@ -2016,14 +1888,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddStringToObject(drv, "driver_type", "ezo");
     cJSON_AddStringToObject(drv, "default_label", "New EZO Pressure sensor");
     df_arr = cJSON_AddArrayToObject(drv, "fields");
-/*
-    df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "prs_sensor_scope_global");
-    cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "Yes");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
-    cJSON_AddItemToArray(df_arr, df_item);
-*/
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "prs_sensor_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
@@ -2054,14 +1919,7 @@ bool build_aquachem_config_json(char *buffer, size_t buf_size) {
     cJSON_AddBoolToObject(df_item, "readonly", false);
     cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_I2C_PRS_DRIVERS));
     cJSON_AddItemToArray(df_arr, df_item);
-/*
-    df_item = cJSON_CreateObject();
-    cJSON_AddStringToObject(df_item, "key", "prs_sensor_scope_global");
-    cJSON_AddStringToObject(df_item, "type", "select");
-    cJSON_AddStringToObject(df_item, "value", "Yes");
-    cJSON_AddItemToObject(df_item, "options", cJSON_Parse(CFG_O_BOOL));
-    cJSON_AddItemToArray(df_arr, df_item);
-*/
+
     df_item = cJSON_CreateObject();
     cJSON_AddStringToObject(df_item, "key", "prs_sensor_interlock_scope");
     cJSON_AddStringToObject(df_item, "type", "select");
@@ -2291,11 +2149,12 @@ void print_config (struct aquachemdata *acdata)
     }
 
     if (curr->type == ACD_TYPE_SYSFS_VALUE) {
-      LOG(LOG_INFO, "%-*s   -> path = %s%s%s, multiplier = %.4f, offset = %.2f\n", MAX_PRINTLEN, "",
+      LOG(LOG_INFO, "%-*s   -> path = %s%s%s, multiplier = %.4f, offset = %.2f, scope = %s\n", MAX_PRINTLEN, "",
           curr->data.sysfs.path,
           curr->data.sysfs.parser_type == PARSER_REGEX ? ", regex = " : "",
           curr->data.sysfs.parser_type == PARSER_REGEX ? curr->data.sysfs.regex_pattern : "",
-          curr->data.sysfs.multiplier, curr->data.sysfs.offset);
+          curr->data.sysfs.multiplier, curr->data.sysfs.offset,
+          config_scope_detail_str(curr));
     }
 
     if (curr->type == ACD_TYPE_VIR_TANK) {
@@ -2332,7 +2191,10 @@ void print_config (struct aquachemdata *acdata)
 void validate_interlock(acd_key_t *key) {
   if (!key) return;
 
-  if (key->scope == ACD_SCOPE_ALLOW || key->scope == ACD_SCOPE_LOCAL || key->scope == ACD_SCOPE_GLOBAL) {
+  //if (key->scope == ACD_SCOPE_ALLOW || key->scope == ACD_SCOPE_LOCAL || key->scope == ACD_SCOPE_GLOBAL) {
+  if (key->scope == ACD_SCOPE_LOCAL || key->scope == ACD_SCOPE_GLOBAL ||
+     (key->scope == ACD_SCOPE_ALLOW && key->type == ACD_TYPE_GPIO_OUTPUT)) // Only GPIO_OUTPUT can be set to Allow (from config)
+  {
     return; // already a real value
   }
 
@@ -2341,8 +2203,10 @@ void validate_interlock(acd_key_t *key) {
     fallback = ACD_SCOPE_GLOBAL;
   } else if (IS_PUMP(key->type)) {
     fallback = ACD_SCOPE_LOCAL;
-  } else if (IS_INPUT(key->type) || key->type == ACD_TYPE_GPIO_OUTPUT) {
-    fallback = ACD_SCOPE_GLOBAL;
+  } else if (IS_INPUT(key->type)) {
+    fallback = ACD_SCOPE_LOCAL;
+  } else if (key->type == ACD_TYPE_GPIO_OUTPUT) {
+     fallback = ACD_SCOPE_GLOBAL;
   } else {
     return; // no interlock concept for this type -- nothing to validate
   }
@@ -2744,6 +2608,12 @@ void add_gpio(const acd_staging_t *st) {
     new_node->data.gpio.required = st->pin_state;
     new_node->met = false; // Initial state, not met.
 
+    new_node->scope = st->scope;
+
+    if (new_node->type==ACD_TYPE_GPIO_OUTPUT) {
+      set_pump_default_duration(new_node,_acdconfig_.switch_max_runtime / 2); // Default to half of the max runtime for switches
+    }
+/*
     if (new_node->type==ACD_TYPE_GPIO_INPUT) {
       new_node->scope = ACD_SCOPE_ALLOW;
       new_node->delay_on = st->value;
@@ -2751,7 +2621,7 @@ void add_gpio(const acd_staging_t *st) {
       new_node->scope = st->scope;
       set_pump_default_duration(new_node,_acdconfig_.switch_max_runtime / 2); // Default to half of the max runtime for switches
     }
-  
+*/
 
     append_to_key_list(new_node);
 }
@@ -2873,14 +2743,14 @@ void add_sensor_sysfs(const acd_staging_t *st) {
     new_node->data.sysfs.offset = st->value;  // Mapped from _staging.value
     new_node->data.sysfs.multiplier = st->value2;  // Mapped from _staging.value2
 
+    new_node->scope = st->scope;
+
     if (st->char_value) {
       new_node->data.sysfs.regex_pattern = strdup(st->char_value);
       new_node->data.sysfs.parser_type = PARSER_REGEX;
     } else {
       new_node->data.sysfs.parser_type = PARSER_RAW;    
     }
-    //new_node->scope = st->is_global ? ACD_SCOPE_GLOBAL : ACD_SCOPE_LOCAL;
-    new_node->scope = ACD_SCOPE_ALLOW;
 
     new_node->uom = st->uom;
 
