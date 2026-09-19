@@ -49,9 +49,9 @@ Other Pool information.
 
 
 
-How I originally got to those numbers.  I was using on average 1gal of 30% Acid per week to keep pool in check. So I tool that number and divided it into how many doses I had scheduled for the week, plus accounted for using 15% Acid since that's what I use in the Acid tank.
+How I originally got to those numbers.  I was using on average 1gal of 30% Acid per week to keep pool in check. So I took that number and divided it into how many doses I had scheduled for the week, plus accounted for using 15% Acid since that's what I use in the Acid tank.
 
-230 Doses a week needs to dose 2 Gal of Acid, (my pump is 2.18 ml |/s)
+~230 Doses a week needs to dose 2 Gal of Acid, (my pump is 2.18 ml |/s)
 
 **Convert total volume to milliliters (mL):**
 
@@ -68,7 +68,7 @@ $$\frac{7,570.82 \text{ ml |}}{230 \text{ doses}} = 32.92 \text{ ml | per dose}$
 $$\frac{32.92 \text{ ml |}}{2.18 \text{ ml |/s}} = 15.10 \text{ seconds}$$
 
 So that was my starting point and I configured my dosing table with pH 7.7 being a 15 seconds dose and went up and down from that.
-
+Below was my first table, a simply starting point.
 | pH Reading | Seconds to Dose |
 | --- | --- |
 |8|60|
@@ -77,11 +77,13 @@ So that was my starting point and I configured my dosing table with pH 7.7 being
 |7.6|0|
 
 Over the next few days I monitored pH and Dose in seconds, and quickly realized I didn't need nearly as much as I had scheduled, and kept modifying the table.  It took me about 1 week to land on the table posted at the top of this article, and as you can see I'm now using 1/2 as much Acid as I used too when manually adding Acid.<br>
-I was using 1 gal os 32% Acid a week, now using just under 1 gal of 15% Acid a week. So 1/2 as much.
+I was using 1 gal of 32% Acid a week, now using just under 1 gal of 15% Acid a week. So 1/2 as much.
 
-Below is my last weeks dose as of writing this. Last line `Acid doser TOTAL: 3679.84ml (0.97gal) over 7 Days`
+Below is my last weeks dose stats as of writing this. Last line `Acid doser TOTAL: 3679.84ml (0.97gal) over 7 Days`
 
-Anytime you see a line Run time: 0s | Sensor reading 0.00 | Dosed: 0.00 ml, that's due to an interlock being on, so unsafe to dose (probably pool cleaner).
+Anytime you see a line Run time: 0s | Sensor reading 0.00 | Dosed: 0.00 ml, that's due to an interlock being on, so unsafe to dose (usually pool cleaner being on).
+
+BTW, this is pulled directly from AquachemD, so you don't need to manually record/monitor this. 
  
 | Date / Time | Run Time | pH reading | ml Dosed|
 | --- | --- | --- | --- |
@@ -330,4 +332,4 @@ IntelliChem enforces a default pH dose limit based on 2 ppm of pool size, up to 
 
 IPS. A patent describing an IPS M920W-based system lays out the actual trigger logic: when ORP drops below setpoint, the controller sends a signal for a preset feed duration to route water through the chlorine feeder, then stops once that duration elapses — a fixed dose length per triggering event, not a value computed fresh from how far off the reading is. The pH side works the same way — once pH is detected as high, the controller signals the acid pump to feed muriatic acid until pH returns to setpoint. This is a different strategy than IntelliChem's fixed-time dosing — this is "run until you hit the target or time out," the same run-to-setpoint mode Pentair also offers as an alternative to Dose-by-Time. A related patent for a broader automatic chemical monitor confirms the same pattern generally across the category: the acid feed runs until either a satisfactory pH is sensed or a pump time limit is exceeded, with the actual feed duration chosen the same way as the chlorine system's
 
-Pool Technologie's Dosipool Pro markets "Smart pH" specifically as predictive regulation based on history, alongside dosing proportional to pool volume, for what they describe as a more stable pH result. Their separate Pro Dosing ORP product describes both pH and chlorine injections as proportional to the gap between setpoint and the probe's actual measurement, aimed at reducing oscillation around the target compared to fixed-duration dosing.  This may be the exception to the <i>"most manufacturers dosing strategies suck" statement."</i>
+Pool Technologie's Dosipool Pro markets "Smart pH" specifically as predictive regulation based on history, alongside dosing proportional to pool volume, for what they describe as a more stable pH result. Their separate Pro Dosing ORP product describes both pH and chlorine injections as proportional to the gap between setpoint and the probe's actual measurement, aimed at reducing oscillation around the target compared to fixed-duration dosing.  This may be the exception to the <i>"most manufacturers dosing strategies suck"</i> statement at the top of this page.
