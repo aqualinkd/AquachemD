@@ -58,13 +58,13 @@ Full details on all UI options coming soon, below are a few examples. Just about
 <br><br>
 <hr>
 
-- AquachemD Managment Console.
+- AquachemD Managment Console. (click the burger icon top left of screen)
 
 <img src="images/Aqmanager.png" alt="Alt Text">
 <br><br>
 <hr>
 
-- AquachemD Scheduler.  Interface for cron.
+- AquachemD Scheduler.  Interface for cron. (click the date in top right of screen)
 
 <img src="images/AquachemD-scheduler.png" alt="Alt Text">
 <br><br>
