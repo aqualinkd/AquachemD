@@ -11,7 +11,14 @@ Pool chemistry controllers from the major manufacturers are closed, expensive, a
 
 No subscriptions. No cloud dependency. No proprietary sensor lock-in. Just an open daemon, a config file, and full visibility into exactly what your pool chemistry is doing and why.
 
+## Links to further details
 
+- [Dosing strategy — the reasoning and real-world tuning behind the dosing approach](/docs/dosing%20strategy.md)
+- [Hardware — supported sensors and hardware](/docs/hardware.md)
+- [Flow-cell design — Evaluates physical flow-cell design(s), DIY and pre-made](/docs/flow%20cell%20design.md)
+- [API — HTTP/MQTT integration](/docs/API.md)
+- [Getting started](/docs/getting%20started.md)
+- [`Web UI / Homekit & HomeAssistant UI examples`](/docs/UI.md)
 
 ## Quick Web UI overview
 
@@ -137,6 +144,8 @@ curl -sSL https://raw.githubusercontent.com/aqualinkd/AquachemD/main/release/rem
 ```
 
 This installs AquachemD as a systemd service (`aquachemd.service`) that starts on boot, alongside a starter config at `/etc/aquachemd.conf` (or wherever your install script places it) that you'll edit to match your actual sensor addresses and pump wiring.
+
+See [`getting started.md`](/docs/getting%20started.md) for more information
 
 ### Building from source
 If you want to build it yourself rather than use a release binary, a `Makefile` supports both native and cross-architecture builds:
